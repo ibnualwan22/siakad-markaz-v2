@@ -24,6 +24,8 @@ type Perizinan = {
   petugasNama?: string | null;
   grupTasrihId: string | null;
   _isRombongan?: boolean;
+  selfieUrl?: string | null;
+  selfieAt?: string | null;
 };
 
 export default function PerizinanDataClient({ permissions }: { permissions: string[] }) {
@@ -38,6 +40,7 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
   const [filterStatus, setFilterStatus] = useState("AKTIF,MENUNGGU");
 
   const [selectedTasrih, setSelectedTasrih] = useState<TasrihDetail | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
 
   // Tabs for Types
   const TABS = [
@@ -102,6 +105,22 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
       fetchData();
     } catch (error) {
       toast.error("Terjadi kesalahan");
+    }
+  };
+
+  const handleRejectSelfie = async (id: string, grupTasrihId: string | null) => {
+    const isBatch = !!grupTasrihId;
+    const batchMsg = isBatch ? " (Perhatian: Ini izin rombongan, tapi fitur ini khusus satuan)" : "";
+    
+    if (!confirm(`Tolak verifikasi selfie? Santri akan dianggap belum hadir.${batchMsg}`)) return;
+    
+    try {
+      const res = await fetch(`/api/admin/perizinan/${id}/reject-selfie`, { method: "POST" });
+      if (!res.ok) throw new Error("Gagal menolak selfie");
+      toast.success("Verifikasi ditolak, status kembali AKTIF (belum kembali)");
+      fetchData();
+    } catch (error) {
+      toast.error("Terjadi kesalahan saat menolak selfie");
     }
   };
 
@@ -217,14 +236,15 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
               <th className="px-4 py-3">Nama Santri</th>
               <th className="px-4 py-3">Tipe & Tanggal</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Foto Kehadiran</th>
               <th className="px-4 py-3 text-right">Aksi</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {isLoading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[var(--color-primary)]" /></td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[var(--color-primary)]" /></td></tr>
             ) : filteredData.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Tidak ada data</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--color-text-muted)]">Tidak ada data</td></tr>
             ) : (
               filteredData.map((d, index) => (
                 <tr key={d.id} className="hover:bg-slate-50 transition-colors">
@@ -247,6 +267,25 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
                   </td>
                   <td className="px-4 py-3">
                     {getStatusBadge(d.statusIzin, d)}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {d.selfieUrl ? (
+                      <div className="flex flex-col items-center">
+                        <img 
+                          src={d.selfieUrl} 
+                          alt="Selfie" 
+                          className="w-12 h-12 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity border border-slate-200 shadow-sm"
+                          onClick={() => setPreviewPhoto(d.selfieUrl!)}
+                        />
+                        {d.selfieAt && (
+                          <span className="text-[10px] text-slate-500 mt-1 font-bold">
+                            {new Date(d.selfieAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 font-bold">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <div className="flex items-center justify-end gap-2">
@@ -271,6 +310,12 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
                         </button>
                       )}
 
+                      {canEdit && d.statusIzin === "SUDAH_KEMBALI" && d.selfieUrl && (
+                        <button onClick={() => handleRejectSelfie(d.id, d.grupTasrihId)} className="p-1.5 px-2 text-rose-700 bg-rose-100 rounded hover:bg-rose-200 flex items-center gap-1 text-xs font-bold" title="Tolak Selfie Kehadiran">
+                          <XCircle size={14} /> Tolak Foto
+                        </button>
+                      )}
+
                       {canDelete && (
                         <button onClick={() => handleAction(d.id, "DELETE", d.grupTasrihId)} className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded text-xs font-bold" title="Hapus Izin">
                           <Trash2 size={16} />
@@ -288,6 +333,24 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
       {/* TASRIH MODAL */}
       {selectedTasrih && (
         <TasrihModal tasrih={selectedTasrih} onClose={() => setSelectedTasrih(null)} />
+      )}
+
+      {/* PHOTO PREVIEW MODAL */}
+      {previewPhoto && (
+        <div 
+          className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -top-10 right-0 p-1.5 bg-white/20 hover:bg-white/30 rounded-full text-white backdrop-blur-md transition-colors"
+            >
+              <XCircle size={24} />
+            </button>
+            <img src={previewPhoto} alt="Selfie Full" className="max-w-full max-h-[85vh] rounded-2xl shadow-2xl" />
+          </div>
+        </div>
       )}
     </div>
   );

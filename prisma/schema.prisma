@@ -531,6 +531,9 @@ model Perizinan {
   batasJam       Int?
   grupTasrihId   String?
   statusAbsen    String     @default("IZIN") // "IZIN" atau "SAKIT"
+  selfieUrl      String?    // URL foto dari Cloudinary
+  selfiePublicId String?    // Cloudinary public_id untuk delete
+  selfieAt       DateTime?  // Waktu selfie diambil (WIB)
 
   riwayat RiwayatSantri @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
 

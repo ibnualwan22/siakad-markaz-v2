@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import SantriPerizinanForm from "@/components/santri/santri-perizinan-form";
 import TasrihDigital from "@/components/public/tasrih-digital";
+import SelfieCamera from "@/components/santri/selfie-camera";
+import { Camera } from "lucide-react";
 
 type PerizinanItem = {
   id: string;
@@ -27,6 +29,8 @@ type PerizinanItem = {
   tanggalKembali: string | null;
   statusAbsen: string;
   createdAt: string;
+  selfieUrl: string | null;
+  selfieAt: string | null;
 };
 
 type RiwayatData = {
@@ -40,6 +44,7 @@ const tipeLabel: Record<string, string> = {
   HARIAN: "Harian",
   BERHARI_HARI: "Berhari-hari",
   KELUAR_PARE: "Keluar Pare",
+  TABIROT: "Ta'birot",
 };
 
 const statusConfig: Record<string, { color: string; bg: string; label: string; icon: any }> = {
@@ -48,6 +53,7 @@ const statusConfig: Record<string, { color: string; bg: string; label: string; i
   SUDAH_KEMBALI: { color: "var(--color-success)", bg: "var(--color-success-light)", label: "Sudah Kembali", icon: CheckCircle },
   SELESAI: { color: "var(--color-text-muted)", bg: "var(--color-surface-light)", label: "Selesai", icon: CheckCircle },
   DITOLAK: { color: "var(--color-danger)", bg: "var(--color-danger-light)", label: "Ditolak", icon: XCircle },
+  KADALUARSA: { color: "var(--color-danger)", bg: "var(--color-danger-light)", label: "Kadaluarsa", icon: XCircle },
 };
 
 function formatDate(d: string) {
@@ -61,6 +67,11 @@ export default function SantriPerizinanPage() {
   const [viewMode, setViewMode] = useState<"RIWAYAT" | "FORM">("RIWAYAT");
   const [santriData, setSantriData] = useState<any>(null);
   const [selectedTasrihData, setSelectedTasrihData] = useState<any>(null);
+  const [selfieTarget, setSelfieTarget] = useState<string | null>(null);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     fetch("/api/santri/me")
@@ -90,14 +101,35 @@ export default function SantriPerizinanPage() {
 
 
   const current = riwayat[activeDufah];
-  const perizinanList = current?.perizinan ?? [];
+  const perizinanListRaw = current?.perizinan ?? [];
+  
+  // Hitung jumlah izian dengan KADALUARSA
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
+  const perizinanList = perizinanListRaw.map((p) => {
+    let isExpired = false;
+    if ((p.tipeIzin === "HARIAN" || p.tipeIzin === "TABIROT") && (p.statusIzin === "AKTIF" || p.statusIzin === "MENUNGGU")) {
+      const pDate = new Date(p.tanggalMulai);
+      pDate.setHours(0, 0, 0, 0);
+      if (pDate < todayDate) isExpired = true;
+    }
+    return {
+      ...p,
+      computedStatus: isExpired ? "KADALUARSA" : p.statusIzin
+    };
+  });
+
+  // Calculate Pagination Data
+  const totalPages = Math.ceil(perizinanList.length / itemsPerPage);
+  const paginatedPerizinan = perizinanList.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   // Ambil kelas dari riwayat aktif, fallback ke santriData kalo ada
   const kelasNama = current?.kelasNama || "Tanpa Kelas";
 
   // Stats
   const totalIzin = perizinanList.length;
-  const aktifCount = perizinanList.filter((p) => p.statusIzin === "AKTIF" || p.statusIzin === "MENUNGGU").length;
+  const aktifCount = perizinanList.filter((p) => p.computedStatus === "AKTIF" || p.computedStatus === "MENUNGGU").length;
 
   return (
     <div className="space-y-6">
@@ -186,13 +218,13 @@ export default function SantriPerizinanPage() {
 
           {/* Perizinan List */}
           <div className="space-y-3">
-            {perizinanList.length === 0 ? (
+            {paginatedPerizinan.length === 0 ? (
               <div className="neu-card p-8 text-center">
                 <p className="text-xs" style={{ color: "var(--color-text-subtle)" }}>Tidak ada perizinan di duf&apos;ah ini</p>
               </div>
             ) : (
-              perizinanList.map((p) => {
-                const cfg = statusConfig[p.statusIzin] || statusConfig.SELESAI;
+              paginatedPerizinan.map((p) => {
+                const cfg = statusConfig[p.computedStatus] || statusConfig.SELESAI;
                 const StatusIcon = cfg.icon;
 
                 return (
@@ -236,8 +268,8 @@ export default function SantriPerizinanPage() {
                         <span
                           className="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
                           style={{
-                            background: p.tipeIzin === "KELUAR_PARE" ? "var(--color-danger-light)" : "var(--color-primary-50)",
-                            color: p.tipeIzin === "KELUAR_PARE" ? "var(--color-danger)" : "var(--color-primary)",
+                            background: p.tipeIzin === "KELUAR_PARE" || p.tipeIzin === "BERHARI_HARI" ? "var(--color-danger-light)" : "var(--color-primary-50)",
+                            color: p.tipeIzin === "KELUAR_PARE" || p.tipeIzin === "BERHARI_HARI" ? "var(--color-danger)" : "var(--color-primary)",
                           }}
                         >
                           {tipeLabel[p.tipeIzin] || p.tipeIzin}
@@ -277,6 +309,26 @@ export default function SantriPerizinanPage() {
                       </div>
                     </div>
 
+                    {((p.tipeIzin === "KELUAR_PARE" || p.tipeIzin === "BERHARI_HARI") && (p.computedStatus === "AKTIF" || p.computedStatus === "SUDAH_KEMBALI")) && (
+                      <div className="pt-2">
+                        {p.selfieUrl ? (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200">
+                            <CheckCircle size={14} /> Terkonfirmasi {p.selfieAt ? new Date(p.selfieAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }) + " WIB" : ""}
+                          </div>
+                        ) : p.computedStatus === "AKTIF" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelfieTarget(p.id);
+                            }}
+                            className="w-full mt-1.5 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 transition flex items-center justify-center gap-2 shadow-md shadow-slate-800/20 active:scale-95"
+                          >
+                            <Camera size={14} /> Konfirmasi Kehadiran
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+
                     <div className="absolute top-1/2 -translate-y-1/2 right-4 opacity-50 sm:hidden">
                       <Plus size={16} /> {/* just a placeholder to indicate clickable if we want, or do nothing */}
                     </div>
@@ -285,6 +337,29 @@ export default function SantriPerizinanPage() {
               })
             )}
           </div>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center bg-slate-100 p-2 rounded-xl mt-4 border border-slate-200">
+              <button 
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition-colors"
+              >
+                Sebelumnya
+              </button>
+              <div className="text-xs font-bold text-slate-500">
+                Hal {currentPage} / {totalPages}
+              </div>
+              <button 
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-50 transition-colors"
+              >
+                Selanjutnya
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -301,6 +376,28 @@ export default function SantriPerizinanPage() {
             <TasrihDigital data={selectedTasrihData} hideQR={true} hideDownload={true} />
           </div>
         </div>
+      )}
+
+      {/* Selfie Camera */}
+      {selfieTarget && (
+        <SelfieCamera
+          perizinanId={selfieTarget}
+          onClose={() => setSelfieTarget(null)}
+          onSuccess={(url, at) => {
+            // Update local state without full refetch for smoother UX
+            setRiwayat(prevRiwayat => 
+              prevRiwayat.map(r => ({
+                ...r,
+                perizinan: r.perizinan.map(p => 
+                  p.id === selfieTarget 
+                    ? { ...p, selfieUrl: url, selfieAt: at, statusIzin: "SUDAH_KEMBALI", tanggalKembali: new Date().toISOString() } 
+                    : p
+                )
+              }))
+            );
+            setSelfieTarget(null);
+          }}
+        />
       )}
     </div>
   );

@@ -66,7 +66,7 @@ export async function processAutoAbsensiIzin(
                      (tipeIzin as any) === "TABIROT" ? `Izin Ta'birot [${nomorTasrih}]: ${alasan}` :
                      `Izin Keluar Pare [${nomorTasrih}]: ${alasan}`;
 
-  // Tentukan range tanggal
+  // Tentukan range tanggal (khusus absen sakan, tabel lain dibuat by JIT saat diabsen)
   const datesToProcess: Date[] = [];
   if (tipeIzin === "HARIAN" || tipeIzin === "KELUAR_PARE" || (tipeIzin as any) === "TABIROT") {
     datesToProcess.push(tanggalMulai);
@@ -80,23 +80,7 @@ export async function processAutoAbsensiIzin(
 
   // Lakukan proses untuk setiap hari
   for (const date of datesToProcess) {
-    // 1. Absen Kelas (semua sesi termasuk sesi tambahan, kecuali Tabirot dan Kegiatan)
-    if ((tipeIzin as any) !== "TABIROT" && kategoriHarian !== "KEGIATAN") {
-      for (const sesi of sesiList) {
-        const existingKelas = await prisma.absenKelas.findUnique({
-          where: { riwayatId_tanggal_sesi: { riwayatId, tanggal: date, sesi } }
-        });
-        if (!existingKelas || existingKelas.status !== "HADIR") {
-          await prisma.absenKelas.upsert({
-            where: { riwayatId_tanggal_sesi: { riwayatId, tanggal: date, sesi } },
-            update: { status: statusAbsen, keterangan },
-            create: { riwayatId, tanggal: date, sesi, status: statusAbsen, keterangan }
-          });
-        }
-      }
-    }
-
-    // 2. Absen Sakan (Hanya untuk tipe Berhari-hari dan Keluar Pare)
+    // 2. Absen Sakan (Hanya untuk tipe Berhari-hari dan Keluar Pare, ini valid karena asrama aktif setiap hari)
     if (tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE") {
       const existingSakan = await prisma.absenSakan.findUnique({
         where: { riwayatId_tanggal: { riwayatId, tanggal: date } }
@@ -109,57 +93,15 @@ export async function processAutoAbsensiIzin(
         });
       }
     }
-
-    // 3. Absen Kegiatan (Yang sudah ada diabsen diubah jadi IZIN/SAKIT, atau auto isi untuk semua kategori aktif)
-    if (tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE" || (tipeIzin === "HARIAN" && kategoriHarian === "KEGIATAN")) {
-      const kategoriAktif = await prisma.kategoriKegiatan.findMany({ where: { aktif: true } });
-      for (const kat of kategoriAktif) {
-        const existingKegiatan = await prisma.absenKegiatan.findUnique({
-          where: { riwayatId_kategoriId_tanggal: { riwayatId, tanggal: date, kategoriId: kat.id } }
-        });
-        if (!existingKegiatan || existingKegiatan.status !== "HADIR") {
-          await prisma.absenKegiatan.upsert({
-            where: { riwayatId_kategoriId_tanggal: { riwayatId, tanggal: date, kategoriId: kat.id } },
-            update: { status: statusAbsen, keterangan },
-            create: { riwayatId, tanggal: date, kategoriId: kat.id, status: statusAbsen, keterangan }
-          });
-        }
-      }
-    }
-
-    // 4. Absen Ta'birot (Untuk tipe Tabirot, Berhari-hari, Keluar Pare)
-    if ((tipeIzin as any) === "TABIROT" || tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE") {
-      const rws = await prisma.riwayatSantri.findUnique({ where: { id: riwayatId }, select: { santriId: true } });
-      if (rws?.santriId) {
-        // Cari kelompok tabirot yang aktif
-        const anggota = await prisma.anggotaTabirot.findFirst({
-          where: { santriId: rws.santriId, kelompok: { isActive: true } }
-        });
-        if (anggota) {
-          const existingTabirot = await prisma.absenTabirot.findUnique({
-            where: { kelompokId_santriId_tanggal: { kelompokId: anggota.kelompokId, santriId: rws.santriId, tanggal: date } }
-          });
-          if (!existingTabirot || existingTabirot.status !== "HADIR") {
-            await prisma.absenTabirot.upsert({
-              where: { kelompokId_santriId_tanggal: { kelompokId: anggota.kelompokId, santriId: rws.santriId, tanggal: date } },
-              update: { status: statusAbsen, keterangan },
-              create: { kelompokId: anggota.kelompokId, santriId: rws.santriId, tanggal: date, status: statusAbsen, keterangan }
-            });
-          }
-        }
-      }
-    }
+    // Absen Kelas, Kegiatan, & Tabirot ditangani dengan skema JIT (Just-In-Time) saat Submit Absensi.
   }
 }
 
 export async function rollbackAutoAbsensiIzin(nomorTasrih: string) {
-  // Hapus semua absensi yang keterangannya mengandung nomor tasrih ini
+  // Hanya menghapus Sakan yang masih mencantumkan nomor tasrih ini di keterangan karena yang lain tidak di inject secara eager lagi.
   const searchKeterangan = { contains: `[${nomorTasrih}]` };
   
   await prisma.$transaction([
-    prisma.absenKelas.deleteMany({ where: { keterangan: searchKeterangan } }),
     prisma.absenSakan.deleteMany({ where: { keterangan: searchKeterangan } }),
-    prisma.absenKegiatan.deleteMany({ where: { keterangan: searchKeterangan } }),
-    prisma.absenTabirot.deleteMany({ where: { keterangan: searchKeterangan } }),
   ]);
 }

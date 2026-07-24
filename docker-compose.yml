@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: siakad-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rahasia}
+      POSTGRES_DB: ${POSTGRES_DB:-siakad}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - siakad-network
+
+  app:
+    build: .
+    container_name: siakad-app
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      # Menimpa DATABASE_URL dari .env lokal agar mengarah ke container db
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-rahasia}@db:5432/${POSTGRES_DB:-siakad}?schema=public
+    networks:
+      - siakad-network
+
+volumes:
+  db_data:
+
+networks:
+  siakad-network:

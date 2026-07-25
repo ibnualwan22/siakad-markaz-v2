@@ -105,7 +105,26 @@ export async function POST(request: Request) {
     });
 
     if (existingAbsen) {
-      return NextResponse.json({ error: `Anda sudah tercatat ${existingAbsen.status} pada absen ini.` }, { status: 400 });
+      if (existingAbsen.status === "HADIR") {
+        return NextResponse.json({ error: `Anda sudah tercatat HADIR pada absen ini.` }, { status: 400 });
+      }
+
+      // Update status if it was ALPA/IZIN/SAKIT etc.
+      await prisma.absenKegiatan.update({
+        where: {
+          riwayatId_kategoriId_tanggal: {
+            riwayatId: riwayatSantri.riwayatId,
+            kategoriId: sesi.kategoriId,
+            tanggal: today
+          }
+        },
+        data: {
+          status: "HADIR",
+          keterangan: (existingAbsen.keterangan ? existingAbsen.keterangan + " | " : "") + "Self-Attendance (Dari " + existingAbsen.status + ")"
+        }
+      });
+
+      return NextResponse.json({ success: true, message: `Berhasil mengubah status ${existingAbsen.status} menjadi HADIR untuk kegiatan ${sesi.kategori.nama}` });
     }
 
     // ===================================================================

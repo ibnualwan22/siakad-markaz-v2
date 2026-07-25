@@ -151,13 +151,14 @@ export default function SantriLoginPage() {
                 </div>
                 <input
                   id="nis-input"
+                  name="username"
                   type="text"
                   required
                   value={nis}
                   onChange={(e) => setNis(e.target.value)}
                   className="neu-input w-full !pl-11 !pr-4 !py-3.5 text-sm"
                   placeholder="Masukkan NIS"
-                  autoComplete="off"
+                  autoComplete="username"
                   autoFocus
                 />
               </div>

@@ -61,6 +61,7 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
           where: { id: pengajuanId },
           data: { status: "DITOLAK" }
         });
+      } else if (allApproved) {
         await tx.checkoutPengajuan.update({
           where: { id: pengajuanId },
           data: { status: "DISETUJUI" }

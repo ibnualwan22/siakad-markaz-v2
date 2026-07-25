@@ -120,6 +120,8 @@ export async function POST(request: Request) {
     }
 
     const modifiedAbsenList = absenList.map((absen: any) => {
+      if (absen.status === "KOSONG") return absen; // Langsung pass jika admin eksplisit minta KOSONG
+
       const activeIzin = izinMap.get(absen.riwayatId);
       // Jika disubmit sebagai ALPHA/kosong, tapi dia punya Izin aktif, otomatis inject IZIN
       if ((absen.status === "ALPHA" || !absen.status) && activeIzin) {
@@ -133,7 +135,10 @@ export async function POST(request: Request) {
     });
     // ---------------------------
 
-    const operations: any[] = modifiedAbsenList.map((absen: any) =>
+    const toUpsert = modifiedAbsenList.filter((a: any) => a.status !== "KOSONG");
+    const toDelete = modifiedAbsenList.filter((a: any) => a.status === "KOSONG");
+
+    const operations: any[] = toUpsert.map((absen: any) =>
       prisma.absenKelas.upsert({
         where: {
           riwayatId_tanggal_sesi: {
@@ -155,6 +160,18 @@ export async function POST(request: Request) {
         },
       })
     );
+
+    if (toDelete.length > 0) {
+      operations.push(
+        prisma.absenKelas.deleteMany({
+          where: {
+            tanggal: parsedDate,
+            sesi: sesi,
+            riwayatId: { in: toDelete.map((d: any) => d.riwayatId) }
+          }
+        })
+      );
+    }
 
     const isTeacherSubmit = userSession && userSession.role !== "ADMIN";
     const isAdminBackupSubmit = userSession && userSession.role === "ADMIN" && payload.targetUserId;

@@ -19,7 +19,7 @@ type SantriAbsenTarget = {
   isCheckedOut: boolean;
 };
 
-type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
+type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA" | "KOSONG";
 
 type KategoriKegiatan = {
   id: string;
@@ -369,7 +369,7 @@ export function AbsensiKegiatanClient({
                               <button
                                 key={st}
                                 disabled={santri.isCheckedOut}
-                                onClick={() => handleStatusChange(santri.riwayatId, st)}
+                                onClick={() => handleStatusChange(santri.riwayatId, currentStatus === st ? "KOSONG" : st)}
                                 className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${currentStatus === st
                                     ? st === "HADIR"
                                       ? "bg-[var(--color-primary)] text-white"

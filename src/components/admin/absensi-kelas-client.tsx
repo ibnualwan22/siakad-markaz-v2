@@ -209,7 +209,7 @@ type SantriAbsenTarget = {
   isCheckedOut: boolean;
 };
 
-type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
+type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA" | "KOSONG";
 type SesiKelas = "SESI_1" | "SESI_2" | "SESI_3" | "SESI_4" | "SESI_5" | "SESI_6" | "SESI_7" | "SESI_8" | "SESI_9" | "SESI_10";
 
 export function AbsensiKelasClient({
@@ -1362,7 +1362,7 @@ export function AbsensiKelasClient({
                                           <button
                                             key={st}
                                             disabled={santri.isCheckedOut}
-                                            onClick={() => handleStatusChange(santri.riwayatId, st)}
+                                            onClick={() => handleStatusChange(santri.riwayatId, currentStatus === st ? "KOSONG" : st)}
                                             className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${currentStatus === st
                                               ? st === "HADIR" ? "bg-emerald-500 text-white shadow-emerald-200 shadow-sm"
                                                 : st === "IZIN" ? "bg-indigo-500 text-white shadow-indigo-200 shadow-sm"

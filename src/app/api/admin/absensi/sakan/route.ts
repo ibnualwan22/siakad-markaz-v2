@@ -61,8 +61,11 @@ export async function POST(request: Request) {
 
     const parsedDate = parseWibDateString(tanggal);
 
+    const toUpsert = absenList.filter((a: any) => a.status !== "KOSONG");
+    const toDelete = absenList.filter((a: any) => a.status === "KOSONG");
+
     // Upsert each using transaction
-    const operations = absenList.map((absen) =>
+    const operations: any[] = toUpsert.map((absen: any) =>
       prisma.absenSakan.upsert({
         where: {
           riwayatId_tanggal: {
@@ -82,6 +85,17 @@ export async function POST(request: Request) {
         },
       })
     );
+
+    if (toDelete.length > 0) {
+      operations.push(
+        prisma.absenSakan.deleteMany({
+          where: {
+            tanggal: parsedDate,
+            riwayatId: { in: toDelete.map((d: any) => d.riwayatId) }
+          }
+        })
+      );
+    }
 
     await prisma.$transaction(operations);
 

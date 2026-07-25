@@ -94,6 +94,8 @@ export async function POST(request: Request) {
     }
 
     const modifiedAbsenList = absenList.map((absen: any) => {
+      if (absen.status === "KOSONG") return absen;
+
       const activeIzin = izinMap.get(absen.riwayatId);
       if ((absen.status === "ALPHA" || !absen.status) && activeIzin) {
         return {
@@ -106,8 +108,11 @@ export async function POST(request: Request) {
     });
     // ---------------------------
 
+    const toUpsert = modifiedAbsenList.filter((a: any) => a.status !== "KOSONG");
+    const toDelete = modifiedAbsenList.filter((a: any) => a.status === "KOSONG");
+
     // --- Simpan absensi ---
-    const operations = modifiedAbsenList.map((absen) =>
+    const operations: any[] = toUpsert.map((absen: any) =>
       prisma.absenKegiatan.upsert({
         where: {
           riwayatId_kategoriId_tanggal: {
@@ -129,6 +134,18 @@ export async function POST(request: Request) {
         },
       })
     );
+    
+    if (toDelete.length > 0) {
+      operations.push(
+        prisma.absenKegiatan.deleteMany({
+          where: {
+            tanggal: parsedDate,
+            kategoriId: kategoriId,
+            riwayatId: { in: toDelete.map((d: any) => d.riwayatId) }
+          }
+        })
+      );
+    }
 
     await prisma.$transaction(operations);
 

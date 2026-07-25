@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, FileText, ChevronDown, ChevronRight, Search, Copy, ClipboardCheck, AlertTriangle, Send } from "lucide-react";
+import { ChevronLeft, FileText, ChevronDown, ChevronRight, Search, Copy, ClipboardCheck, AlertTriangle, Send, X } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   BarChart,
@@ -25,11 +25,22 @@ type SantriDetail = {
   sakan: string;
   kelas: string;
   sesi?: string | null;
+  kategoriId?: string | null;
   kegiatanNama?: string | null;
   status: "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
   keterangan: string;
   tanggal: string; // YYYY-MM-DD
   usbu: string;
+};
+
+type EditingCell = {
+  riwayatId: string;
+  namaSantri: string;
+  tanggal: string;
+  sesi?: string;
+  kategoriId?: string;
+  currentStatus?: "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
+  keterangan: string;
 };
 
 const STATUS_CONFIG = [
@@ -53,6 +64,10 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  
+  // Inline edit state
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
+  const [isSavingCell, setIsSavingCell] = useState(false);
 
   useEffect(() => {
     if (!type || !dari || !sampai) return;
@@ -150,6 +165,77 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
   }
 
   const collapseAll = () => setExpandedGroups({});
+
+  // --- Inline Edit Logic ---
+  const handleInlineSave = async (newStatus: "HADIR" | "IZIN" | "SAKIT" | "ALPHA" | "KOSONG") => {
+    if (!editingCell) return;
+    setIsSavingCell(true);
+    const toastId = toast.loading("Updating status...");
+    
+    try {
+      let endpoint = "";
+      let payload: any = {
+        tanggal: editingCell.tanggal,
+        absenList: [{
+          riwayatId: editingCell.riwayatId,
+          status: newStatus,
+          keterangan: editingCell.keterangan || ""
+        }]
+      };
+
+      if (type === "kelas") {
+        endpoint = "/api/admin/absensi/kelas";
+        payload.sesi = editingCell.sesi;
+      } else if (type === "kegiatan") {
+        endpoint = "/api/admin/absensi/kegiatan-harian";
+        payload.kategoriId = editingCell.kategoriId;
+      } else if (type === "sakan") {
+        endpoint = "/api/admin/absensi/sakan";
+      }
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error || "Gagal update");
+
+      // Update local state directly so UI updates without reload
+      setData(prev => {
+        let newData = [...prev];
+        const idx = newData.findIndex(d => 
+          d.riwayatId === editingCell.riwayatId && 
+          d.tanggal === editingCell.tanggal && 
+          (type === "kelas" ? d.sesi === editingCell.sesi : 
+           type === "kegiatan" ? d.kategoriId === editingCell.kategoriId : true)
+        );
+
+        if (newStatus === "KOSONG") {
+          if (idx !== -1) newData.splice(idx, 1);
+        } else {
+          if (idx !== -1) {
+            newData[idx].status = newStatus;
+          } else {
+            // Need to fake a SantriDetail record because they were NULL previously
+            // This is slightly tricky, we reload the whole page if adding a new record from empty to be safe
+            // For now, let's just do a quick reload or construct mock if missing
+            window.location.reload(); 
+            return prev;
+          }
+        }
+        return newData;
+      });
+
+      toast.success("Tersimpan!", { id: toastId });
+      setEditingCell(null);
+    } catch(err: any) {
+      toast.error(err.message, { id: toastId });
+    } finally {
+      setIsSavingCell(false);
+    }
+  };
 
   // --- Clipboard State ---
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -665,11 +751,15 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
                                                             else if (rec.status === "SAKIT") { cellContent = <span className="font-bold text-amber-500">S</span>; dayS++; weekS++; totalS++; }
                                                             else if (rec.status === "ALPHA") { cellContent = <span className="font-bold text-[var(--color-danger)]">X</span>; dayA++; weekA++; totalA++; }
                                                           }
-                                                          return (
-                                                            <td key={`${santri}-${date}-${sesi}`} className="px-2 py-2 text-center border-b border-r border-[var(--color-surface-dark)]">
-                                                              {cellContent}
-                                                            </td>
-                                                          );
+                                                            const rId = group.records.find(r => r.namaSantri === santri)?.riwayatId || "";
+                                                            return (
+                                                              <td key={`${santri}-${date}-${sesi}`} 
+                                                                  onClick={() => setEditingCell({ riwayatId: rId, namaSantri: santri, tanggal: date, sesi: sesi, currentStatus: rec?.status, keterangan: rec?.keterangan || "" })}
+                                                                  className="px-2 py-2 text-center border-b border-r border-[var(--color-surface-dark)] cursor-pointer hover:bg-slate-100 transition-colors relative group-hover:bg-slate-50"
+                                                              >
+                                                                {cellContent}
+                                                              </td>
+                                                            );
                                                         })}
                                                         <td className="px-1 py-1 text-center border-b border-r-2 border-[var(--color-surface-dark)] bg-[var(--color-surface-light)] align-top content-center">
                                                           <div className="flex flex-col gap-[2px] text-[10px] items-center min-w-[28px]">
@@ -760,8 +850,11 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
                                                 else if (rec.status === "ALPHA") { cellContent = <span className="font-bold text-[var(--color-danger)] text-sm">X</span>; totalA++; }
                                               }
                                               return (
-                                                <td key={`${santri}-${date}`} className="p-0 border-b border-r border-[var(--color-surface)] align-middle">
-                                                  <div className="flex items-center justify-center w-full h-full min-h-[32px] hover:bg-[var(--color-secondary)]">
+                                                <td key={`${santri}-${date}`} 
+                                                    onClick={() => setEditingCell({ riwayatId: rec?.riwayatId || "", namaSantri: santri, tanggal: date, currentStatus: rec?.status, keterangan: rec?.keterangan || "" })}
+                                                    className="p-0 border-b border-r border-[var(--color-surface)] align-middle cursor-pointer"
+                                                >
+                                                  <div className="flex items-center justify-center w-full h-full min-h-[32px] hover:bg-slate-100 transition-colors">
                                                     {cellContent}
                                                   </div>
                                                 </td>
@@ -881,6 +974,56 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
             </div>
           </div>
         </>
+      )}
+
+      {/* INLINE EDIT MODAL */}
+      {editingCell && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+          <div className="w-full max-w-sm rounded-[var(--radius-2xl)] bg-white shadow-2xl border border-[var(--color-surface-dark)] overflow-hidden scale-in-center">
+            <div className="p-5 border-b border-[var(--color-surface-dark)] bg-slate-50 relative">
+              <button 
+                onClick={() => setEditingCell(null)}
+                className="absolute right-4 top-4 text-slate-400 hover:text-[var(--color-danger)] transition-colors bg-white hover:bg-rose-50 rounded-full p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <h3 className="font-bold text-[var(--color-text)] text-lg mb-0.5">Edit Absensi</h3>
+              <p className="text-xs font-semibold text-[var(--color-text-muted)] truncate max-w-[90%]">
+                {editingCell.namaSantri}
+              </p>
+              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">
+                {format(new Date(editingCell.tanggal), "eeee, dd MMM yyyy", { locale: id })} {editingCell.sesi ? `• ${editingCell.sesi.replace("SESI_", "Sesi ")}` : ""}
+              </p>
+            </div>
+            
+            <div className="p-5">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
+                Ubah Status
+              </label>
+              <div className="grid grid-cols-2 gap-2 mb-6">
+                {(["HADIR", "IZIN", "SAKIT", "ALPHA", "KOSONG"] as ("HADIR"|"IZIN"|"SAKIT"|"ALPHA"|"KOSONG")[]).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => handleInlineSave(st)}
+                    disabled={isSavingCell}
+                    className={`flex items-center justify-center gap-2 py-3 px-2 rounded-xl text-xs font-bold transition-all border ${
+                      editingCell.currentStatus === st 
+                        ? st === "HADIR" ? "bg-[var(--color-primary)] text-white border-[var(--color-primary-dark)]" 
+                          : st === "IZIN" ? "bg-indigo-600 text-white border-indigo-700" 
+                          : st === "SAKIT" ? "bg-[var(--color-warning)] text-white border-amber-600" 
+                          : st === "ALPHA" ? "bg-[var(--color-danger)] text-white border-rose-600" 
+                          : "bg-slate-600 text-white border-slate-700"
+                        : st === "KOSONG" ? "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100" 
+                        : "bg-white text-[var(--color-text)] border-[var(--color-surface-dark)] hover:border-[var(--color-primary)] hover:shadow-sm"
+                    } disabled:opacity-50`}
+                  >
+                    {st === "KOSONG" ? "Hapus Data" : st}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

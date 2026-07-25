@@ -24,7 +24,7 @@ type Kelompok = {
   anggotaList: Anggota[];
 };
 
-type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
+type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA" | "KOSONG";
 
 export function TabirotDetailClient({ kelompokId, canEdit }: { kelompokId: string, canEdit: boolean }) {
   const [kelompok, setKelompok] = useState<Kelompok | null>(null);
@@ -365,7 +365,7 @@ export function TabirotDetailClient({ kelompokId, canEdit }: { kelompokId: strin
                               onClick={() => {
                                 setAbsenMap(prev => ({
                                   ...prev,
-                                  [anggota.santriId]: { status: st, keterangan: prev[anggota.santriId]?.keterangan || "" }
+                                  [anggota.santriId]: { status: currentStatus === st ? "KOSONG" : st, keterangan: prev[anggota.santriId]?.keterangan || "" }
                                 }));
                               }}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${

@@ -31,7 +31,7 @@ type SantriAbsenTarget = {
   isCheckedOut: boolean;
 };
 
-type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA";
+type AbsenStatus = "HADIR" | "IZIN" | "SAKIT" | "ALPHA" | "KOSONG";
 
 export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: string[]; defaultSakan?: string }) {
   const [tanggal, setTanggal] = useState("");
@@ -413,7 +413,7 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
                             <button
                               key={st}
                               disabled={santri.isCheckedOut}
-                              onClick={() => handleStatusChange(santri.riwayatId, st)}
+                              onClick={() => handleStatusChange(santri.riwayatId, currentStatus === st ? "KOSONG" : st)}
                               className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${currentStatus === st
                                   ? st === "HADIR" ? "bg-[var(--color-primary)] text-white shadow-[var(--color-primary-100)] shadow-sm"
                                     : st === "IZIN" ? "bg-indigo-500 text-white shadow-indigo-200 shadow-sm"

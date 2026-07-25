@@ -120,6 +120,7 @@ export async function GET(request: Request) {
         sakan: ms ? ms.sakan : "-",
         kelas: r.riwayat.kelas?.nama || r.riwayat.program?.nama_indo || "-",
         sesi: r.sesi || null,
+        kategoriId: r.kategoriId || null,
         kegiatanNama: r.kategori?.nama || null,
         status: r.status,
         keterangan: r.keterangan || "-",

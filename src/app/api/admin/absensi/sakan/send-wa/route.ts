@@ -82,7 +82,10 @@ export async function POST(request: Request) {
       if (activeDufah && activeDufah === record.riwayat.dufahNama) {
         const ms = masterSantriList.find(m => m.id === record.riwayat.santriId);
         if (ms && ms.sakan && ms.sakan !== "-") {
-          sakanSudahAbsen.add(ms.sakan);
+          // Do not consider sakan as completed if the record is only automatically injected IZIN / SAKIT
+          if (record.status !== "IZIN" && record.status !== "SAKIT") {
+            sakanSudahAbsen.add(ms.sakan);
+          }
 
           // Kumpulkan keterangan jika ada (strip [TRS-xxx] agar tidak tampil di WA)
           if (record.keterangan && record.keterangan.trim()) {
@@ -126,7 +129,9 @@ export async function POST(request: Request) {
       unconfirmedPerSakan
     );
 
-    const result = await sendWhatsAppMessage(groupId, message);
+    // Gunakan wa session id (sesi utama) sesuai request pengguna
+    const sessionId = process.env.WA_SESSION_ID;
+    const result = await sendWhatsAppMessage(groupId, message, sessionId);
 
     if (result.success) {
       return NextResponse.json({ success: true, detail: result.detail });

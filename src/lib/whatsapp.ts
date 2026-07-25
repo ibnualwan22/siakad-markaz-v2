@@ -8,9 +8,9 @@ const WA_API_URL = "https://wa-multi-session.amtsilatipusat.com/api/v1";
 /**
  * Mengirim pesan WhatsApp via WA Multi Session API.
  */
-export async function sendWhatsAppMessage(target: string, message: string): Promise<{ success: boolean; detail?: string }> {
+export async function sendWhatsAppMessage(target: string, message: string, forceSessionId?: string | null): Promise<{ success: boolean; detail?: string }> {
   const apiKey = process.env.WA_API_KEY || "024a3190-cfd8-4da6-8e82-7ac0f6c568d0";
-  const sessionId = process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
+  const sessionId = forceSessionId || process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
 
   if (!apiKey) {
     return { success: false, detail: "WA_API_KEY belum dikonfigurasi" };

@@ -23,6 +23,47 @@ export async function GET(request: Request) {
     },
   });
 
+  // --- AUTO-JIT IZIN LOGIC FOR GET --- //
+  const dateZero = new Date(parsedDate);
+  dateZero.setHours(0,0,0,0);
+  
+  const activeIzinRecords = await prisma.perizinan.findMany({
+    where: {
+      riwayatId: { in: santriIds },
+      statusIzin: "AKTIF",
+      OR: [
+        { tipeIzin: "HARIAN", tanggalMulai: dateZero },
+        { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: dateZero }, tanggalSelesai: { gte: dateZero } },
+        { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: dateZero } }
+      ]
+    },
+    select: { riwayatId: true, statusAbsen: true, nomorTasrih: true }
+  });
+
+  const izinMap = new Map<string, any>();
+  for (const i of activeIzinRecords) {
+    izinMap.set(i.riwayatId, { status: i.statusAbsen || "IZIN", tasrih: i.nomorTasrih });
+  }
+
+  const enhancedAbsen = [...existingAbsen];
+  for (const s of santriList) {
+    const existing = enhancedAbsen.find(x => x.riwayatId === s.riwayatId);
+    if ((!existing || existing.status === "ALPHA") && izinMap.has(s.riwayatId)) {
+      const activeIzin = izinMap.get(s.riwayatId);
+      if (!existing) {
+        enhancedAbsen.push({
+          riwayatId: s.riwayatId,
+          tanggal: parsedDate,
+          status: activeIzin.status,
+          keterangan: `Auto ${activeIzin.status} [${activeIzin.tasrih}]`
+        } as any);
+      } else {
+        existing.status = activeIzin.status;
+        existing.keterangan = (existing.keterangan ? existing.keterangan + " | " : "") + `Auto ${activeIzin.status} [${activeIzin.tasrih}]`;
+      }
+    }
+  }
+
   const today = new Date();
   today.setHours(0,0,0,0);
   
@@ -42,7 +83,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     santriList,
-    absenData: existingAbsen,
+    absenData: enhancedAbsen,
     unconfirmedIds,
   });
 }
@@ -61,8 +102,46 @@ export async function POST(request: Request) {
 
     const parsedDate = parseWibDateString(tanggal);
 
-    const toUpsert = absenList.filter((a: any) => a.status !== "KOSONG");
-    const toDelete = absenList.filter((a: any) => a.status === "KOSONG");
+    // --- AUTO-JIT IZIN LOGIC FOR POST --- //
+    const santriIds = absenList.map((a: any) => a.riwayatId);
+    const dateZero = new Date(parsedDate);
+    dateZero.setHours(0,0,0,0);
+    
+    const activeIzinRecords = await prisma.perizinan.findMany({
+      where: {
+        riwayatId: { in: santriIds },
+        statusIzin: "AKTIF",
+        OR: [
+          { tipeIzin: "HARIAN", tanggalMulai: dateZero },
+          { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: dateZero }, tanggalSelesai: { gte: dateZero } },
+          { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: dateZero } }
+        ]
+      },
+      select: { riwayatId: true, statusAbsen: true, nomorTasrih: true }
+    });
+
+    const izinMap = new Map<string, any>();
+    for (const i of activeIzinRecords) {
+      izinMap.set(i.riwayatId, { status: i.statusAbsen || "IZIN", tasrih: i.nomorTasrih });
+    }
+
+    const modifiedAbsenList = absenList.map((absen: any) => {
+      if (absen.status === "KOSONG") return absen; // Langsung pass jika admin eksplisit minta KOSONG
+
+      const activeIzin = izinMap.get(absen.riwayatId);
+      // Jika disubmit sebagai ALPHA/kosong, tapi dia punya Izin aktif, otomatis inject IZIN
+      if ((absen.status === "ALPHA" || !absen.status) && activeIzin) {
+        return {
+          ...absen,
+          status: activeIzin.status,
+          keterangan: (absen.keterangan ? absen.keterangan + " | " : "") + `Auto ${activeIzin.status} [${activeIzin.tasrih}]`
+        };
+      }
+      return absen;
+    });
+
+    const toUpsert = modifiedAbsenList.filter((a: any) => a.status !== "KOSONG");
+    const toDelete = modifiedAbsenList.filter((a: any) => a.status === "KOSONG");
 
     // Upsert each using transaction
     const operations: any[] = toUpsert.map((absen: any) =>

@@ -67,11 +67,14 @@ export async function GET(request: Request) {
 
   const unconfirmedIds = unconfirmedIzin.map((u: any) => u.riwayatId);
 
+  const hariLibur = await prisma.hariLibur.findUnique({ where: { tanggal: parsedDate } });
+
   return NextResponse.json({
     santriList,
     absenData: existingAbsen,
     absenPengajarData,
     unconfirmedIds,
+    hariLibur,
   });
 }
 
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
         statusIzin: "AKTIF",
         OR: [
           { tipeIzin: "HARIAN", tanggalMulai: dateZero },
-          { tipeIzin: { not: "HARIAN" }, tanggalSelesai: { gte: dateZero } },
+          { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: dateZero }, tanggalSelesai: { gte: dateZero } },
           { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: dateZero } }
         ]
       },
@@ -119,7 +122,15 @@ export async function POST(request: Request) {
       izinMap.set(i.riwayatId, { status: i.statusAbsen || "IZIN", tasrih: i.nomorTasrih });
     }
 
+    const hariLibur = await prisma.hariLibur.findUnique({ where: { tanggal: dateZero } });
+
     const modifiedAbsenList = absenList.map((absen: any) => {
+      // Jika sesi ini libur, maka inputannya dibaikkan (KOSONG), bahkan di frontend sudah di block
+      if (hariLibur) {
+        const sesiIsLibur = hariLibur.isSemuaSesi || hariLibur.sesiLibur.includes(sesi);
+        if (sesiIsLibur) return { ...absen, status: "KOSONG" };
+      }
+
       if (absen.status === "KOSONG") return absen; // Langsung pass jika admin eksplisit minta KOSONG
 
       const activeIzin = izinMap.get(absen.riwayatId);

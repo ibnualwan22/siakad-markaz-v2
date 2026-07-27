@@ -87,6 +87,7 @@ const navigationGroups = [
       { href: "/admin/checkout/config", label: "Konfigurasi Approver", icon: UserCog, permissionId: "checkout_config" },
       { href: "/admin/manajemen-user", label: "Manajemen User", icon: UserCog, permissionId: "manajemen_user" },
       { href: "/admin/manajemen-role", label: "Hak Akses (Role)", icon: ShieldCheck, permissionId: "manajemen_role" },
+      { href: "/admin/pengaturan/hari-libur", label: "Hari Libur", icon: Calendar, permissionId: "pengaturan_kegiatan" },
       { href: "/admin/manajemen-konten/agenda", label: "Agenda Rutinan", icon: CalendarDays, permissionId: "agenda_rutinan" },
       { href: "/admin/manajemen-konten/instagram", label: "Konten Instagram", icon: Instagram, permissionId: "konten_instagram" },
     ]

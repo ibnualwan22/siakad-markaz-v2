@@ -278,6 +278,7 @@ export function AbsensiKelasClient({
   const [tasrihPickerFor, setTasrihPickerFor] = useState<{ riwayatId: string; nama: string } | null>(null);
   const [perizinanCache, setPerizinanCache] = useState<Record<string, any[]>>({});
   const [isFetchingPerizinan, setIsFetchingPerizinan] = useState(false);
+  const [hariLibur, setHariLibur] = useState<any>(null);
 
   // Sync ref dengan state
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
@@ -667,6 +668,12 @@ export function AbsensiKelasClient({
           setUnconfirmedIds(new Set());
         }
 
+        if (data.hariLibur) {
+          setHariLibur(data.hariLibur);
+        } else {
+          setHariLibur(null);
+        }
+
         // Tandai bahwa data untuk sesi ini sudah selesai dimuat (mengizinkan auto-save)
         loadedSessionRef.current = { sesi, kelasId };
       } catch (error) {
@@ -917,6 +924,8 @@ export function AbsensiKelasClient({
     });
   };
 
+  const isLiburSesi = !!hariLibur && (hariLibur.isSemuaSesi || (hariLibur.sesiLibur?.includes(sesi) ?? false));
+
   return (
     <div className="space-y-6">
       <section className="overflow-hidden neu-card-white">
@@ -1103,7 +1112,8 @@ export function AbsensiKelasClient({
             {santriList.length > 0 && (
               <button
                 onClick={handleCopySemuaLaporan}
-                className="rounded-full flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-50)] text-xs font-bold text-[var(--color-primary-dark)] transition hover:bg-[var(--color-primary-100)]"
+                disabled={isLiburSesi}
+                className="rounded-full flex items-center gap-2 px-4 py-2 bg-[var(--color-primary-50)] text-xs font-bold text-[var(--color-primary-dark)] transition hover:bg-[var(--color-primary-100)] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Copy className="w-4 h-4" />
                 Copy Ke WA (Semua Kelas)
@@ -1111,7 +1121,8 @@ export function AbsensiKelasClient({
             )}
             <button
               onClick={() => setAllStatus("HADIR")}
-              className="rounded-full bg-[var(--color-surface-dark)] px-4 py-2 text-xs font-bold text-[var(--color-text)] transition hover:bg-[var(--color-surface-dark)]"
+              disabled={isLiburSesi}
+              className="rounded-full bg-[var(--color-surface-dark)] px-4 py-2 text-xs font-bold text-[var(--color-text)] transition hover:bg-[var(--color-surface-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Hadirkan Semua
             </button>
@@ -1218,6 +1229,16 @@ export function AbsensiKelasClient({
           </div>
         ) : (
           <div className="flex flex-col">
+            {/* Banner Hari Libur */}
+            {isLiburSesi && (
+              <div className="mx-6 mt-4 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3">
+                <div>
+                  <h4 className="text-rose-700 font-bold text-sm">Hari Libur: {hariLibur.nama}</h4>
+                  <p className="text-rose-600 font-medium text-xs">Sesi ini diliburkan. Anda tidak perlu mengisi absensi santri maupun data pengajar.</p>
+                </div>
+              </div>
+            )}
+
             {/* Stats */}
             <div className="flex flex-wrap gap-4 border-b border-[var(--color-surface-dark)] px-6 py-4 bg-white">
               <div className="flex items-center gap-2 text-sm font-bold">
@@ -1361,7 +1382,7 @@ export function AbsensiKelasClient({
                                         {(["HADIR", "IZIN", "SAKIT", "ALPHA"] as AbsenStatus[]).map((st) => (
                                           <button
                                             key={st}
-                                            disabled={santri.isCheckedOut}
+                                            disabled={santri.isCheckedOut || isLiburSesi}
                                             onClick={() => handleStatusChange(santri.riwayatId, currentStatus === st ? "KOSONG" : st)}
                                             className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${currentStatus === st
                                               ? st === "HADIR" ? "bg-emerald-500 text-white shadow-emerald-200 shadow-sm"
@@ -1385,7 +1406,7 @@ export function AbsensiKelasClient({
                                                 type="text"
                                                 placeholder="Catatan..."
                                                 value={displayKet}
-                                                disabled={santri.isCheckedOut}
+                                                disabled={santri.isCheckedOut || isLiburSesi}
                                                 onChange={(e) => {
                                                   let val = e.target.value;
                                                   if (nomorTasrih) {
@@ -1591,7 +1612,7 @@ export function AbsensiKelasClient({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-2">Materi Pelajaran Hari Ini</label>
-                        <input type="text" value={materi} onChange={e => { setMateri(e.target.value); setIsSaved(false); }} placeholder="Contoh: Nahwu Bab Isim" className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3 text-sm focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary)]/10 outline-none transition-all" />
+                        <input type="text" disabled={isLiburSesi} value={materi} onChange={e => { setMateri(e.target.value); setIsSaved(false); }} placeholder="Contoh: Nahwu Bab Isim" className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3 text-sm focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary)]/10 outline-none transition-all disabled:opacity-50 disabled:bg-slate-100" />
                       </div>
                       {isTeacher ? (
                         <div className="grid grid-cols-1 gap-4">
@@ -1620,12 +1641,12 @@ export function AbsensiKelasClient({
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-2">Jam Masuk (24H)</label>
-                            <input type="text" placeholder="Contoh: 15:30" maxLength={5} value={waktuMulai} onChange={e => {
+                            <input type="text" disabled={isLiburSesi} placeholder="Contoh: 15:30" maxLength={5} value={waktuMulai} onChange={e => {
                               let val = e.target.value.replace(/[^0-9:]/g, '');
                               if (val.length === 2 && !val.includes(':') && e.target.value.length > waktuMulai.length) val += ':';
                               setWaktuMulai(val);
                               setIsSaved(false);
-                            }} className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3 text-sm focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary)]/10 outline-none transition-all font-mono placeholder:text-[var(--color-text-subtle)]" />
+                            }} className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3 text-sm focus:border-[var(--color-primary)] focus:ring-4 focus:ring-[var(--color-primary)]/10 outline-none transition-all font-mono placeholder:text-[var(--color-text-subtle)] disabled:opacity-50 disabled:bg-slate-100" />
                           </div>
                           <div>
                             <label className="block text-xs font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-2">Jam Selesai (24H)</label>
@@ -1644,16 +1665,16 @@ export function AbsensiKelasClient({
                       <div>
                         <label className="block text-xs font-bold uppercase tracking-[0.1em] text-[var(--color-text-muted)] mb-3">Kelengkapan Atribut Mengajar</label>
                         <div className="flex flex-wrap gap-4">
-                          <label className="flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)] transition-colors shadow-sm">
-                            <input type="checkbox" checked={atribut.kopiah} onChange={e => { setAtribut({ ...atribut, kopiah: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)]" />
+                          <label className={`flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border transition-colors shadow-sm ${isLiburSesi ? 'opacity-50 border-[var(--color-surface-dark)]' : 'border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)]'}`}>
+                            <input type="checkbox" disabled={isLiburSesi} checked={atribut.kopiah} onChange={e => { setAtribut({ ...atribut, kopiah: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)] disabled:bg-slate-100" />
                             <span className="text-sm font-bold text-[var(--color-text)]">Kopiah / Khimar</span>
                           </label>
-                          <label className="flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)] transition-colors shadow-sm">
-                            <input type="checkbox" checked={atribut.nametag} onChange={e => { setAtribut({ ...atribut, nametag: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)]" />
+                          <label className={`flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border transition-colors shadow-sm ${isLiburSesi ? 'opacity-50 border-[var(--color-surface-dark)]' : 'border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)]'}`}>
+                            <input type="checkbox" disabled={isLiburSesi} checked={atribut.nametag} onChange={e => { setAtribut({ ...atribut, nametag: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)] disabled:bg-slate-100" />
                             <span className="text-sm font-bold text-[var(--color-text)]">Nametag</span>
                           </label>
-                          <label className="flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)] transition-colors shadow-sm">
-                            <input type="checkbox" checked={atribut.bros} onChange={e => { setAtribut({ ...atribut, bros: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)]" />
+                          <label className={`flex items-center gap-3 cursor-pointer bg-white px-5 py-3.5 rounded-2xl border transition-colors shadow-sm ${isLiburSesi ? 'opacity-50 border-[var(--color-surface-dark)]' : 'border-[var(--color-surface-dark)] hover:border-[var(--color-primary-100)]'}`}>
+                            <input type="checkbox" disabled={isLiburSesi} checked={atribut.bros} onChange={e => { setAtribut({ ...atribut, bros: e.target.checked }); setIsSaved(false); }} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-5 h-5 border-[var(--color-surface-dark)] disabled:bg-slate-100" />
                             <span className="text-sm font-bold text-[var(--color-text)]">Baju</span>
                           </label>
                         </div>
@@ -1676,6 +1697,7 @@ export function AbsensiKelasClient({
                               <span className="text-sm font-semibold text-[var(--color-text)]">{item.label}</span>
                               <input
                                 type="checkbox"
+                                disabled={isLiburSesi}
                                 checked={kecerdasan.includes(item.id)}
                                 onChange={(e) => {
                                   if (e.target.checked) {
@@ -1685,7 +1707,7 @@ export function AbsensiKelasClient({
                                   }
                                   setIsSaved(false);
                                 }}
-                                className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-4 h-4 border-[var(--color-surface-dark)]"
+                                className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)] w-4 h-4 border-[var(--color-surface-dark)] disabled:bg-slate-100"
                               />
                             </label>
                           ))}
@@ -1857,8 +1879,8 @@ export function AbsensiKelasClient({
       {activeSession && (
         <button
           onClick={handleSave}
-          disabled={isSaving || !materi || !tanggal || !sesi}
-          title="Simpan absensi"
+          disabled={isSaving || !materi || !tanggal || !sesi || isLiburSesi}
+          title={isLiburSesi ? "Sesi libur" : "Simpan absensi"}
           className={`fixed bottom-24 right-6 z-50 flex items-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-all duration-300 ${isSaving
             ? "bg-amber-400 scale-90 shadow-amber-200"
             : isSaved

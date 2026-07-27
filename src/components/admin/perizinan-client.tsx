@@ -101,11 +101,11 @@ export default function PerizinanClient({ santriOptions, sakanList, kelasList, p
       return toast.error("Pilih minimal satu santri");
     }
 
-    if (activeTab === "BERHARI_HARI" && !tanggalSelesai) {
+    if ((activeTab === "BERHARI_HARI" || activeTab === "KELUAR_PARE") && !tanggalSelesai) {
       return toast.error("Pilih tanggal sampai");
     }
 
-    if (activeTab === "BERHARI_HARI" && new Date(tanggalMulai) > new Date(tanggalSelesai)) {
+    if ((activeTab === "BERHARI_HARI" || activeTab === "KELUAR_PARE") && new Date(tanggalMulai) > new Date(tanggalSelesai)) {
       return toast.error("Tanggal selesai tidak boleh sebelum tanggal mulai");
     }
 
@@ -119,7 +119,7 @@ export default function PerizinanClient({ santriOptions, sakanList, kelasList, p
           tipeIzin: activeTab,
           alasan,
           tanggalMulai,
-          tanggalSelesai: activeTab === "BERHARI_HARI" ? tanggalSelesai : null,
+          tanggalSelesai: (activeTab === "BERHARI_HARI" || activeTab === "KELUAR_PARE") ? tanggalSelesai : null,
           statusAbsen,
           kategoriHarian: activeTab === "HARIAN" ? kategoriHarian : undefined,
         })
@@ -351,7 +351,7 @@ export default function PerizinanClient({ santriOptions, sakanList, kelasList, p
               />
             </div>
 
-            {activeTab === "BERHARI_HARI" ? (
+            {activeTab === "BERHARI_HARI" || activeTab === "KELUAR_PARE" ? (
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-bold text-[var(--color-text)] mb-1">Dari Tanggal</label>

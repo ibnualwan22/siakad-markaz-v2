@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { parseWibDateString, getSesiStatusToday, getAllJadwalSesi } from "@/lib/jadwal-sesi";
 import { TipeIzin, SesiKelas, StatusAbsen } from "@prisma/client";
+import { isHariLiburFull, isSesiLibur } from "./hari-libur";
 
 // Generate Nomor Tasrih: TRS-YYYYMMDD-XXXX
 export async function generateNomorTasrih(tanggal: Date): Promise<string> {
@@ -66,21 +67,40 @@ export async function processAutoAbsensiIzin(
                      (tipeIzin as any) === "TABIROT" ? `Izin Ta'birot [${nomorTasrih}]: ${alasan}` :
                      `Izin Keluar Pare [${nomorTasrih}]: ${alasan}`;
 
-  // Tentukan range tanggal (khusus absen sakan, tabel lain dibuat by JIT saat diabsen)
   const datesToProcess: Date[] = [];
-  if (tipeIzin === "HARIAN" || tipeIzin === "KELUAR_PARE" || (tipeIzin as any) === "TABIROT") {
+  if (tipeIzin === "HARIAN" || (tipeIzin as any) === "TABIROT") {
     datesToProcess.push(tanggalMulai);
-  } else if (tipeIzin === "BERHARI_HARI" && tanggalSelesai) {
+  } else if ((tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE") && tanggalSelesai) {
     let currentDate = new Date(tanggalMulai);
     while (currentDate <= tanggalSelesai) {
       datesToProcess.push(new Date(currentDate));
       currentDate.setDate(currentDate.getDate() + 1);
     }
+  } else if (tipeIzin === "KELUAR_PARE" && !tanggalSelesai) {
+    datesToProcess.push(tanggalMulai);
   }
 
   // Lakukan proses untuk setiap hari
   for (const date of datesToProcess) {
-    // 2. Absen Sakan (Hanya untuk tipe Berhari-hari dan Keluar Pare, ini valid karena asrama aktif setiap hari)
+    const isFullLibur = await isHariLiburFull(date);
+
+    // 1. Absen Kelas (Eager Injection dengan pengecekan Hari Libur)
+    for (const sesi of sesiList) {
+      if (isFullLibur || await isSesiLibur(date, sesi)) continue;
+      
+      const existingKelas = await prisma.absenKelas.findUnique({
+        where: { riwayatId_tanggal_sesi: { riwayatId, tanggal: date, sesi } }
+      });
+      if (!existingKelas || existingKelas.status === "ALPHA") {
+         await prisma.absenKelas.upsert({
+           where: { riwayatId_tanggal_sesi: { riwayatId, tanggal: date, sesi } },
+           update: { status: statusAbsen, keterangan },
+           create: { riwayatId, tanggal: date, sesi: sesi, status: statusAbsen, keterangan }
+         });
+      }
+    }
+
+    // 2. Absen Sakan (Hanya untuk tipe Berhari-hari dan Keluar Pare)
     if (tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE") {
       const existingSakan = await prisma.absenSakan.findUnique({
         where: { riwayatId_tanggal: { riwayatId, tanggal: date } }
@@ -93,7 +113,33 @@ export async function processAutoAbsensiIzin(
         });
       }
     }
-    // Absen Kelas, Kegiatan, & Tabirot ditangani dengan skema JIT (Just-In-Time) saat Submit Absensi.
+    
+    // 3. Absen Kegiatan (Eager inject, khusus KEGIATAN/HARIAN/BERHARI_HARI/KELUAR_PARE)
+    if (tipeIzin === "BERHARI_HARI" || tipeIzin === "HARIAN" || tipeIzin === "KELUAR_PARE") {
+       const activeKegiatanSesi = await prisma.sesiAbsenKegiatan.findMany({
+         where: { 
+            isClosed: false,
+            OR: [
+              { dibukaPada: { lte: new Date(date.getTime() + 86399999), gte: date } },
+              { ditutupPada: { gte: date } }
+            ]
+         }
+       });
+
+       for (const kSesi of activeKegiatanSesi) {
+         const existingKeg = await prisma.absenKegiatan.findUnique({
+           where: { riwayatId_kategoriId_tanggal: { riwayatId, kategoriId: kSesi.kategoriId, tanggal: date } }
+         });
+         
+         if (!existingKeg || existingKeg.status === "ALPHA") {
+            await prisma.absenKegiatan.upsert({
+              where: { riwayatId_kategoriId_tanggal: { riwayatId, kategoriId: kSesi.kategoriId, tanggal: date } },
+              update: { status: statusAbsen, keterangan },
+              create: { riwayatId, kategoriId: kSesi.kategoriId, tanggal: date, status: statusAbsen, keterangan }
+            });
+         }
+       }
+    }
   }
 }
 

@@ -21,6 +21,7 @@ type RekapData = {
   sakan: StatusCounts;
   kelas: StatusCounts;
   kegiatan: KegiatanRekap[];
+  liburCount?: number;
 };
 
 const STATUS_CONFIG = [
@@ -238,6 +239,11 @@ export function RekapAbsenClient() {
         </div>
       ) : data ? (
         <div className="space-y-6">
+          {(data.liburCount ?? 0) > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-50 border border-rose-100 rounded-lg text-rose-600 text-xs font-semibold shadow-sm animate-pulse-slow">
+              <span className="font-bold text-rose-500 bg-rose-100 px-1.5 py-0.5 rounded">LBR</span> {data.liburCount} hari libur dikecualikan dari perhitungan statistik kehadiran.
+            </div>
+          )}
           {/* Sakan */}
           <RekapCard
             title="Absen Sakan"

@@ -54,10 +54,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       where: {
         riwayatId: { in: santriIds },
         statusIzin: "AKTIF",
-        tipeIzin: { not: "HARIAN" },
         OR: [
-          { tanggalSelesai: { gt: today } },
-          { tanggalSelesai: { equals: today } },
+          { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: today }, tanggalSelesai: { gte: today } },
           { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: today } }
         ]
       },

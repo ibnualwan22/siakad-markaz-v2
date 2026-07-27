@@ -31,6 +31,7 @@ type SantriDetail = {
   keterangan: string;
   tanggal: string; // YYYY-MM-DD
   usbu: string;
+  isLibur?: boolean;
 };
 
 type EditingCell = {
@@ -100,7 +101,9 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
   const stats = useMemo(() => {
     const counts = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
     data.forEach((r) => {
-      if (r.status in counts) counts[r.status as keyof typeof counts]++;
+      if (!r.isLibur) {
+        if (r.status in counts) counts[r.status as keyof typeof counts]++;
+      }
     });
 
     const total = counts.HADIR + counts.IZIN + counts.SAKIT + counts.ALPHA;
@@ -120,7 +123,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
     if (type !== "kelas") return [];
     const map = new Map<string, { nama: string; kelas: string; total: number }>();
     data.forEach((r) => {
-      if (r.status !== "HADIR") {
+      if (!r.isLibur && r.status !== "HADIR") {
         const key = r.namaSantri;
         if (!map.has(key)) map.set(key, { nama: r.namaSantri, kelas: r.kelas, total: 0 });
         map.get(key)!.total++;
@@ -248,7 +251,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
 
   // --- Generate Laporan Pemanggilan (type=kegiatan) ---
   const generateLaporanPemanggilan = useCallback(() => {
-    const alphaRecords = data.filter((r) => r.status === "ALPHA");
+    const alphaRecords = data.filter((r) => !r.isLibur && r.status === "ALPHA");
     if (alphaRecords.length === 0) return "";
     const header = `يرجي  من الأسماء المكتوبة أدناه الاتجاه إلى الرواق التنفيذي في قسم الأمن والانضباط بعد الدراسة\n\nDiharapkan semua nama-nama yang tertulis dibawah ini, untuk menghadap ke ruang pengurus dibagian keamanan dan kedisiplinan setelah pembelajaran\n`;
     const names = alphaRecords.map((r, i) => `${i + 1}. ${r.namaSantri} - ${r.sakan}`).join("\n");
@@ -277,7 +280,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
 
   // --- Generate Rekap Alfa Mingguan (type=kelas) ---
   const generateRekapAlfaMingguan = useCallback(() => {
-    const alphaRecords = data.filter((r) => r.status === "ALPHA");
+    const alphaRecords = data.filter((r) => !r.isLibur && r.status === "ALPHA");
     if (alphaRecords.length === 0) return "";
     
     // Tentukan usbu label dari data
@@ -746,10 +749,14 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
                                                           const rec = recordMap.get(`${santri}_${date}_${sesi}`);
                                                           let cellContent = <span className="text-slate-200">-</span>;
                                                           if (rec) {
-                                                            if (rec.status === "HADIR") { cellContent = <span className="font-bold text-emerald-500">✓</span>; dayH++; weekH++; totalH++; }
-                                                            else if (rec.status === "IZIN") { cellContent = <span className="font-bold text-indigo-500">I</span>; dayI++; weekI++; totalI++; }
-                                                            else if (rec.status === "SAKIT") { cellContent = <span className="font-bold text-amber-500">S</span>; dayS++; weekS++; totalS++; }
-                                                            else if (rec.status === "ALPHA") { cellContent = <span className="font-bold text-[var(--color-danger)]">X</span>; dayA++; weekA++; totalA++; }
+                                                            if (rec.isLibur) {
+                                                              cellContent = <span className="opacity-70 text-rose-600 text-[10px] font-bold uppercase" title={`Libur: ${rec.status || 'Tidak ada'}`}>LBR</span>;
+                                                            } else {
+                                                              if (rec.status === "HADIR") { cellContent = <span className="font-bold text-emerald-500">✓</span>; dayH++; weekH++; totalH++; }
+                                                              else if (rec.status === "IZIN") { cellContent = <span className="font-bold text-indigo-500">I</span>; dayI++; weekI++; totalI++; }
+                                                              else if (rec.status === "SAKIT") { cellContent = <span className="font-bold text-amber-500">S</span>; dayS++; weekS++; totalS++; }
+                                                              else if (rec.status === "ALPHA") { cellContent = <span className="font-bold text-[var(--color-danger)]">X</span>; dayA++; weekA++; totalA++; }
+                                                            }
                                                           }
                                                             const rId = group.records.find(r => r.namaSantri === santri)?.riwayatId || "";
                                                             return (

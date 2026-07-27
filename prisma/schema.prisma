@@ -386,6 +386,18 @@ model JadwalSesi {
   isActive       Boolean   @default(true)
 }
 
+model HariLibur {
+  id           String      @id @default(cuid())
+  tanggal      DateTime    @db.Date
+  nama         String
+  isSemuaSesi  Boolean     @default(true)
+  sesiLibur    SesiKelas[]
+  keterangan   String?
+  createdAt    DateTime    @default(now())
+
+  @@unique([tanggal])
+}
+
 model AbsenPengajar {
   id                   String    @id @default(cuid())
   userId               String

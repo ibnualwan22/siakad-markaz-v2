@@ -58,6 +58,9 @@ export async function GET(request: Request) {
       });
     }
 
+    // Ambil hari libur dalam rentang tanggal
+    const hariLiburList = await prisma.hariLibur.findMany({ where: tanggalWhere });
+
     // Ambil master santri untuk filter hanya riwayat aktif
     const masterSantriList = await getMasterSantriList();
     const activeSantriMap = new Map<string, string>();
@@ -113,6 +116,13 @@ export async function GET(request: Request) {
         }
       }
 
+      let isLibur = false;
+      const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tanggalStr);
+      if (hl) {
+        if (hl.isSemuaSesi) isLibur = true;
+        else if (r.sesi && hl.sesiLibur.includes(r.sesi)) isLibur = true;
+      }
+
       return {
         id: r.id,
         riwayatId: r.riwayatId,
@@ -126,6 +136,7 @@ export async function GET(request: Request) {
         keterangan: r.keterangan || "-",
         tanggal: tanggalStr,
         usbu: usbuLabel,
+        isLibur,
       };
     });
 

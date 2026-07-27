@@ -31,29 +31,43 @@ export async function GET(request: Request) {
 
   const riwayatSelect = { select: { santriId: true, dufahNama: true } };
 
+  const hariLiburList = await prisma.hariLibur.findMany({
+    where: tanggalWhere
+  });
+  const liburCount = hariLiburList.filter(h => h.isSemuaSesi).length;
+
   // --- Rekap Sakan ---
   const sakanRecords = await prisma.absenSakan.findMany({
     where: tanggalWhere,
-    select: { status: true, riwayat: riwayatSelect },
+    select: { status: true, tanggal: true, riwayat: riwayatSelect },
   });
   
   const sakanRekap: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
   for (const r of sakanRecords) {
     if (isActiveRiwayat(r.riwayat)) {
-      if (r.status in sakanRekap) sakanRekap[r.status]++;
+      const tgl = r.tanggal.toISOString().split("T")[0];
+      const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
+      if (!(hl && hl.isSemuaSesi)) {
+        if (r.status in sakanRekap) sakanRekap[r.status]++;
+      }
     }
   }
 
   // --- Rekap Kelas ---
   const kelasRecords = await prisma.absenKelas.findMany({
     where: tanggalWhere,
-    select: { status: true, riwayat: riwayatSelect },
+    select: { status: true, sesi: true, tanggal: true, riwayat: riwayatSelect },
   });
 
   const kelasRekap: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
   for (const r of kelasRecords) {
     if (isActiveRiwayat(r.riwayat)) {
-      if (r.status in kelasRekap) kelasRekap[r.status]++;
+      const tgl = r.tanggal.toISOString().split("T")[0];
+      const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
+      const sesiIsLibur = hl && (hl.isSemuaSesi || hl.sesiLibur.includes(r.sesi as any));
+      if (!sesiIsLibur) {
+        if (r.status in kelasRekap) kelasRekap[r.status]++;
+      }
     }
   }
 
@@ -64,14 +78,18 @@ export async function GET(request: Request) {
 
   const kegiatanRecords = await prisma.absenKegiatan.findMany({
     where: tanggalWhere,
-    select: { status: true, kategoriId: true, riwayat: riwayatSelect },
+    select: { status: true, kategoriId: true, tanggal: true, riwayat: riwayatSelect },
   });
 
   const kegiatanRekap = kegiatanList.map((k) => {
     const counts: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
     for (const r of kegiatanRecords) {
       if (r.kategoriId === k.id && isActiveRiwayat(r.riwayat)) {
-         if (r.status in counts) counts[r.status]++;
+        const tgl = r.tanggal.toISOString().split("T")[0];
+        const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
+        if (!(hl && hl.isSemuaSesi)) {
+           if (r.status in counts) counts[r.status]++;
+        }
       }
     }
     return {
@@ -85,5 +103,6 @@ export async function GET(request: Request) {
     sakan: sakanRekap,
     kelas: kelasRekap,
     kegiatan: kegiatanRekap,
+    liburCount,
   });
 }

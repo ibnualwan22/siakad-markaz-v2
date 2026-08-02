@@ -1,10 +1,29 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await getSession();
+  
+  // Jika dia bukan super admin, filter program berdasarkan kewenangan mengajarnya
+  let whereClause: any = {};
+  if (session && session.role !== "ADMIN") {
+    const orConditions = [];
+    
+    if (session.kelasId) {
+      orConditions.push({ kelasList: { some: { id: session.kelasId } } });
+    }
+    
+    // Check if they are teaching specific programs
+    orConditions.push({ pengajarSesiProgramList: { some: { userId: session.userId } } });
+    
+    whereClause = { OR: orConditions };
+  }
+
   const programs = await prisma.program.findMany({
+    where: whereClause,
     include: {
       programMapels: {
         include: { mapel: true },

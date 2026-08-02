@@ -101,6 +101,10 @@ const AVAILABLE_PERMISSIONS = [
   { id: "pengaturan_syahadah", label: "Pengaturan Syahadah (Lihat)", desc: "Akses melihat pengaturan syahadah", category: "Divisi Syahadah", type: "lihat" },
   { id: "pengaturan_syahadah_edit", label: "Pengaturan Syahadah (Aksi)", desc: "Akses mengubah pengaturan syahadah (Kop, TTD, Bobot Mapel)", category: "Divisi Syahadah", type: "aksi" },
 
+  // Divisi CBT / Ujian
+  { id: "ujian_usbu", label: "CBT / Ujian (Lihat)", desc: "Akses melihat monitoring sesi ujian dan bank soal", category: "Divisi CBT / Ujian", type: "lihat" },
+  { id: "ujian_usbu_edit", label: "CBT / Ujian (Aksi)", desc: "Akses membuat ujian baru, mengedit bank soal, dan membuka sesi ujian globa", category: "Divisi CBT / Ujian", type: "aksi" },
+
   // Manajemen Aplikasi
   { id: "manajemen_user", label: "Manajemen User (Lihat)", desc: "Akses melihat daftar user", category: "Manajemen Aplikasi", type: "lihat" },
   { id: "manajemen_user_edit", label: "Manajemen User (Aksi)", desc: "Akses menambah, mengubah, dan menghapus user", category: "Manajemen Aplikasi", type: "aksi" },

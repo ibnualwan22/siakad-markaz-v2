@@ -126,16 +126,6 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const useCount = await prisma.sesiUjianSantri.count({
-      where: {
-        paket: { sesiGlobalId: id }
-      }
-    });
-
-    if (useCount > 0) {
-      return NextResponse.json({ error: "Tidak dapat menghapus sesi ujian yang sudah memiliki riwayat pengerjaan santri." }, { status: 400 });
-    }
-
     await prisma.sesiUjianGlobal.delete({
       where: { id }
     });

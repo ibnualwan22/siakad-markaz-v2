@@ -173,7 +173,7 @@ export function SantriSidebar({
       {/* Mobile hamburger */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 lg:hidden neu-button p-2.5 rounded-xl"
+        className="santri-mobile-menu-btn fixed top-4 left-4 z-50 lg:hidden neu-button p-2.5 rounded-xl"
         aria-label="Menu"
       >
         <Menu size={20} style={{ color: "var(--color-text)" }} />

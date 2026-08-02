@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline } from "lucide-react";
 import toast from "react-hot-toast";
+import SoalText from "@/components/soal-text";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -364,14 +365,14 @@ export default function BankSoalPage() {
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {soal.bobot} Poin</span>
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-600">Paket: {soal.paketSoal || "A"}</span>
                     </div>
-                    <h3 className="font-semibold text-base leading-relaxed mb-4 whitespace-pre-wrap text-gray-800" dangerouslySetInnerHTML={{ __html: soal.pertanyaan }} />
+                    <SoalText html={soal.pertanyaan} className="font-semibold text-base leading-relaxed mb-4 whitespace-pre-wrap text-gray-800 block" />
                     <div className="space-y-2.5">
                       {soal.opsiList.map((j: any, i: number) => (
                         <div key={j.id} className={`px-4 py-3 rounded-xl border text-sm flex gap-3 items-center transition-colors ${j.isCorrect ? 'border-green-300 bg-green-50' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}>
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-xs font-bold ${j.isCorrect ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-gray-500 bg-white'}`}>
                             {String.fromCharCode(65 + i)}
                           </div>
-                          <span className="flex-1 font-medium text-gray-700" style={{ color: j.isCorrect ? '#166534' : '' }} dangerouslySetInnerHTML={{ __html: j.teks }} />
+                          <SoalText html={j.teks} className="flex-1 font-medium text-gray-700" style={{ color: j.isCorrect ? '#166534' : '' }} />
                           {j.isCorrect && <CheckCircle2 size={18} className="text-green-500" />}
                         </div>
                       ))}

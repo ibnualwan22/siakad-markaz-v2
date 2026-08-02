@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send } from "lucide-react";
 import toast from "react-hot-toast";
+import SoalText from "@/components/soal-text";
 
 export default function ClientMengerjakanUjian() {
   const router = useRouter();
@@ -413,6 +414,7 @@ export default function ClientMengerjakanUjian() {
           aside { display: none !important; }
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
+          .santri-mobile-menu-btn { display: none !important; }
           body { overflow: hidden !important; overscroll-behavior: none; }
         `}} />
       )}
@@ -441,9 +443,9 @@ export default function ClientMengerjakanUjian() {
         {/* Soal Content */}
         <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-32 md:pb-8">
            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
-              <div 
-                className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none" 
-                dangerouslySetInnerHTML={{ __html: soal.pertanyaan }} 
+              <SoalText 
+                html={soal.pertanyaan}
+                className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" 
               />
            </div>
 
@@ -468,9 +470,9 @@ export default function ClientMengerjakanUjian() {
                        checked={isSelected}
                        onChange={() => handleAnswerSelect(soal.soalId, opt.id)}
                      />
-                     <div 
-                       className={`text-sm md:text-base transition-colors ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`} 
-                       dangerouslySetInnerHTML={{ __html: opt.teks }} 
+                     <SoalText
+                       html={opt.teks}
+                       className={`text-sm md:text-base transition-colors block ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`} 
                      />
                    </div>
                  </label>

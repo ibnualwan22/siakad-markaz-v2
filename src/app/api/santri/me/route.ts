@@ -217,6 +217,31 @@ export async function GET() {
       };
     });
 
+    const riwayatAktif = santri.riwayatRecords[0];
+    const getUjianAktif = async () => {
+      if (!riwayatAktif || !riwayatAktif.programId) return [];
+      const paketAktif = await prisma.paketUjian.findMany({
+        where: {
+          programId: riwayatAktif.programId,
+          sesiGlobal: { isActive: true }
+        },
+        include: {
+          sesiList: {
+            where: { riwayatId: riwayatAktif.id }
+          },
+          _count: { select: { soalPaketList: true } }
+        }
+      });
+      return paketAktif.map((p: any) => ({
+        id: p.id,
+        nama: p.nama,
+        usbuKe: p.usbuKe,
+        status: p.sesiList.length > 0 ? p.sesiList[0].status : "BELUM_MULAI"
+      })).filter((p: any) => p.status !== "SELESAI" && p.status !== "AUTO_SUBMIT");
+    };
+
+    const ujianAktif = await getUjianAktif();
+
     return NextResponse.json({
       success: true,
       santri: {

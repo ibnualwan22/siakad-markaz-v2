@@ -1,0 +1,80 @@
+import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Add permission check
+    if (session.role !== "ADMIN") {
+      const p = await prisma.rolePermission.findUnique({
+        where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
+      });
+      if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const { pertanyaan, tipeSoal, bobot, opsiList, usbuKe, paketSoal } = await req.json();
+
+    if (!pertanyaan) {
+      return NextResponse.json({ error: "Pertanyaan tidak boleh kosong" }, { status: 400 });
+    }
+
+    // Update soal and re-create opsi
+    const updatedSoal = await prisma.bankSoalUsbu.update({
+      where: { id },
+      data: {
+        pertanyaan,
+        tipeSoal: tipeSoal || "PG",
+        bobot: Number(bobot) || 10,
+        ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
+        ...(paketSoal !== undefined && { paketSoal }),
+        opsiList: {
+          deleteMany: {},
+          create: opsiList?.map((opsi: any, i: number) => ({
+            teks: opsi.teks,
+            isCorrect: opsi.isCorrect,
+            urutan: i + 1
+          })) || []
+        }
+      },
+      include: {
+        opsiList: true
+      }
+    });
+
+    return NextResponse.json(updatedSoal);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (session.role !== "ADMIN") {
+      const p = await prisma.rolePermission.findUnique({
+        where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
+      });
+      if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { id } = await params;
+
+    await prisma.bankSoalUsbu.delete({
+      where: { id }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

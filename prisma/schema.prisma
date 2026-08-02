@@ -25,6 +25,8 @@ model Program {
   soalTauziList               SoalTauzi[]
   pesertaTauziList            PesertaTauzi[]
   pesertaTauziRekomendasiList PesertaTauzi[]        @relation("ProgramRekomendasi")
+  bankSoalUsbuList            BankSoalUsbu[]
+  paketUjianList              PaketUjian[]
 }
 
 model Kelas {
@@ -55,6 +57,7 @@ model Mapel {
   jumlah_tes_b2      Int? // Override jumlah tes jika berada di bulan ke-2 (Contoh: Qowaid = 1)
   programMapels      ProgramMapel[]
   nilaiList          Nilai[]
+  bankSoalUsbuList   BankSoalUsbu[]
 }
 
 model ProgramMapel {
@@ -114,6 +117,7 @@ model Dufah {
 
   riwayatRecords RiwayatSantri[]
   sesiTauziList  SesiTauzi[]
+  sesiUjianGlobalList SesiUjianGlobal[]
 }
 
 model RiwayatSantri {
@@ -137,6 +141,7 @@ model RiwayatSantri {
   perizinanList         Perizinan[]
   jumlah_kolom_usbu     Int? // null=ikut kelas, 0=normal, 1=satu kolom, 2=dua kolom
   checkoutPengajuanList CheckoutPengajuan[]
+  sesiUjianList         SesiUjianSantri[]
 
   @@unique([santriId, dufahNama])
 }
@@ -740,4 +745,111 @@ model AbsenTabirot {
   santri    SantriInternal  @relation(fields: [santriId], references: [id], onDelete: Cascade)
 
   @@unique([kelompokId, santriId, tanggal])
+}
+
+// ===== CBT UJIAN USBU' =====
+
+model BankSoalUsbu {
+  id          String   @id @default(cuid())
+  mapelId     String
+  programId   String
+  usbuKe      Int      @default(1)    // 1, 2, atau 3
+  paketSoal   String   @default("A")  // "A", "B", "C", dll
+  tipeSoal    String   @default("PG") // "PG", "PG_MULTI", "ISIAN", "BENAR_SALAH"
+  pertanyaan  String
+  bobot       Int      @default(10)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  mapel         Mapel    @relation(fields: [mapelId], references: [id], onDelete: Restrict)
+  program       Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  opsiList      OpsiSoalUsbu[]
+  soalPaketList SoalPaket[]
+}
+
+model OpsiSoalUsbu {
+  id        String  @id @default(cuid())
+  soalId    String
+  teks      String
+  isCorrect Boolean @default(false)
+  urutan    Int
+
+  soal BankSoalUsbu @relation(fields: [soalId], references: [id], onDelete: Cascade)
+}
+
+model SesiUjianGlobal {
+  id            String    @id @default(cuid())
+  nama          String
+  dufahNama     String
+  usbuKe        Int       // 1, 2, atau 3
+  durasiMenit   Int       @default(120)
+  kodeAkses     String?   // 6-digit code dari pengawas
+  acakSoal      Boolean   @default(true)
+  acakOpsi      Boolean   @default(true)
+  isActive      Boolean   @default(false)
+  waktuMulai    DateTime?
+  waktuSelesai  DateTime?
+  createdAt     DateTime  @default(now())
+
+  dufah             Dufah         @relation(fields: [dufahNama], references: [nama], onDelete: Restrict)
+  paketUjianList    PaketUjian[]
+}
+
+model PaketUjian {
+  id           String    @id @default(cuid())
+  nama         String // Auto generated nama (misal: "Ujian Usbu 1 - Shifr Awal (Paket A)")
+  programId    String
+  sesiGlobalId String
+  paketSoal    String    @default("A") // A, B, C
+  createdAt    DateTime  @default(now())
+
+  program       Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  sesiGlobal    SesiUjianGlobal  @relation(fields: [sesiGlobalId], references: [id], onDelete: Cascade)
+  soalPaketList SoalPaket[]
+  sesiList      SesiUjianSantri[]
+  
+  @@unique([sesiGlobalId, programId])
+}
+
+model SoalPaket {
+  id      String @id @default(cuid())
+  paketId String
+  soalId  String
+  urutan  Int
+
+  paket   PaketUjian   @relation(fields: [paketId], references: [id], onDelete: Cascade)
+  soal    BankSoalUsbu @relation(fields: [soalId], references: [id], onDelete: Cascade)
+
+  @@unique([paketId, soalId])
+  @@unique([paketId, urutan])
+}
+
+model SesiUjianSantri {
+  id            String    @id @default(cuid())
+  paketId       String
+  riwayatId     String
+  waktuMulai    DateTime  @default(now())
+  waktuSelesai  DateTime?
+  status        String    @default("MENGERJAKAN") // MENGERJAKAN | SELESAI | AUTO_SUBMIT
+  nilaiTotal    Float?
+  tabCloseCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  paket         PaketUjian    @relation(fields: [paketId], references: [id], onDelete: Cascade)
+  riwayat       RiwayatSantri @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
+  jawabanList   JawabanUjianSantri[]
+
+  @@unique([paketId, riwayatId])
+}
+
+model JawabanUjianSantri {
+  id     String  @id @default(cuid())
+  sesiId String
+  soalId String
+  opsiId String?
+  rpiId  String? // flag ragu-ragu
+
+  sesi   SesiUjianSantri @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+
+  @@unique([sesiId, soalId])
 }

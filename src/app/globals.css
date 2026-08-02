@@ -7,6 +7,9 @@
 
 :root {
   color-scheme: light;
+  
+  --font-inter: 'Inter', sans-serif;
+  --font-jetbrains-mono: 'JetBrains Mono', monospace;
 
   /* ── Color Tokens ── */
   --color-primary: #006666;

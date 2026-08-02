@@ -109,7 +109,7 @@ export function InputNilaiBulkClient({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`/api/admin/input-nilai-kelas?kelasId=${selectedKelasId}&month=${akbarnasMonth}`);
+      const res = await fetch(`/api/admin/input-nilai-kelas?kelasId=${selectedKelasId}&month=${akbarnasMonth}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Gagal mengambil data");
       const data = await res.json();
       setSantriList(data);

@@ -103,8 +103,8 @@ export async function PUT(req: NextRequest, context: { params: Promise<{ id: str
           tanggalCheckout: formatTanggalWa(todayStr),
         });
         
-        // Fire and forget
-        sendWhatsAppMessage(santriData.noWaWali, message).catch(err => {
+        // Fire and forget (menggunakan WA_SESSION_ID pertama)
+        sendWhatsAppMessage(santriData.noWaWali, message, process.env.WA_SESSION_ID).catch(err => {
           console.error("Failed to send WA to wali on full checkout approval:", err);
         });
       }

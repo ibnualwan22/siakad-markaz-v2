@@ -24,6 +24,7 @@ import { useState } from "react";
 const baseNavItems = [
   { href: "/santri/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/santri/nilai", label: "Nilai", icon: FileText },
+  { href: "/santri/ujian", label: "Ujian", icon: ClipboardCheck },
   { href: "/santri/absen-kegiatan", label: "Absen Mandiri", icon: CalendarCheck },
   { href: "/santri/absensi", label: "Absensi", icon: CalendarCheck },
   { href: "/santri/riwayat", label: "Riwayat", icon: Clock },

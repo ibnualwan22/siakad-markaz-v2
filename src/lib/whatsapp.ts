@@ -176,17 +176,27 @@ const BULAN_INDO = [
  * Format tanggal menjadi "*Selasa, 19 Mei 2026*" (bold WhatsApp).
  * Parameter tanggal dalam format YYYY-MM-DD.
  */
+
 export function formatTanggalWa(tanggalStr: string): string {
-  const parts = tanggalStr.split("-");
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const day = parseInt(parts[2], 10);
-  const date = new Date(year, month, day);
+  if (!tanggalStr) return "-";
+  try {
+    const parts = tanggalStr.split("-");
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const date = new Date(year, month, day);
 
-  const hari = HARI_INDO[date.getDay()];
-  const bulan = BULAN_INDO[date.getMonth()];
-
-  return `*${hari}, ${day} ${bulan} ${year}*`;
+      if (!isNaN(date.getTime())) {
+        const hari = HARI_INDO[date.getDay()];
+        const bulan = BULAN_INDO[date.getMonth()];
+        return `*${hari}, ${day} ${bulan} ${year}*`;
+      }
+    }
+    return `*${tanggalStr}*`;
+  } catch (e) {
+    return `*${tanggalStr}*`;
+  }
 }
 
 /**
@@ -381,12 +391,11 @@ export function formatKonfirmasiSantriMessage(data: {
   lines.push("");
   lines.push(`Masa perizinan anda telah berakhir pada tanggal *${formatTanggalWa(data.tanggalSelesai)}*, namun anda *belum melakukan konfirmasi kehadiran*.`);
   lines.push("");
-  lines.push(`Dimohon untuk *segera konfirmasi* ke nomor keamanan/pengurus di:`);
-  lines.push(`*${data.nomorKeamanan}*`);
+  lines.push(`Dimohon untuk *segera konfirmasi* di halaman SIAKAD Santri Anda.`);
   lines.push("");
-  lines.push(`Anda *diwajibkan* mengirimkan foto konfirmasi (selfie di sakan dengan jam saat ini, bisa menggunakan HP teman) paling lambat *12 jam* dari pesan ini dikirim.`);
+  lines.push(`Anda *diwajibkan* mengirimkan foto selfie di depan sakan pada menu konfirmasi yang tersedia, dan pastikan foto terlihat *jelas*.`);
   lines.push("");
-  lines.push(`_Catatan: Jika Anda merasa sudah konfirmasi secara langsung namun masih mendapatkan pesan ini, harap kirim pesan pengingat ke nomor keamanan di atas agar kehadiran Anda segera di-update di sistem website._`);
+  lines.push(`_Catatan: Jika mengalami kendala teknis saat upload, hubungi bagian keamanan._`);
   lines.push("");
   lines.push(`Harap segera direspon sebelum dikenakan sanksi indisipliner.`);
 

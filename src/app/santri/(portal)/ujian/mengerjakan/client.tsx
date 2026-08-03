@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send } from "lucide-react";
+import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, X } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 
@@ -18,6 +18,7 @@ export default function ClientMengerjakanUjian() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [secureMode, setSecureMode] = useState(false);
+  const [showMobileNav, setShowMobileNav] = useState(false);
 
   // Anti-cheat refs
   const hasSubmitted = useRef(false);
@@ -109,16 +110,52 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
+    // 5. Blur Detection — catches floating/overlay apps (e.g. WhatsApp bubble on Realme 9i)
+    // Uses a 3-second grace period so brief notification bar pulls don't trigger auto-submit
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleBlur = () => {
+      if (hasSubmitted.current) return;
+      // Start grace period — if focus isn't regained within 3s, auto-submit
+      blurTimer = setTimeout(() => {
+        if (!document.hasFocus() && !hasSubmitted.current) {
+          handleAutoSubmit("FLOATING_APP");
+        }
+      }, 3000);
+    };
+
+    const handleFocus = () => {
+      // User came back within grace period — cancel auto-submit
+      if (blurTimer) {
+        clearTimeout(blurTimer);
+        blurTimer = null;
+      }
+    };
+
+    // 6. Periodic Focus Check — backup for devices where blur doesn't fire
+    const focusCheckInterval = setInterval(() => {
+      if (!document.hasFocus() && !document.hidden && !hasSubmitted.current) {
+        // Browser lost focus but tab is still visible = floating/overlay app!
+        handleAutoSubmit("FOCUS_LOST");
+      }
+    }, 5000);
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+      clearInterval(focusCheckInterval);
+      if (blurTimer) clearTimeout(blurTimer);
     };
   }, [secureMode, sesiId]);
 
@@ -330,37 +367,108 @@ export default function ClientMengerjakanUjian() {
   const answeredCount = examData.soal.filter((s:any) => !!s.opsiTerpilih).length;
   const isLastQuestion = currentIdx === examData.soal.length - 1;
 
+  const raguList = examData.soal.filter((s:any) => s.rpiId === "RAGU");
+  const unansweredList = examData.soal.filter((s:any) => !s.opsiTerpilih);
+  const canSubmit = raguList.length === 0 && unansweredList.length === 0;
+
   if (showSummary) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
-        <div className="bg-white rounded-3xl max-w-2xl w-full p-8 shadow-xl">
-          <h1 className="text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
+        <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
+          <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
           
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-blue-50 p-4 rounded-2xl text-center border border-blue-100">
-               <div className="text-3xl font-black text-blue-700 mb-1">{answeredCount}</div>
-               <div className="text-xs font-bold text-blue-600 uppercase tracking-wider">Soal Terjawab</div>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="bg-green-50 p-3 md:p-4 rounded-2xl text-center border border-green-100">
+               <div className="text-2xl md:text-3xl font-black text-green-700 mb-1">{answeredCount - raguList.filter((r:any) => !!r.opsiTerpilih).length}</div>
+               <div className="text-[10px] md:text-xs font-bold text-green-600 uppercase tracking-wider">Terjawab</div>
             </div>
-            <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-200">
-               <div className="text-3xl font-black text-gray-700 mb-1">{examData.soal.length - answeredCount}</div>
-               <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Belum Dijawab</div>
+            <div className="bg-orange-50 p-3 md:p-4 rounded-2xl text-center border border-orange-100">
+               <div className="text-2xl md:text-3xl font-black text-orange-600 mb-1">{raguList.length}</div>
+               <div className="text-[10px] md:text-xs font-bold text-orange-500 uppercase tracking-wider">Ragu-Ragu</div>
+            </div>
+            <div className="bg-gray-50 p-3 md:p-4 rounded-2xl text-center border border-gray-200">
+               <div className="text-2xl md:text-3xl font-black text-gray-700 mb-1">{unansweredList.length}</div>
+               <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Belum Dijawab</div>
             </div>
           </div>
 
-          <p className="text-gray-600 text-center mb-8">
-            Apakah Anda yakin ingin menyelesaikan ujian? Anda tidak akan dapat kembali untuk mengubah jawaban.
-          </p>
+          {/* Daftar soal bermasalah */}
+          {(raguList.length > 0 || unansweredList.length > 0) && (
+            <div className="mb-6 space-y-4">
+              {raguList.length > 0 && (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-orange-700 mb-2 flex items-center gap-2">
+                    <AlertTriangle size={16}/> Soal Ragu-Ragu ({raguList.length})
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {raguList.map((s:any) => {
+                      const idx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
+                      return (
+                        <button
+                          key={s.soalId}
+                          onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
+                          className="w-10 h-10 rounded-lg bg-orange-400 text-white font-bold text-sm flex items-center justify-center hover:bg-orange-500 transition-all shadow-sm active:scale-95"
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {unansweredList.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                  <h3 className="text-sm font-bold text-red-700 mb-2 flex items-center gap-2">
+                    <ShieldAlert size={16}/> Soal Belum Dijawab ({unansweredList.length})
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {unansweredList.map((s:any) => {
+                      const idx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
+                      return (
+                        <button
+                          key={s.soalId}
+                          onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
+                          className="w-10 h-10 rounded-lg bg-red-400 text-white font-bold text-sm flex items-center justify-center hover:bg-red-500 transition-all shadow-sm active:scale-95"
+                        >
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-          <div className="flex gap-4">
-             <button onClick={() => setShowSummary(false)} className="flex-1 py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition">
-               Batal, Kembali ke Soal
+              <p className="text-xs text-center text-gray-500 font-medium">
+                Klik nomor soal di atas untuk menuju soal tersebut.
+              </p>
+            </div>
+          )}
+
+          {!canSubmit && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-center">
+              <p className="text-sm font-bold text-yellow-800">
+                ⚠️ Anda belum bisa mengumpulkan jawaban.
+              </p>
+              <p className="text-xs text-yellow-700 mt-1">
+                Pastikan semua soal sudah dijawab dan tidak ada yang ditandai ragu-ragu.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+             <button onClick={() => setShowSummary(false)} className="flex-1 py-3 md:py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition text-sm">
+               Kembali ke Soal
              </button>
              <button 
                onClick={handleManualSubmit}
-               disabled={isSubmitting}
-               className="flex-1 py-3.5 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-md shadow-green-200 transition flex justify-center items-center gap-2"
+               disabled={isSubmitting || !canSubmit}
+               className={`flex-1 py-3 md:py-3.5 font-bold rounded-xl shadow-md transition flex justify-center items-center gap-2 text-sm ${
+                 canSubmit 
+                   ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200' 
+                   : 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+               }`}
              >
-               {isSubmitting ? "Mengirim Jawaban..." : <><Send size={18}/> Kumpulkan Jawaban</>}
+               {isSubmitting ? "Mengirim..." : <><Send size={16}/> Kumpulkan Jawaban</>}
              </button>
           </div>
         </div>
@@ -383,25 +491,70 @@ export default function ClientMengerjakanUjian() {
       )}
       
       {/* LEFT: Soal Area */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden px-4 md:px-0">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden px-0">
         
         {/* Header - Timer */}
-        <div className="bg-white px-6 py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0 sticky top-0 md:static">
-           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-[var(--color-primary)] text-white font-bold text-lg rounded-xl flex items-center justify-center shadow-sm">
+        <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
+           <div className="flex items-center gap-2 md:gap-3">
+             <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
                {soal.urutanUI}
              </div>
              <div>
-                <h1 className="font-bold text-sm text-gray-800 uppercase tracking-wide">SOAL {soal.urutanUI} DARI {examData.soal.length}</h1>
-                <p className="text-[10px] sm:text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 mt-0.5 rounded-full inline-block">Mata Pelajaran</p>
+                <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">SOAL {soal.urutanUI} / {examData.soal.length}</h1>
+                <p className="text-[9px] md:text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">Mata Pelajaran</p>
              </div>
            </div>
            
-           <div className={`flex items-center gap-2 px-4 py-2 bg-gradient-to-r rounded-xl shadow-inner font-mono font-bold text-lg md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
-             <Clock size={20} />
-             {formatTime(timeLeft)}
+           <div className="flex items-center gap-2">
+             {/* Mobile Nav Toggle */}
+             <button 
+               onClick={() => setShowMobileNav(!showMobileNav)}
+               className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+             >
+               <Grid3X3 size={18} />
+             </button>
+             <div className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r rounded-lg md:rounded-xl shadow-inner font-mono font-bold text-base md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
+               <Clock size={16} className="md:w-5 md:h-5" />
+               {formatTime(timeLeft)}
+             </div>
            </div>
         </div>
+
+        {/* Mobile Navigator Overlay */}
+        {showMobileNav && (
+          <div className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileNav(false)}>
+            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-gray-800">Navigasi Soal</h3>
+                <button onClick={() => setShowMobileNav(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={18}/></button>
+              </div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex-1 bg-gray-200 h-2 rounded-full overflow-hidden">
+                  <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${(answeredCount / examData.soal.length) * 100}%` }}></div>
+                </div>
+                <span className="text-xs font-bold text-gray-500">{answeredCount}/{examData.soal.length}</span>
+              </div>
+              <div className="grid grid-cols-6 gap-2 mb-4">
+                {examData.soal.map((s:any, idx:number) => {
+                  const Active = currentIdx === idx;
+                  const Answered = !!s.opsiTerpilih;
+                  const Ragu = s.rpiId === "RAGU";
+                  let cls = "h-11 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
+                  if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
+                  else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
+                  else if (Answered) cls += "bg-green-500 border-green-600 text-white";
+                  else cls += "bg-white border-gray-200 text-gray-500";
+                  return <button key={s.soalId} onClick={() => { setCurrentIdx(idx); setShowMobileNav(false); }} className={cls}>{idx+1}</button>;
+                })}
+              </div>
+              <div className="flex gap-3 text-[10px] font-semibold text-gray-500 justify-center">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded border border-green-600"></div> Terjawab</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-400 rounded border border-orange-500"></div> Ragu</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-white rounded border-2 border-gray-200"></div> Belum</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Soal Content */}
         <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-32 md:pb-8">

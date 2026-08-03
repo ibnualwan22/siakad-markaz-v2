@@ -101,41 +101,11 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
-    // 4. Before Unload
+    // 4. Before Unload confirmation (TIDAK LAGI AUTO-SUBMIT)
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!hasSubmitted.current) {
-        // Some browsers don't support async fetch in beforeunload, use sendBeacon
-        const payload = JSON.stringify({ sesiId, reason: "TAB_CLOSE" });
-        navigator.sendBeacon("/api/santri/ujian/submit", payload);
-      }
-    };
-
-    // 2. Blur event — tangkap split screen Android/iOS atau aplikasi tersembunyi
-    const handleBlur = () => {
-      if (!hasSubmitted.current) handleAutoSubmit("BLUR");
-    };
-
-    // 3. Page Hide — replacement untuk beforeunload di mobile Safari
-    const handlePageHide = () => {
-      if (!hasSubmitted.current) {
-        const payload = JSON.stringify({ sesiId, reason: "PAGEHIDE" });
-        navigator.sendBeacon("/api/santri/ujian/submit", payload);
-      }
-    };
-
-    // 4. Focus loss detection
-    const focusInterval = setInterval(() => {
-      if (!document.hasFocus() && !hasSubmitted.current && hasStarted) {
-        handleAutoSubmit("FOCUS_LOST");
-      }
-    }, 2000);
-
-    // 5. Resize detection — split screen changes viewport drastically
-    const handleResize = () => {
-      const ratio = window.innerHeight / window.screen.height;
-      // Jika viewport vertikal mengecil signifikan mendadak (split screen)
-      if (ratio < 0.6 && !hasSubmitted.current) {
-        handleAutoSubmit("SPLIT_SCREEN");
+        e.preventDefault();
+        e.returnValue = ''; // Required for most browsers to show confirmation dialog
       }
     };
 
@@ -143,19 +113,12 @@ export default function ClientMengerjakanUjian() {
     window.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("blur", handleBlur);
-    document.addEventListener("pagehide", handlePageHide);
-    window.addEventListener("resize", handleResize);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("pagehide", handlePageHide);
-      window.removeEventListener("resize", handleResize);
-      clearInterval(focusInterval);
     };
   }, [secureMode, sesiId]);
 
@@ -443,6 +406,12 @@ export default function ClientMengerjakanUjian() {
         {/* Soal Content */}
         <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-32 md:pb-8">
            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
+              {soal.gambarUrl && (
+                <div className="mb-6 flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full max-h-[300px] rounded-xl border border-gray-200 shadow-sm" />
+                </div>
+              )}
               <SoalText 
                 html={soal.pertanyaan}
                 className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" 
@@ -474,6 +443,12 @@ export default function ClientMengerjakanUjian() {
                        html={opt.teks}
                        className={`text-sm md:text-base transition-colors block ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`} 
                      />
+                     {opt.gambarUrl && (
+                       <div className="mt-3">
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img src={opt.gambarUrl} alt={`Opsi ${String.fromCharCode(65 + index)} Image`} className="max-w-full max-h-[200px] rounded-lg border border-gray-200 shadow-sm" />
+                       </div>
+                     )}
                    </div>
                  </label>
                );

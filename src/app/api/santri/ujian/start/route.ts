@@ -86,6 +86,7 @@ export async function POST(req: Request) {
       soalId: sp.soal.id,
       mapelId: sp.soal.mapelId,
       pertanyaan: sp.soal.pertanyaan,
+      gambarUrl: sp.soal.gambarUrl,
       tipeSoal: sp.soal.tipeSoal,
       bobot: sp.soal.bobot,
       opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(sp.soal.opsiList) : sp.soal.opsiList.map((o: any) => o),
@@ -121,7 +122,8 @@ export async function POST(req: Request) {
       // Hilangkan field isCorrect agar tidak bocor ke client
       opsiList: s.opsiList.map(o => ({
         id: o.id,
-        teks: o.teks
+        teks: o.teks,
+        gambarUrl: o.gambarUrl
       }))
     }));
 

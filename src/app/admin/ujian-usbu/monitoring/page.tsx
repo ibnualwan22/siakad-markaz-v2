@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAlert, Info, Timer } from "lucide-react";
+import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAlert, Info, Timer, Play, RotateCcw } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function MonitoringPengejaanPage() {
@@ -66,6 +66,26 @@ export default function MonitoringPengejaanPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Ujian berhasil dipaksa submit!");
+      fetchMonitoringData(selectedPaket);
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleAction = async (sesiId: string, action: "RETRY" | "RESUME") => {
+    const msg = action === "RETRY" 
+      ? "Reset ujian santri ini? Santri harus mengulang dari awal." 
+      : "Lanjutkan ujian santri ini? Sisa waktu akan dilanjutkan.";
+    if (!confirm(msg)) return;
+    
+    try {
+      const res = await fetch("/api/admin/ujian-usbu/monitoring/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sesiId, action })
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success(action === "RETRY" ? "Ujian di-reset!" : "Ujian dilanjutkan!");
       fetchMonitoringData(selectedPaket);
     } catch (err: any) {
       toast.error(err.message);
@@ -208,6 +228,21 @@ export default function MonitoringPengejaanPage() {
                         >
                           Paksa Submit
                         </button>
+                      ) : d.status === "AUTO_SUBMIT" && d.tabCloseCount > 0 ? (
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => handleAction(d.id, "RETRY")}
+                            className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors" title="Ulangi Ujian (Reset)"
+                          >
+                            <RotateCcw size={16}/>
+                          </button>
+                          <button 
+                            onClick={() => handleAction(d.id, "RESUME")}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors"
+                          >
+                            <Play size={14}/> Lanjutkan
+                          </button>
+                        </div>
                       ) : (
                         <div className="font-bold text-[15px]" style={{ color: d.nilaiTotal < 60 ? 'var(--color-danger)' : 'var(--color-primary)' }}>
                           Nilai rata2: {d.nilaiTotal}

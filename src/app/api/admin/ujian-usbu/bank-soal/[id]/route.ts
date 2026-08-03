@@ -18,17 +18,18 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { pertanyaan, tipeSoal, bobot, opsiList, usbuKe, paketSoal } = await req.json();
+    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, paketSoal } = await req.json();
 
-    if (!pertanyaan) {
-      return NextResponse.json({ error: "Pertanyaan tidak boleh kosong" }, { status: 400 });
+    if (!pertanyaan && !gambarUrl) {
+      return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
     }
 
     // Update soal and re-create opsi
     const updatedSoal = await prisma.bankSoalUsbu.update({
       where: { id },
       data: {
-        pertanyaan,
+        pertanyaan: pertanyaan || "",
+        gambarUrl: gambarUrl || null,
         tipeSoal: tipeSoal || "PG",
         bobot: Number(bobot) || 10,
         ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
@@ -36,7 +37,8 @@ export async function PUT(
         opsiList: {
           deleteMany: {},
           create: opsiList?.map((opsi: any, i: number) => ({
-            teks: opsi.teks,
+            teks: opsi.teks || "",
+            gambarUrl: opsi.gambarUrl || null,
             isCorrect: opsi.isCorrect,
             urutan: i + 1
           })) || []

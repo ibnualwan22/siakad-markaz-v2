@@ -757,6 +757,7 @@ model BankSoalUsbu {
   paketSoal   String   @default("A")  // "A", "B", "C", dll
   tipeSoal    String   @default("PG") // "PG", "PG_MULTI", "ISIAN", "BENAR_SALAH"
   pertanyaan  String
+  gambarUrl   String?
   bobot       Int      @default(10)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -771,6 +772,7 @@ model OpsiSoalUsbu {
   id        String  @id @default(cuid())
   soalId    String
   teks      String
+  gambarUrl String?
   isCorrect Boolean @default(false)
   urutan    Int
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -47,14 +47,16 @@ export default function BankSoalPage() {
     id: "",
     tipeSoal: "PG",
     pertanyaan: "",
+    gambarUrl: "",
     bobot: 10,
     jawabanList: [
-      { id: "opt-1", teks: "", isCorrect: true },
-      { id: "opt-2", teks: "", isCorrect: false },
-      { id: "opt-3", teks: "", isCorrect: false },
-      { id: "opt-4", teks: "", isCorrect: false }
+      { id: "opt-1", teks: "", gambarUrl: "", isCorrect: true },
+      { id: "opt-2", teks: "", gambarUrl: "", isCorrect: false },
+      { id: "opt-3", teks: "", gambarUrl: "", isCorrect: false },
+      { id: "opt-4", teks: "", gambarUrl: "", isCorrect: false }
     ]
   });
+  const [isUploadingImg, setIsUploadingImg] = useState(""); // "soal" or opt id
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -124,12 +126,13 @@ export default function BankSoalPage() {
       tipeSoal: "PG",
       paketSoal: selectedPaketSoal || "A",
       pertanyaan: "",
+      gambarUrl: "",
       bobot: 10,
       jawabanList: [
-        { id: `opt-${Date.now()}-1`, teks: "", isCorrect: true },
-        { id: `opt-${Date.now()}-2`, teks: "", isCorrect: false },
-        { id: `opt-${Date.now()}-3`, teks: "", isCorrect: false },
-        { id: `opt-${Date.now()}-4`, teks: "", isCorrect: false }
+        { id: `opt-${Date.now()}-1`, teks: "", gambarUrl: "", isCorrect: true },
+        { id: `opt-${Date.now()}-2`, teks: "", gambarUrl: "", isCorrect: false },
+        { id: `opt-${Date.now()}-3`, teks: "", gambarUrl: "", isCorrect: false },
+        { id: `opt-${Date.now()}-4`, teks: "", gambarUrl: "", isCorrect: false }
       ]
     });
     setIsEditing(false);
@@ -142,14 +145,47 @@ export default function BankSoalPage() {
       tipeSoal: soal.tipeSoal,
       paketSoal: soal.paketSoal || "A",
       pertanyaan: soal.pertanyaan,
+      gambarUrl: soal.gambarUrl || "",
       bobot: soal.bobot,
       // pad with empty answers if less than 4, map existing IDs for drag and drop
       jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) => 
-        j ? { id: j.id || `opt-${i}`, teks: j.teks, isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", isCorrect: false }
+        j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
       )
     });
     setIsEditing(true);
     setIsModalOpen(true);
+  };
+
+  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>, target: "soal" | string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) return toast.error("Ukuran gambar maksimal 2MB");
+
+    setIsUploadingImg(target);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+
+    try {
+      const res = await fetch("/api/admin/ujian-usbu/bank-soal/upload-image", { method: "POST", body: formDataUpload });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      if (target === "soal") {
+        setFormData((prev: any) => ({ ...prev, gambarUrl: data.url }));
+      } else {
+        setFormData((prev: any) => ({
+          ...prev,
+          jawabanList: prev.jawabanList.map((j: any) => j.id === target ? { ...j, gambarUrl: data.url } : j)
+        }));
+      }
+      toast.success("Gambar berhasil diupload!");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal upload gambar");
+    } finally {
+      setIsUploadingImg("");
+      e.target.value = ""; // reset input
+    }
   };
 
   const handleDragEnd = (event: any) => {
@@ -174,7 +210,7 @@ export default function BankSoalPage() {
     const hasCorrect = formData.jawabanList.some((j: any) => j.isCorrect);
     if (!hasCorrect) return toast.error("Harus ada 1 jawaban benar!");
 
-    const validJawaban = formData.jawabanList.filter((j: any) => j.teks.trim() !== "");
+    const validJawaban = formData.jawabanList.filter((j: any) => j.teks.trim() !== "" || !!j.gambarUrl);
     if (validJawaban.length < 2) return toast.error("Minimal 2 pilihan jawaban yang valid");
 
     const method = isEditing ? "PUT" : "POST";
@@ -187,6 +223,7 @@ export default function BankSoalPage() {
       paketSoal: formData.paketSoal,
       tipeSoal: formData.tipeSoal,
       pertanyaan: formData.pertanyaan,
+      gambarUrl: formData.gambarUrl || null,
       bobot: Number(formData.bobot),
       opsiList: validJawaban
     };
@@ -365,15 +402,29 @@ export default function BankSoalPage() {
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {soal.bobot} Poin</span>
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-600">Paket: {soal.paketSoal || "A"}</span>
                     </div>
+                    {soal.gambarUrl && (
+                      <div className="mb-4">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full h-auto max-h-32 object-contain rounded-lg border shadow-sm" />
+                      </div>
+                    )}
                     <SoalText html={soal.pertanyaan} className="font-semibold text-base leading-relaxed mb-4 whitespace-pre-wrap text-gray-800 block" />
                     <div className="space-y-2.5">
                       {soal.opsiList.map((j: any, i: number) => (
-                        <div key={j.id} className={`px-4 py-3 rounded-xl border text-sm flex gap-3 items-center transition-colors ${j.isCorrect ? 'border-green-300 bg-green-50' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}>
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-xs font-bold ${j.isCorrect ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-gray-500 bg-white'}`}>
+                        <div key={j.id} className={`px-4 py-3 rounded-xl border text-sm flex gap-3 items-start transition-colors ${j.isCorrect ? 'border-green-300 bg-green-50' : 'border-gray-100 bg-gray-50/50 hover:bg-gray-50'}`}>
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-xs font-bold mt-0.5 shrink-0 ${j.isCorrect ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-gray-500 bg-white'}`}>
                             {String.fromCharCode(65 + i)}
                           </div>
-                          <SoalText html={j.teks} className="flex-1 font-medium text-gray-700" style={{ color: j.isCorrect ? '#166534' : '' }} />
-                          {j.isCorrect && <CheckCircle2 size={18} className="text-green-500" />}
+                          <div className="flex-1 overflow-hidden">
+                            <SoalText html={j.teks} className="font-medium text-gray-700 block" style={{ color: j.isCorrect ? '#166534' : '' }} />
+                            {j.gambarUrl && (
+                              <div className="mt-2">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={j.gambarUrl} alt={`Opsi ${String.fromCharCode(65 + i)}`} className="max-w-full h-auto max-h-24 object-contain rounded-lg border shadow-sm mix-blend-multiply" />
+                              </div>
+                            )}
+                          </div>
+                          {j.isCorrect && <CheckCircle2 size={18} className="text-green-500 shrink-0 mt-1" />}
                         </div>
                       ))}
                     </div>
@@ -444,7 +495,30 @@ export default function BankSoalPage() {
                   <button type="button" title="Underline" onClick={() => document.execCommand('underline')} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all text-gray-600 hover:text-gray-900">
                     <Underline size={16} />
                   </button>
+                  <label className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all text-blue-600 hover:text-blue-700 cursor-pointer relative" title="Upload Gambar Soal">
+                    {isUploadingImg === "soal" ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => handleUploadImage(e, "soal")}
+                      disabled={!!isUploadingImg}
+                    />
+                  </label>
                 </div>
+                {formData.gambarUrl && (
+                  <div className="mb-4 relative w-fit">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={formData.gambarUrl} alt="Preview Soal" className="max-w-full h-auto max-h-48 rounded-lg border shadow-sm" />
+                    <button 
+                      type="button" 
+                      onClick={() => setFormData((prev: any) => ({ ...prev, gambarUrl: "" }))}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                )}
                 <div 
                   contentEditable
                   id="pertanyaan-editor"
@@ -477,18 +551,49 @@ export default function BankSoalPage() {
                             className="w-5 h-5 cursor-pointer accent-green-600 ml-2"
                           />
                           <span className="font-bold text-gray-400 w-6 text-center text-xs">{String.fromCharCode(65 + i)}</span>
-                          <input 
-                            type="text" 
-                            required={j.isCorrect || i < 2} 
-                            value={j.teks} 
-                            onChange={e => {
-                              const newJawaban = [...formData.jawabanList];
-                              newJawaban[i].teks = e.target.value;
-                              setFormData({ ...formData, jawabanList: newJawaban });
-                            }} 
-                            className="flex-1 bg-transparent border-0 border-b border-transparent focus:border-[var(--color-primary)] focus:ring-0 px-2 py-3 text-sm font-medium transition-colors" 
-                            placeholder={`Ketik opsi ${String.fromCharCode(65 + i)}...`}
-                          />
+                          <div className="flex-1 flex flex-col gap-2 relative">
+                            <div className="flex gap-2 items-center">
+                              <input 
+                                type="text"  
+                                required={j.isCorrect || i < 2} 
+                                value={j.teks} 
+                                onChange={e => {
+                                  const newJawaban = [...formData.jawabanList];
+                                  newJawaban[i].teks = e.target.value;
+                                  setFormData({ ...formData, jawabanList: newJawaban });
+                                }} 
+                                className="flex-1 bg-transparent border-0 border-b border-transparent focus:border-[var(--color-primary)] focus:ring-0 px-2 py-2 text-sm font-medium transition-colors" 
+                                placeholder={`Ketik opsi ${String.fromCharCode(65 + i)}...`}
+                              />
+                              <label className="p-2 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all text-gray-500 hover:text-blue-600 cursor-pointer" title="Upload Gambar Opsi">
+                                {isUploadingImg === j.id ? <Loader2 size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="hidden" 
+                                  onChange={(e) => handleUploadImage(e, j.id)}
+                                  disabled={!!isUploadingImg}
+                                />
+                              </label>
+                            </div>
+                            {j.gambarUrl && (
+                              <div className="relative w-fit bg-gray-50 p-2 rounded-lg border mt-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={j.gambarUrl} alt="Preview Opsi" className="max-w-full h-auto max-h-24 rounded shadow-sm" />
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    const newJawaban = [...formData.jawabanList];
+                                    newJawaban[i].gambarUrl = "";
+                                    setFormData({ ...formData, jawabanList: newJawaban });
+                                  }}
+                                  className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </SortableItem>
                       ))}
                     </div>

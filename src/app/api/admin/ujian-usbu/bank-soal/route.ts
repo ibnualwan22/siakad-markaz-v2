@@ -48,10 +48,10 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { mapelId, programId, tipeSoal, pertanyaan, bobot, opsiList, usbuKe, paketSoal } = await req.json();
+    const { mapelId, programId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, usbuKe, paketSoal } = await req.json();
 
-    if (!mapelId || !programId || !pertanyaan) {
-      return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
+    if (!mapelId || !programId || (!pertanyaan && !gambarUrl)) {
+      return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
     }
 
     const newSoal = await prisma.bankSoalUsbu.create({
@@ -61,11 +61,13 @@ export async function POST(req: Request) {
         usbuKe: Number(usbuKe) || 1,
         paketSoal: paketSoal || "A",
         tipeSoal: tipeSoal || "PG",
-        pertanyaan,
+        pertanyaan: pertanyaan || "",
+        gambarUrl: gambarUrl || null,
         bobot: Number(bobot) || 10,
         opsiList: {
           create: opsiList?.map((opsi: any, i: number) => ({
-            teks: opsi.teks,
+            teks: opsi.teks || "",
+            gambarUrl: opsi.gambarUrl || null,
             isCorrect: opsi.isCorrect,
             urutan: i + 1
           })) || []

@@ -424,7 +424,7 @@ export default function BankSoalPage() {
         <div className="space-y-5">
           {soalList.map((soal, index) => (
             <div key={soal.id} className="neu-card-white p-0 rounded-2xl transition-all relative overflow-hidden group hover:shadow-md">
-              <div className="absolute top-0 right-0 p-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-0 right-0 p-3 flex gap-2 transition-opacity">
                 <button onClick={() => handleEdit(soal)} className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors shadow-sm"><Edit2 size={16}/></button>
                 <button onClick={() => handleDelete(soal.id)} className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors shadow-sm"><Trash2 size={16}/></button>
               </div>

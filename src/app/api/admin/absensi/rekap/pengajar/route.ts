@@ -64,13 +64,7 @@ export async function GET(request: Request) {
       }
     });
 
-    const jadwalSesiList = await prisma.jadwalSesi.findMany();
-    const jadwalMap = new Map(jadwalSesiList.map(j => [j.sesi, j]));
-
-    // Fetch SesiTambahanProgram untuk mendeteksi keterlambatan sesi 7-10
-    const sesiTambahanList = await prisma.sesiTambahanProgram.findMany({ where: { isActive: true } });
-    
-    // Fetch SesiTaqwim untuk mendeteksi keterlambatan program Taqwim
+    // Fetch SesiTaqwim untuk mendeteksi kelas Taqwim (masih dipakai untuk label sesi)
     const sesiTaqwimList = await prisma.sesiTaqwim.findMany({ where: { isActive: true } });
 
     // Fetch kelas-kelas yang punya ketua kelas aktif (beritaAcara aktif)
@@ -86,55 +80,10 @@ export async function GET(request: Request) {
         psp => psp.userId === r.userId && psp.programId === r.kelas.program?.id && psp.sesi === r.sesi
       );
 
-      let terlambatMenit = 0;
-      let toleransi = 5; // Default grace period 5 menit
-      
-      // Badal: tidak dihitung keterlambatan berapapun menitnya
-      if (r.terlambatMenit !== null) {
-        terlambatMenit = r.terlambatMenit;
-      } else if (!r.isBadal && r.waktuMulai && r.waktuMulai !== "-") {
-        let jadwalBuka: string | null = null;
-        
-        // 1. Cek SesiTaqwim dulu jika program ini memiliki SesiTaqwim
-        if (r.kelas.program?.id) {
-          const taqwim = sesiTaqwimList.find(t => t.programId === r.kelas.program!.id);
-          if (taqwim) {
-            jadwalBuka = taqwim.jamBuka;
-            toleransi = taqwim.toleransiMenit;
-          }
-        }
-        
-        // 2. Jika tidak ada Taqwim, cek JadwalSesi global
-        if (!jadwalBuka) {
-          jadwalBuka = jadwalMap.get(r.sesi)?.jamBuka ?? null;
-        }
-
-        // 3. Fallback ke SesiTambahanProgram (sesi 7-10)
-        if (!jadwalBuka && r.kelas.program?.id) {
-          const tambahan = sesiTambahanList.find(
-            s => s.sesi === r.sesi && s.programId === r.kelas.program!.id
-          );
-          if (tambahan) jadwalBuka = tambahan.jamBuka;
-        }
-
-        if (jadwalBuka) {
-          const [hM, mM] = r.waktuMulai.split(":").map(Number);
-          const [hB, mB] = jadwalBuka.split(":").map(Number);
-          const totalMinutesMulai = (hM * 60) + mM;
-          let totalMinutesBuka = (hB * 60) + mB;
-
-          // Handle cross-midnight (e.g. jamBuka 23:59, waktuMulai 00:03)
-          if (totalMinutesBuka > 1200 && totalMinutesMulai < 120) {
-            totalMinutesBuka -= 24 * 60;
-          }
-
-          const diff = totalMinutesMulai - totalMinutesBuka;
-          // Grace period: baru dianggap terlambat jika lebih dari toleransi sejak jadwal buka
-          if (diff > toleransi) {
-            terlambatMenit = diff - toleransi;
-          }
-        }
-      }
+      // Gunakan nilai terlambatMenit yang sudah tersimpan di database saat pengajar absen.
+      // JANGAN hitung ulang dari jadwal saat ini — perubahan jadwal tidak boleh mempengaruhi
+      // rekap yang sudah ada. Nilai null berarti tidak terlambat (sudah dihitung saat submit).
+      const terlambatMenit = r.terlambatMenit ?? 0;
 
       const isTaqwimClass = r.kelas.program?.id && sesiTaqwimList.some(t => t.programId === r.kelas.program!.id);
 

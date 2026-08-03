@@ -4,12 +4,24 @@ import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession();
   
-  // Jika dia bukan super admin, filter program berdasarkan kewenangan mengajarnya
+  const { searchParams } = new URL(req.url);
+  const bypassFilter = searchParams.get("bypassFilter") === "true";
+  
+  // Periksa izin akses CBT ujian_usbu untuk bypass filter
+  let hasCbtAccess = session?.role === "ADMIN";
+  if (!hasCbtAccess && session && bypassFilter) {
+    const p = await prisma.rolePermission.findUnique({
+      where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
+    });
+    if (p) hasCbtAccess = true;
+  }
+
+  // Jika dia bukan super admin (dan tidak punya izin bypass), filter program berdasarkan kewenangan mengajarnya
   let whereClause: any = {};
-  if (session && session.role !== "ADMIN") {
+  if (session && !hasCbtAccess) {
     const orConditions = [];
     
     if (session.kelasId) {

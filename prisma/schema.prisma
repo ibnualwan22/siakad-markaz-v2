@@ -759,6 +759,7 @@ model BankSoalUsbu {
   pertanyaan  String
   gambarUrl   String?
   bobot       Int      @default(10)
+  grupSoalId  String?  // ID soal induk untuk grup qiro'ah (jika null = soal mandiri)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -766,6 +767,10 @@ model BankSoalUsbu {
   program       Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
   opsiList      OpsiSoalUsbu[]
   soalPaketList SoalPaket[]
+  
+  // Self-relation: grup qiro'ah
+  grupInduk     BankSoalUsbu?  @relation("GrupSoal", fields: [grupSoalId], references: [id], onDelete: SetNull)
+  anakGrup      BankSoalUsbu[] @relation("GrupSoal")
 }
 
 model OpsiSoalUsbu {

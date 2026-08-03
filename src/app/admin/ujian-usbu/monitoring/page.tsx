@@ -11,6 +11,8 @@ export default function MonitoringPengejaanPage() {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [mounted, setMounted] = useState(false);
+  const [filterKelas, setFilterKelas] = useState("SEMUA");
+  const [sisaGlobalStr, setSisaGlobalStr] = useState<string>("");
 
   useEffect(() => {
     setMounted(true);
@@ -46,8 +48,14 @@ export default function MonitoringPengejaanPage() {
     try {
       const res = await fetch(`/api/admin/ujian-usbu/monitoring?sesiGlobalId=${paketId}`);
       if (res.ok) {
-        setMonitoringData(await res.json());
+        const data = await res.json();
+        setMonitoringData(data);
         setLastUpdate(new Date());
+
+        if (data.length > 0) {
+          const unique = Array.from(new Set(data.map((d: any) => d.kelasNama))).sort() as string[];
+          setFilterKelas(prev => (prev === "SEMUA" && unique.length > 0) ? unique[0] : prev);
+        }
       }
     } catch {
       if (showLoading) toast.error("Gagal load data monitoring");
@@ -94,6 +102,30 @@ export default function MonitoringPengejaanPage() {
 
   const currentPaket = paketList.find(p => p.id === selectedPaket);
 
+  const uniqueClasses = Array.from(new Set(monitoringData.map((d: any) => d.kelasNama))).sort();
+  const displayedData = filterKelas === "SEMUA" ? monitoringData : monitoringData.filter((d: any) => d.kelasNama === filterKelas);
+
+  useEffect(() => {
+    if (!currentPaket?.waktuSelesai) {
+      setSisaGlobalStr("");
+      return;
+    }
+    const updateCountdown = () => {
+      const end = new Date(currentPaket.waktuSelesai).getTime();
+      const diff = Math.max(0, Math.floor((end - Date.now()) / 1000));
+      if (diff === 0) setSisaGlobalStr("Waktu Habis");
+      else {
+        const h = Math.floor(diff / 3600);
+        const m = Math.floor((diff % 3600) / 60);
+        const s = diff % 60;
+        setSisaGlobalStr(`Sisa: ${h > 0 ? h + 'j ' : ''}${m}m ${s.toString().padStart(2, '0')}s`);
+      }
+    };
+    updateCountdown();
+    const intv = setInterval(updateCountdown, 1000);
+    return () => clearInterval(intv);
+  }, [currentPaket]);
+
   const formatDurasi = (mulai: string, selesai: string | null, status: string) => {
     const start = new Date(mulai).getTime();
     const end = (selesai && status !== 'MENGERJAKAN') ? new Date(selesai).getTime() : Date.now();
@@ -126,6 +158,23 @@ export default function MonitoringPengejaanPage() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="flex-1 w-full relative z-10">
+            <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-gray-500">Filter Kelas</label>
+            <div className="flex items-center gap-3">
+              <select value={filterKelas} onChange={e => setFilterKelas(e.target.value)} className="neu-input flex-1 p-2.5 text-sm font-semibold bg-gray-50" disabled={!selectedPaket || monitoringData.length === 0}>
+                {uniqueClasses.map((cls: any) => (
+                  <option key={cls} value={cls}>{cls}</option>
+                ))}
+                <option value="SEMUA">Semua Kelas</option>
+              </select>
+              {sisaGlobalStr && (
+                <div className="shrink-0 px-3 py-2.5 bg-orange-50 text-orange-600 border border-orange-100 rounded-xl font-bold text-sm tracking-wide shadow-sm flex items-center gap-1.5">
+                  <Timer size={16}/>
+                  {sisaGlobalStr}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex flex-col md:items-end w-full md:w-auto mt-2 md:mt-0 relative z-10">
             <button 
@@ -169,7 +218,7 @@ export default function MonitoringPengejaanPage() {
                 <tr className="bg-gray-50/80 border-b text-gray-500 uppercase tracking-wider text-[11px] font-bold">
                   <th className="px-6 py-4">No</th>
                   <th className="px-6 py-4">Nama Santri</th>
-                  <th className="px-6 py-4">Lokasi Asrama</th>
+                  <th className="px-6 py-4">Kelas</th>
                   <th className="px-6 py-4">Status & Waktu</th>
                   <th className="px-6 py-4">Progress Pengerjaan</th>
                   <th className="px-6 py-4">Durasi</th>
@@ -178,38 +227,54 @@ export default function MonitoringPengejaanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {monitoringData.map((d, i) => (
+                {displayedData.map((d: any, i: number) => (
                   <tr key={d.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-6 py-4 font-medium text-gray-500">{i + 1}</td>
-                    <td className="px-6 py-4 font-bold text-gray-800">{d.namaSantri}</td>
-                    <td className="px-6 py-4 text-gray-600 text-xs">{d.lokasi}</td>
                     <td className="px-6 py-4">
+                      <div className="font-bold text-gray-800">{d.namaSantri}</div>
+                      <div className="text-[10px] text-gray-400 font-medium mt-0.5">{d.lokasi}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded w-fit">{d.kelasNama}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {d.status === "BELUM_MULAI" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-500 w-fit">⌛ Belum Mulai</span>}
                       {d.status === "MENGERJAKAN" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700 w-fit"><RefreshCw size={12} className="animate-spin"/> Mengerjakan</span>}
-                      {d.status === "SELESAI" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-100 text-green-700 w-fit"><CheckCircle2 size={12}/> Selesai Manual</span>}
+                      {d.status === "SELESAI" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-100 text-green-700 w-fit"><CheckCircle2 size={12}/> Selesai / Dikumpulkan</span>}
                       {d.status === "AUTO_SUBMIT" && d.tabCloseCount > 0 && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-100 text-rose-700 w-fit"><ShieldAlert size={12}/> Tersita: Pelanggaran</span>}
                       {d.status === "AUTO_SUBMIT" && d.tabCloseCount === 0 && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-orange-100 text-orange-700 w-fit"><ClockAlert size={12}/> Waktu Habis</span>}
-                      <div className="text-[10px] text-gray-400 mt-1 font-medium flex items-center gap-1">
-                        <ClockAlert size={10}/> Mulai: {new Date(d.waktuMulai).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                      </div>
+                      {d.waktuMulai && (
+                        <div className="text-[10px] text-gray-400 mt-1 font-medium flex items-center gap-1">
+                          <ClockAlert size={10}/> Mulai: {new Date(d.waktuMulai).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-3 w-48">
-                        <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${d.status === 'MENGERJAKAN' ? 'bg-blue-500' : 'bg-green-500'}`} 
-                            style={{ width: `${d.progress}%` }}
-                          ></div>
+                      {d.status !== "BELUM_MULAI" ? (
+                        <div className="flex flex-col gap-1 w-56">
+                          <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
+                            <div className="h-full bg-green-500 transition-all duration-500" style={{ width: `${(d.dijawab / d.totalSoal) * 100}%` }}></div>
+                            <div className="h-full bg-orange-400 transition-all duration-500" style={{ width: `${(d.ragu / d.totalSoal) * 100}%` }}></div>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] font-bold">
+                            <span className="text-green-600">{d.dijawab} Terjawab</span>
+                            <span className="text-orange-500">{d.ragu} Ragu</span>
+                            <span className="text-gray-400">{d.belum} Belum</span>
+                          </div>
                         </div>
-                        <div className="font-bold text-xs w-16 text-right">
-                          {d.dijawab}/{d.totalSoal} Soal
-                        </div>
-                      </div>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
-                        <Timer size={14} className="text-blue-500"/>
-                        {mounted && formatDurasi(d.waktuMulai, d.waktuSelesai, d.status)}
-                      </div>
+                      {d.status !== "BELUM_MULAI" ? (
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                          <Timer size={14} className="text-blue-500"/>
+                          {mounted && formatDurasi(d.waktuMulai, d.waktuSelesai, d.status)}
+                        </div>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center">
                       {d.tabCloseCount > 0 ? (
@@ -221,24 +286,26 @@ export default function MonitoringPengejaanPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      {d.status === "MENGERJAKAN" ? (
+                      {d.status === "BELUM_MULAI" ? (
+                        <span className="text-gray-300">-</span>
+                      ) : d.status === "MENGERJAKAN" ? (
                         <button 
                           onClick={() => handleForceSubmit(d.id)}
-                          className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors opacity-0 group-hover:opacity-100"
+                          className="px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 rounded-lg text-xs font-bold transition-colors"
                         >
                           Paksa Submit
                         </button>
                       ) : d.status === "AUTO_SUBMIT" && d.tabCloseCount > 0 ? (
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-2">
                           <button 
                             onClick={() => handleAction(d.id, "RETRY")}
-                            className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors" title="Ulangi Ujian (Reset)"
+                            className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors" title="Ulangi Ujian (Reset)"
                           >
                             <RotateCcw size={16}/>
                           </button>
                           <button 
                             onClick={() => handleAction(d.id, "RESUME")}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors"
                           >
                             <Play size={14}/> Lanjutkan
                           </button>

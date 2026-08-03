@@ -374,6 +374,12 @@ export default function ClientMengerjakanUjian() {
   if (showSummary) {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
+        <style dangerouslySetInnerHTML={{__html: `
+          aside { display: none !important; }
+          .app-footer { display: none !important; }
+          .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
+          .santri-mobile-menu-btn { display: none !important; }
+        `}} />
         <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
           <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
           
@@ -477,7 +483,7 @@ export default function ClientMengerjakanUjian() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100">
+    <div className="fixed inset-0 bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 overflow-hidden z-50">
       
       {/* Hide Global Navigasi Saat CBT */}
       {hasStarted && !hasSubmitted.current && !showSummary && (
@@ -491,7 +497,7 @@ export default function ClientMengerjakanUjian() {
       )}
       
       {/* LEFT: Soal Area */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden px-0">
+      <div className="flex-1 flex flex-col h-full overflow-hidden px-0 bg-white">
         
         {/* Header - Timer */}
         <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
@@ -557,7 +563,30 @@ export default function ClientMengerjakanUjian() {
         )}
 
         {/* Soal Content */}
-        <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-32 md:pb-8">
+        <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-8">
+           {/* Qiro'ah Parent Passage — ditampilkan jika soal ini adalah anak grup */}
+           {soal.grupSoalId && (() => {
+             const parentSoal = examData.soal.find((s:any) => s.soalId === soal.grupSoalId);
+             if (!parentSoal) return null;
+             return (
+               <div className="bg-purple-50/50 rounded-3xl p-6 md:p-8 shadow-sm border-2 border-purple-200 mb-4">
+                 <div className="flex items-center gap-2 mb-3">
+                   <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md bg-purple-100 text-purple-600">Bacaan Qiro&apos;ah</span>
+                 </div>
+                 {parentSoal.gambarUrl && (
+                   <div className="mb-4 flex justify-center">
+                     {/* eslint-disable-next-line @next/next/no-img-element */}
+                     <img src={parentSoal.gambarUrl} alt="Bacaan" className="max-w-full max-h-[300px] rounded-xl border border-purple-200 shadow-sm" />
+                   </div>
+                 )}
+                 <SoalText 
+                   html={parentSoal.pertanyaan}
+                   className="text-base md:text-lg font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" 
+                 />
+               </div>
+             );
+           })()}
+
            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
               {soal.gambarUrl && (
                 <div className="mb-6 flex justify-center">
@@ -609,8 +638,8 @@ export default function ClientMengerjakanUjian() {
            </div>
         </div>
 
-        {/* Footer Navigation Overlay on Mobile */}
-        <div className="fixed bottom-0 left-0 right-0 md:w-[calc(100%-20rem)] lg:w-[calc(100%-22rem)] bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]">
+        {/* Footer Navigation Area */}
+        <div className="w-full shrink-0 bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]">
            <button 
              onClick={() => setCurrentIdx(Math.max(0, currentIdx - 1))}
              disabled={currentIdx === 0}
@@ -644,7 +673,7 @@ export default function ClientMengerjakanUjian() {
       </div>
 
       {/* RIGHT: Grid Navigasi Soal (Desktop only by default, but hidden correctly in footer block on mobile if we wanted) */}
-      <div className="hidden md:flex flex-col w-80 lg:w-88 bg-white border-l h-screen sticky top-0 shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.02)]">
+      <div className="hidden md:flex flex-col w-80 lg:w-88 bg-white border-l h-full sticky top-0 shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.02)]">
         <div className="p-5 border-b bg-gray-50/50">
           <h3 className="font-bold font-display text-gray-800">Navigasi Pengerjaan</h3>
           <div className="flex items-center gap-2 mt-2 pt-2 border-t">

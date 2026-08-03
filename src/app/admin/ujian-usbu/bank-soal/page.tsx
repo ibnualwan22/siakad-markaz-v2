@@ -90,7 +90,7 @@ export default function BankSoalPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const progRes = await fetch("/api/admin/program");
+      const progRes = await fetch("/api/admin/program?bypassFilter=true");
       const progData = await progRes.json();
       setProgramList(progData || []);
       
@@ -127,6 +127,7 @@ export default function BankSoalPage() {
       paketSoal: selectedPaketSoal || "A",
       pertanyaan: "",
       gambarUrl: "",
+      grupSoalId: "",
       bobot: 10,
       jawabanList: [
         { id: `opt-${Date.now()}-1`, teks: "", gambarUrl: "", isCorrect: true },
@@ -146,6 +147,7 @@ export default function BankSoalPage() {
       paketSoal: soal.paketSoal || "A",
       pertanyaan: soal.pertanyaan,
       gambarUrl: soal.gambarUrl || "",
+      grupSoalId: soal.grupSoalId || "",
       bobot: soal.bobot,
       // pad with empty answers if less than 4, map existing IDs for drag and drop
       jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) => 
@@ -224,6 +226,7 @@ export default function BankSoalPage() {
       tipeSoal: formData.tipeSoal,
       pertanyaan: formData.pertanyaan,
       gambarUrl: formData.gambarUrl || null,
+      grupSoalId: formData.grupSoalId || null,
       bobot: Number(formData.bobot),
       opsiList: validJawaban
     };
@@ -401,6 +404,16 @@ export default function BankSoalPage() {
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">Tipe: {soal.tipeSoal}</span>
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {soal.bobot} Poin</span>
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-600">Paket: {soal.paketSoal || "A"}</span>
+                      {/* Indikator Grup Qiro'ah */}
+                      {soal.grupSoalId ? (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-600 flex gap-1 items-center" title="Pertanyaan turunan dari bacaan lain">
+                          <Activity size={12}/> Anak Qiro&apos;ah
+                        </span>
+                      ) : soalList.some(s => s.grupSoalId === soal.id) ? (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-600 text-white flex gap-1 items-center" title="Soal ini digunakan sebagai bacaan induk untuk soal lain">
+                          <Activity size={12}/> Induk Qiro&apos;ah
+                        </span>
+                      ) : null}
                     </div>
                     {soal.gambarUrl && (
                       <div className="mb-4">
@@ -485,6 +498,26 @@ export default function BankSoalPage() {
                     className="neu-input w-24 p-3 text-sm text-center font-bold focus:border-[var(--color-primary)]" 
                   />
                 </div>
+              </div>
+
+              {/* Grup Qiro'ah / Soal Induk */}
+              <div className="flex items-center gap-3 bg-purple-50/50 border border-purple-100 rounded-xl p-3">
+                <label className="text-sm font-bold text-purple-700 whitespace-nowrap">Grup Qiro&apos;ah:</label>
+                <select 
+                  value={formData.grupSoalId}
+                  onChange={e => setFormData({ ...formData, grupSoalId: e.target.value })}
+                  className="neu-input flex-1 p-2.5 text-sm font-medium bg-white focus:border-purple-400"
+                >
+                  <option value="">-- Soal Mandiri (Tidak Tergabung) --</option>
+                  {soalList
+                    .filter((s: any) => s.id !== formData.id && !s.grupSoalId) // Hanya soal mandiri yang bisa jadi induk
+                    .map((s: any, i: number) => (
+                      <option key={s.id} value={s.id}>
+                        Soal #{i + 1}: {(s.pertanyaan || "").replace(/<[^>]*>/g, "").substring(0, 60)}...
+                      </option>
+                    ))
+                  }
+                </select>
               </div>
 
               <div>

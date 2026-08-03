@@ -87,6 +87,7 @@ export async function POST(req: Request) {
       mapelId: sp.soal.mapelId,
       pertanyaan: sp.soal.pertanyaan,
       gambarUrl: sp.soal.gambarUrl,
+      grupSoalId: sp.soal.grupSoalId,
       tipeSoal: sp.soal.tipeSoal,
       bobot: sp.soal.bobot,
       opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(sp.soal.opsiList) : sp.soal.opsiList.map((o: any) => o),
@@ -106,9 +107,44 @@ export async function POST(req: Request) {
       
       const newSoalDisajikan: typeof soalDisajikan = [];
       for (const key of mapelKeys) {
-        // Acak soal di dalam Mapel tersebut
-        const shuffledQuestions = shuffleArray(grouped.get(key)!);
-        newSoalDisajikan.push(...shuffledQuestions);
+        const soalPerMapel = grouped.get(key)!;
+        
+        // Pisahkan soal mandiri dan soal grup qiro'ah
+        const grupMap = new Map<string, typeof soalDisajikan>();
+        const soalMandiri: typeof soalDisajikan = [];
+        
+        for (const s of soalPerMapel) {
+          if (s.grupSoalId) {
+            if (!grupMap.has(s.grupSoalId)) grupMap.set(s.grupSoalId, []);
+            grupMap.get(s.grupSoalId)!.push(s);
+          } else {
+            soalMandiri.push(s);
+          }
+        }
+        
+        // Gabungkan: setiap grup qiro'ah dianggap sebagai 1 "unit" soal
+        // Soal induk + anak grup disatukan agar tidak terpisah saat diacak
+        const units: (typeof soalDisajikan)[] = [];
+        for (const s of soalMandiri) {
+          const anakGrup = grupMap.get(s.soalId);
+          if (anakGrup) {
+            // Soal ini adalah induk grup — satukan dengan anak-anaknya
+            units.push([s, ...anakGrup]);
+            grupMap.delete(s.soalId);
+          } else {
+            units.push([s]);
+          }
+        }
+        // Sisa grup yang induknya bukan di mapel ini (fallback)
+        for (const [, anak] of grupMap) {
+          units.push(anak);
+        }
+        
+        // Acak unit-unit, lalu flatten
+        const shuffledUnits = shuffleArray(units);
+        for (const unit of shuffledUnits) {
+          newSoalDisajikan.push(...unit);
+        }
       }
       soalDisajikan = newSoalDisajikan;
     } else {

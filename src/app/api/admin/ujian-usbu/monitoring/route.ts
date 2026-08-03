@@ -20,50 +20,83 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "sesiGlobalId diperlukan" }, { status: 400 });
     }
 
-    // Ambil data sesi ujian santri beserta info santri
-    const sesiList = await prisma.sesiUjianSantri.findMany({
-      where: { paket: { sesiGlobalId } },
+    // Ambil info SesiGlogal untuk mengetahui dufahNama
+    const sesiGlobal = await prisma.sesiUjianGlobal.findUnique({
+      where: { id: sesiGlobalId },
       include: {
-        riwayat: {
-          include: {
-            santri: {
-              select: { nama: true, sakan: true, kamar: true, id: true }
-            }
-          }
-        },
-        _count: {
-          select: { jawabanList: true }
-        }
-      },
-      orderBy: { waktuMulai: 'desc' }
-    });
-    
-    // Ambil jumlah soal dari paket pertama untuk menghitung progress (biasanya sama antar paket dalam 1 sesi global)
-    const paketFirst = await prisma.paketUjian.findFirst({
-      where: { sesiGlobalId },
-      include: {
-        _count: {
-          select: { soalPaketList: true }
+        paketUjianList: {
+          take: 1,
+          include: { _count: { select: { soalPaketList: true } } }
         }
       }
     });
 
-    const totalSoal = paketFirst?._count.soalPaketList || 0;
+    if (!sesiGlobal) {
+      return NextResponse.json({ error: "Sesi ujian tidak ditemukan" }, { status: 404 });
+    }
 
-    const data = sesiList.map(s => ({
-      id: s.id,
-      santriId: s.riwayat.santri.id,
-      namaSantri: s.riwayat.santri.nama,
-      lokasi: `${s.riwayat.santri.sakan} - ${s.riwayat.santri.kamar}`,
-      status: s.status,
-      waktuMulai: s.waktuMulai,
-      waktuSelesai: s.waktuSelesai,
-      dijawab: s._count.jawabanList,
-      totalSoal,
-      progress: totalSoal > 0 ? Math.round((s._count.jawabanList / totalSoal) * 100) : 0,
-      nilaiTotal: s.nilaiTotal,
-      tabCloseCount: s.tabCloseCount
-    }));
+    const totalSoal = sesiGlobal.paketUjianList[0]?._count.soalPaketList || 0;
+
+    // Ambil SEMUA RiwayatSantri (daftar santri) yang ada di dufah ini
+    const semuaSantri = await prisma.riwayatSantri.findMany({
+      where: { dufahNama: sesiGlobal.dufahNama },
+      include: {
+        santri: { select: { nama: true, sakan: true, kamar: true, id: true } },
+        kelas: { select: { nama: true } }
+      },
+      orderBy: { santri: { nama: 'asc' } }
+    });
+
+    // Ambil data sesi ujian santri yang sudah mulai (di paket milik sesi global ini)
+    const sesiList = await prisma.sesiUjianSantri.findMany({
+      where: { paket: { sesiGlobalId } },
+      include: {
+        riwayat: { select: { id: true, santriId: true } },
+        jawabanList: {
+          select: { opsiId: true, rpiId: true }
+        }
+      }
+    });
+
+    // Indekskan sesi berdasarkan riwayatId (karena 1 riwayat = 1 santri di dufah ini)
+    const sesiMap = new Map();
+    for (const sesi of sesiList) {
+      sesiMap.set(sesi.riwayat.id, sesi);
+    }
+
+    const data = semuaSantri.map(riwayat => {
+      const sesiInfo = sesiMap.get(riwayat.id);
+      
+      let dijawab = 0;
+      let ragu = 0;
+      let belum = 0;
+      
+      if (sesiInfo) {
+        dijawab = sesiInfo.jawabanList.filter((j: any) => j.opsiId).length;
+        ragu = sesiInfo.jawabanList.filter((j: any) => j.rpiId === "RAGU").length;
+        belum = (sesiInfo.jawabanList.length > 0 ? sesiInfo.jawabanList.length : totalSoal) - dijawab;
+      } else {
+        belum = totalSoal;
+      }
+
+      return {
+        id: sesiInfo ? sesiInfo.id : `none-${riwayat.santriId}`,
+        santriId: riwayat.santriId,
+        namaSantri: riwayat.santri.nama,
+        kelasNama: riwayat.kelas?.nama || "Tanpa Kelas",
+        lokasi: `${riwayat.santri.sakan || '-'} - ${riwayat.santri.kamar || '-'}`,
+        status: sesiInfo ? sesiInfo.status : "BELUM_MULAI",
+        waktuMulai: sesiInfo ? sesiInfo.waktuMulai : null,
+        waktuSelesai: sesiInfo ? sesiInfo.waktuSelesai : null,
+        dijawab,
+        ragu,
+        belum,
+        totalSoal,
+        progress: totalSoal > 0 ? Math.round((dijawab / totalSoal) * 100) : 0,
+        nilaiTotal: sesiInfo ? sesiInfo.nilaiTotal : 0,
+        tabCloseCount: sesiInfo ? sesiInfo.tabCloseCount : 0
+      };
+    });
 
     return NextResponse.json(data);
   } catch (error: any) {

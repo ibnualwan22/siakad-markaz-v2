@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { mapelId, programId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, usbuKe, paketSoal } = await req.json();
+    const { mapelId, programId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, usbuKe, paketSoal, grupSoalId } = await req.json();
 
     if (!mapelId || !programId || (!pertanyaan && !gambarUrl)) {
       return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
@@ -63,6 +63,7 @@ export async function POST(req: Request) {
         tipeSoal: tipeSoal || "PG",
         pertanyaan: pertanyaan || "",
         gambarUrl: gambarUrl || null,
+        grupSoalId: grupSoalId || null,
         bobot: Number(bobot) || 10,
         opsiList: {
           create: opsiList?.map((opsi: any, i: number) => ({

@@ -23,15 +23,22 @@ export async function GET() {
 
     const riwayat = santri.riwayatRecords[0];
 
-    if (!riwayat.programId) {
-      return NextResponse.json({ error: "Santri belum memiliki program" }, { status: 400 });
+    // Ambil program dari kelas santri (prioritas), fallback ke program riwayat
+    const kelasData = riwayat.kelasId ? await prisma.kelas.findUnique({
+      where: { id: riwayat.kelasId },
+      select: { programId: true }
+    }) : null;
+
+    const programIdForExam = kelasData?.programId || riwayat.programId;
+
+    if (!programIdForExam) {
+      return NextResponse.json({ error: "Santri belum memiliki program/kelas" }, { status: 400 });
     }
 
-    // Cari paket ujian yang tersedia untuk program ini (termasuk yang belum aktif)
-    // Note: tidak filter by dufahNama karena format nama dufah bisa berbeda antara riwayat dan paket
+    // Cari paket ujian yang tersedia untuk program kelas ini
     const paketTersedia = await prisma.paketUjian.findMany({
       where: {
-        programId: riwayat.programId
+        programId: programIdForExam
       },
       include: {
         sesiList: {

@@ -133,25 +133,30 @@ function wrapTextNode(text: string): string {
   let current = "";
   let currentScript: "ar" | "la" | "neutral" = "neutral";
 
-  for (const char of text) {
-    const isAr = ARABIC_RANGE.test(char);
-    const isLa = LATIN_RANGE.test(char);
+  // We parse entities properly so they aren't split by script change
+  const tokens = text.match(/&[a-zA-Z0-9#]+;|[^]/g) || [];
 
+  for (const token of tokens) {
     let charScript: "ar" | "la" | "neutral" = "neutral";
-    if (isAr) charScript = "ar";
-    else if (isLa) charScript = "la";
+    
+    if (token.length === 1) {
+      const isAr = ARABIC_RANGE.test(token);
+      const isLa = LATIN_RANGE.test(token);
+      if (isAr) charScript = "ar";
+      else if (isLa) charScript = "la";
+    }
 
     if (charScript === "neutral") {
       // Neutral chars (space, digits, punctuation) inherit current script
-      current += char;
+      current += token;
     } else if (charScript === currentScript || currentScript === "neutral") {
       // Same script or upgrading from neutral
       currentScript = charScript;
-      current += char;
+      current += token;
     } else {
       // Script changed — push current and start new
       if (current) segments.push({ text: current, script: currentScript });
-      current = char;
+      current = token;
       currentScript = charScript;
     }
   }

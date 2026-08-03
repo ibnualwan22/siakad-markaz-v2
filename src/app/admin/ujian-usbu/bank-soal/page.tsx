@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2, Eye, X, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -39,6 +39,13 @@ export default function BankSoalPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importTimpa, setImportTimpa] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  // Preview State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewIdx, setPreviewIdx] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [showPreviewNav, setShowPreviewNav] = useState(false);
 
   // Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -290,6 +297,31 @@ export default function BankSoalPage() {
     }
   };
 
+  const handlePreview = async () => {
+    if (!selectedProgram) return toast.error("Pilih program terlebih dahulu");
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/bank-soal/preview?programId=${selectedProgram}&usbuKe=${selectedUsbu}&paketSoal=${selectedPaketSoal}`);
+      if (!res.ok) throw new Error((await res.json()).error);
+      const data = await res.json();
+      if (data.soal.length === 0) return toast.error("Tidak ada soal untuk dikonfigurasi pratinjau ini.");
+      setPreviewData(data);
+      setPreviewIdx(0);
+      setIsPreviewOpen(true);
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } catch (err: any) {
+      toast.error(err.message || "Gagal memuat pratinjau");
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setIsPreviewOpen(false);
+    setPreviewData(null);
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  };
+
   if (loading) return <div>Memuat data bank soal...</div>;
 
   return (
@@ -360,6 +392,9 @@ export default function BankSoalPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-sm px-4 py-2 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors flex gap-2 items-center shadow-sm disabled:opacity-50">
+            {previewLoading ? <Loader2 size={16} className="animate-spin"/> : <Eye size={16}/>} Pratinjau
+          </button>
           <button onClick={() => setIsImportModalOpen(true)} disabled={!selectedMapel || !selectedProgram} className="font-bold text-sm px-4 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors flex gap-2 items-center shadow-sm">
             <FileSpreadsheet size={16}/> Import Excel
           </button>
@@ -696,6 +731,175 @@ export default function BankSoalPage() {
           </div>
         </div>
       )}
+
+      {/* ===== FULLSCREEN PREVIEW OVERLAY ===== */}
+      {isPreviewOpen && previewData && (() => {
+        const soal = previewData.soal[previewIdx];
+        if (!soal) return null;
+        const isFirst = previewIdx === 0;
+        const isLast = previewIdx === previewData.soal.length - 1;
+
+        return (
+          <div className="fixed inset-0 bg-gray-50 flex flex-col md:flex-row font-sans z-[9999] overflow-hidden">
+            <style dangerouslySetInnerHTML={{__html: `
+              aside { display: none !important; }
+              .app-footer { display: none !important; }
+              .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
+              .santri-mobile-menu-btn { display: none !important; }
+              body { overflow: hidden !important; }
+            `}} />
+
+            {/* LEFT: Soal Area */}
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+              {/* Header */}
+              <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-600 text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
+                    {soal.urutanUI}
+                  </div>
+                  <div>
+                    <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">SOAL {soal.urutanUI} / {previewData.totalSoal}</h1>
+                    <p className="text-[9px] md:text-xs font-semibold text-purple-500 bg-purple-50 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">{soal.mapelName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowPreviewNav(!showPreviewNav)} className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                    <Grid3X3 size={18} />
+                  </button>
+                  <div className="px-3 md:px-4 py-1.5 md:py-2 bg-purple-50 text-purple-700 border border-purple-100 rounded-lg md:rounded-xl font-bold text-xs md:text-sm">
+                    <Eye size={14} className="inline mr-1.5"/> MODE PRATINJAU
+                  </div>
+                  <button onClick={closePreview} className="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition shadow-sm border border-rose-100">
+                    <X size={18}/>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Navigator */}
+              {showPreviewNav && (
+                <div className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowPreviewNav(false)}>
+                  <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-gray-800">Navigasi Soal</h3>
+                      <button onClick={() => setShowPreviewNav(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={18}/></button>
+                    </div>
+                    <div className="grid grid-cols-6 gap-2 mb-4">
+                      {previewData.soal.map((s: any, idx: number) => {
+                        const active = previewIdx === idx;
+                        return (
+                          <button key={s.soalId} onClick={() => { setPreviewIdx(idx); setShowPreviewNav(false); }}
+                            className={`h-11 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 shadow-sm ${active ? 'border-purple-600 ring-2 ring-purple-200 bg-white text-purple-700' : 'bg-white border-gray-200 text-gray-500'}`}
+                          >{idx + 1}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Soal Content */}
+              <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-8">
+                {/* Qiro'ah Parent Passage */}
+                {soal.grupSoalId && (() => {
+                  const parentSoal = previewData.soal.find((s: any) => s.soalId === soal.grupSoalId);
+                  if (!parentSoal) return null;
+                  return (
+                    <div className="bg-purple-50/50 rounded-3xl p-6 md:p-8 shadow-sm border-2 border-purple-200 mb-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md bg-purple-100 text-purple-600">Bacaan Qiro&apos;ah</span>
+                      </div>
+                      {parentSoal.gambarUrl && (
+                        <div className="mb-4 flex justify-center">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={parentSoal.gambarUrl} alt="Bacaan" className="max-w-full max-h-[300px] rounded-xl border border-purple-200 shadow-sm" />
+                        </div>
+                      )}
+                      <SoalText html={parentSoal.pertanyaan} className="text-base md:text-lg font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" />
+                    </div>
+                  );
+                })()}
+
+                <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
+                  {soal.gambarUrl && (
+                    <div className="mb-6 flex justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full max-h-[300px] rounded-xl border border-gray-200 shadow-sm" />
+                    </div>
+                  )}
+                  <SoalText html={soal.pertanyaan} className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" />
+                </div>
+
+                <div className="space-y-4">
+                  {soal.opsiList.map((opt: any, index: number) => (
+                    <div key={opt.id} className="flex gap-4 p-4 md:p-5 rounded-2xl border-2 bg-white border-gray-200">
+                      <div className="pt-0.5">
+                        <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center text-xs md:text-sm font-bold border-gray-300 text-gray-500">
+                          {String.fromCharCode(65 + index)}
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <SoalText html={opt.teks} className="text-sm md:text-base text-gray-700 block" />
+                        {opt.gambarUrl && (
+                          <div className="mt-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={opt.gambarUrl} alt={`Opsi ${String.fromCharCode(65 + index)}`} className="max-w-full max-h-[200px] rounded-lg border border-gray-200 shadow-sm" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Footer Navigation */}
+              <div className="w-full shrink-0 bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]">
+                <button
+                  onClick={() => setPreviewIdx(Math.max(0, previewIdx - 1))}
+                  disabled={isFirst}
+                  className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-gray-100 font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm"
+                >
+                  <ChevronLeft size={18}/> <span className="hidden sm:inline">Soal</span> Sebelumnya
+                </button>
+                <div className="text-xs font-bold text-gray-400">{soal.urutanUI} / {previewData.totalSoal}</div>
+                <button
+                  onClick={() => setPreviewIdx(Math.min(previewData.soal.length - 1, previewIdx + 1))}
+                  disabled={isLast}
+                  className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-purple-600 font-bold text-white hover:bg-purple-700 shadow-md shadow-purple-200 transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm disabled:opacity-30"
+                >
+                  <span className="hidden sm:inline">Soal</span> Berikutnya <ChevronRight size={18}/>
+                </button>
+              </div>
+            </div>
+
+            {/* RIGHT: Grid Navigasi (Desktop) */}
+            <div className="hidden md:flex flex-col w-80 lg:w-88 bg-white border-l h-full sticky top-0 shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.02)]">
+              <div className="p-5 border-b bg-gray-50/50">
+                <h3 className="font-bold font-display text-gray-800">Navigasi Pratinjau</h3>
+                <p className="text-xs text-gray-500 font-medium mt-1">Usbu&apos; {selectedUsbu} — Paket {selectedPaketSoal}</p>
+              </div>
+              <div className="p-5 overflow-y-auto flex-1">
+                <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
+                  {previewData.soal.map((s: any, idx: number) => {
+                    const active = previewIdx === idx;
+                    return (
+                      <button key={s.soalId} onClick={() => setPreviewIdx(idx)}
+                        className={`h-11 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ${
+                          active ? 'border-purple-600 ring-2 ring-purple-200 bg-white text-purple-700' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300'
+                        }`}
+                      >{idx + 1}</button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="p-4 border-t bg-gray-50 shrink-0">
+                <button onClick={closePreview} className="w-full bg-rose-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-rose-700 shadow-md transition-colors">
+                  <X size={18}/> Tutup Pratinjau
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

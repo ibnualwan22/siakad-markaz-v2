@@ -183,7 +183,33 @@ export default function ClientMengerjakanUjian() {
     }
   }, [timeLeft, hasStarted, examData]);
 
+  // Polling Real-Time Force Submit Detection
+  // Mengecek ke server setiap 15 detik apakah sesi ini sudah dipaksa submit oleh admin
+  useEffect(() => {
+    if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
+    const pullStatus = async () => {
+      try {
+        const res = await fetch(`/api/santri/ujian/status?sesiId=${sesiId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status && data.status !== "MENGERJAKAN" && !hasSubmitted.current) {
+          hasSubmitted.current = true;
+          // Keluar fullscreen
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+          toast.error("Ujian telah diakhiri oleh Pengawas/Admin.");
+          router.replace(`/santri/ujian/hasil?s=${sesiId}`);
+        }
+      } catch (err) {
+        // Abaikan error jaringan saat polling
+      }
+    };
+
+    const interval = setInterval(pullStatus, 15000);
+    return () => clearInterval(interval);
+  }, [hasStarted, sesiId, router]);
   const enterFullscreen = () => {
     const elem = document.documentElement;
     if (elem.requestFullscreen) {

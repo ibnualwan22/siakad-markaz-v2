@@ -295,26 +295,27 @@ export default function MonitoringPengejaanPage() {
                         >
                           Paksa Submit
                         </button>
-                      ) : d.status === "AUTO_SUBMIT" && d.tabCloseCount > 0 ? (
-                        <div className="flex justify-end gap-2">
-                          <button 
-                            onClick={() => handleAction(d.id, "RETRY")}
-                            className="p-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 rounded-lg transition-colors" title="Ulangi Ujian (Reset)"
-                          >
-                            <RotateCcw size={16}/>
-                          </button>
-                          <button 
-                            onClick={() => handleAction(d.id, "RESUME")}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors"
-                          >
-                            <Play size={14}/> Lanjutkan
-                          </button>
+                      ) : (d.status === "AUTO_SUBMIT" || d.status === "SELESAI") ? (
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="font-bold text-[15px]" style={{ color: d.nilaiTotal < 60 ? 'var(--color-danger)' : 'var(--color-primary)' }}>
+                            Nilai: {d.nilaiTotal ?? "-"}
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button 
+                              onClick={() => handleAction(d.id, "RETRY")}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              <RotateCcw size={14}/> Reset Ujian
+                            </button>
+                            <button 
+                              onClick={() => handleAction(d.id, "RESUME")}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              <Play size={14}/> Lanjutkan
+                            </button>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="font-bold text-[15px]" style={{ color: d.nilaiTotal < 60 ? 'var(--color-danger)' : 'var(--color-primary)' }}>
-                          Nilai rata2: {d.nilaiTotal}
-                        </div>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 ))}

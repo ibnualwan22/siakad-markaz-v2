@@ -30,7 +30,7 @@ export default function SesiUjianPage() {
     setLoading(true);
     try {
       const [progRes, sesiRes, activeCtxRes] = await Promise.all([
-        fetch("/api/admin/program"),
+        fetch("/api/admin/program?bypassFilter=true"),
         fetch("/api/admin/ujian-usbu/sesi"),
         fetch("/api/admin/active-context")
       ]);

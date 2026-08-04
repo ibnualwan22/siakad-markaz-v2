@@ -138,15 +138,21 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
 
   const rataRataPaket = soalPerMapel.size > 0 ? Number((totalSkorSeluruh / soalPerMapel.size).toFixed(2)) : 0;
 
+  const dataToUpdate: any = {
+    status: statusSubmit,
+    waktuSelesai: timeCompleted,
+    nilaiTotal: rataRataPaket,
+    alasanSubmit: reason
+  };
+
+  if (isCheat) {
+    dataToUpdate.tabCloseCount = { increment: 1 };
+  }
+
   // Update SesiUjianSantri
   const updatedSesi = await prisma.sesiUjianSantri.update({
     where: { id: sesiId },
-    data: {
-      status: statusSubmit,
-      waktuSelesai: timeCompleted,
-      nilaiTotal: rataRataPaket,
-      alasanSubmit: reason
-    }
+    data: dataToUpdate
   });
 
   return updatedSesi;

@@ -15,8 +15,8 @@ export default function MonitoringPengejaanPage() {
       "FORCE_SUBMIT": { label: "Dipaksa Admin", color: "bg-purple-100 text-purple-700", Icon: RotateCcw },
       "TAB_CLOSE": { label: "Pelanggaran: Keluar Layar/Tab", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
       "SCREEN_CAPTURE_OR_INSPECT": { label: "Pelanggaran: Inspect/Screenshot", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
-      "FLOATING_APP": { label: "Pelanggaran: App Mengambang", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
-      "FOCUS_LOST": { label: "Pelanggaran: Kehilangan Fokus", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert }
+      "FLOATING_APP": { label: "Pelanggaran: Aktivitas di Luar Ujian", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
+      "FOCUS_LOST": { label: "Pelanggaran: Aktivitas di Luar Ujian", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert }
     };
 
     const config = configs[d.alasanSubmit] || { 

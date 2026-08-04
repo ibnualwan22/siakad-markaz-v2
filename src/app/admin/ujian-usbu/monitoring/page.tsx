@@ -67,10 +67,10 @@ export default function MonitoringPengejaanPage() {
   const handleForceSubmit = async (sesiId: string) => {
     if (!confirm("Paksa kumpulkan ujian santri ini sekarang? Santri tidak akan bisa melanjutkan ujian.")) return;
     try {
-      const res = await fetch("/api/santri/ujian/submit", {
+      const res = await fetch("/api/admin/ujian-usbu/monitoring/paksa-submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sesiId, reason: "FORCE_SUBMIT" })
+        body: JSON.stringify({ sesiId })
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Ujian berhasil dipaksa submit!");

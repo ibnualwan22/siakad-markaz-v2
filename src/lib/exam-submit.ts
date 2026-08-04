@@ -144,7 +144,8 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
     data: {
       status: statusSubmit,
       waktuSelesai: timeCompleted,
-      nilaiTotal: rataRataPaket
+      nilaiTotal: rataRataPaket,
+      alasanSubmit: reason
     }
   });
 

@@ -94,7 +94,8 @@ export async function GET(req: Request) {
         totalSoal,
         progress: totalSoal > 0 ? Math.round((dijawab / totalSoal) * 100) : 0,
         nilaiTotal: sesiInfo ? sesiInfo.nilaiTotal : 0,
-        tabCloseCount: sesiInfo ? sesiInfo.tabCloseCount : 0
+        tabCloseCount: sesiInfo ? sesiInfo.tabCloseCount : 0,
+        alasanSubmit: sesiInfo ? sesiInfo.alasanSubmit : null
       };
     });
 

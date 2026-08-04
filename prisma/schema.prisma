@@ -840,6 +840,7 @@ model SesiUjianSantri {
   status        String    @default("MENGERJAKAN") // MENGERJAKAN | SELESAI | AUTO_SUBMIT
   nilaiTotal    Float?
   tabCloseCount Int       @default(0)
+  alasanSubmit  String?
   createdAt     DateTime  @default(now())
 
   paket         PaketUjian    @relation(fields: [paketId], references: [id], onDelete: Cascade)

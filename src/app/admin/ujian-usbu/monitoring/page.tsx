@@ -5,6 +5,35 @@ import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAle
 import toast from "react-hot-toast";
 
 export default function MonitoringPengejaanPage() {
+  const getSubmitBadge = (d: any) => {
+    if (d.status !== "AUTO_SUBMIT") return null;
+    
+    // Konfigurasi badge berdasarkan alasan
+    // Ikon tidak memakai emotikon sesuai request (pakai elemen Lucide React)
+    const configs: Record<string, { label: string, color: string, Icon: any }> = {
+      "TIME_UP": { label: "Waktu Habis Murni", color: "bg-orange-100 text-orange-700", Icon: ClockAlert },
+      "FORCE_SUBMIT": { label: "Dipaksa Admin", color: "bg-purple-100 text-purple-700", Icon: RotateCcw },
+      "TAB_CLOSE": { label: "Pelanggaran: Keluar Layar/Tab", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
+      "SCREEN_CAPTURE_OR_INSPECT": { label: "Pelanggaran: Inspect/Screenshot", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
+      "FLOATING_APP": { label: "Pelanggaran: App Mengambang", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert },
+      "FOCUS_LOST": { label: "Pelanggaran: Kehilangan Fokus", color: "bg-rose-100 text-rose-700", Icon: ShieldAlert }
+    };
+
+    const config = configs[d.alasanSubmit] || { 
+      label: d.tabCloseCount > 0 ? "Tersita: Pelanggaran" : "Pengumpulan Otomatis", 
+      color: d.tabCloseCount > 0 ? "bg-rose-100 text-rose-700" : "bg-orange-100 text-orange-700", 
+      Icon: d.tabCloseCount > 0 ? ShieldAlert : ClockAlert 
+    };
+
+    const Icon = config.Icon;
+
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold w-fit ${config.color}`} title={d.alasanSubmit}>
+        <Icon size={12}/> {config.label}
+      </span>
+    );
+  };
+
   const [paketList, setPaketList] = useState<any[]>([]);
   const [selectedPaket, setSelectedPaket] = useState("");
   const [monitoringData, setMonitoringData] = useState<any[]>([]);
@@ -241,8 +270,7 @@ export default function MonitoringPengejaanPage() {
                       {d.status === "BELUM_MULAI" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-500 w-fit">⌛ Belum Mulai</span>}
                       {d.status === "MENGERJAKAN" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700 w-fit"><RefreshCw size={12} className="animate-spin"/> Mengerjakan</span>}
                       {d.status === "SELESAI" && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-green-100 text-green-700 w-fit"><CheckCircle2 size={12}/> Selesai / Dikumpulkan</span>}
-                      {d.status === "AUTO_SUBMIT" && d.tabCloseCount > 0 && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-rose-100 text-rose-700 w-fit"><ShieldAlert size={12}/> Tersita: Pelanggaran</span>}
-                      {d.status === "AUTO_SUBMIT" && d.tabCloseCount === 0 && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-orange-100 text-orange-700 w-fit"><ClockAlert size={12}/> Waktu Habis</span>}
+                      {getSubmitBadge(d)}
                       {d.waktuMulai && (
                         <div className="text-[10px] text-gray-400 mt-1 font-medium flex items-center gap-1">
                           <ClockAlert size={10}/> Mulai: {new Date(d.waktuMulai).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

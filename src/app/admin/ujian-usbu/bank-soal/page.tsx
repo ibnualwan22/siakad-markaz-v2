@@ -322,6 +322,32 @@ export default function BankSoalPage() {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
   };
 
+  const handleAutoBobot = async () => {
+    if (soalList.length === 0) return toast.error("Belum ada soal untuk dihitung");
+    const bobotPerSoal = Number((100 / soalList.length).toFixed(2));
+    const msg = `Atur bobot semua ${soalList.length} soal menjadi ${bobotPerSoal} poin per soal? (Total ≈ ${(bobotPerSoal * soalList.length).toFixed(2)})`;
+    if (!confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/bank-soal/auto-bobot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          programId: selectedProgram,
+          mapelId: selectedMapel,
+          usbuKe: Number(selectedUsbu),
+          paketSoal: selectedPaketSoal,
+          bobot: bobotPerSoal
+        })
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success(`Bobot semua ${soalList.length} soal di-set ke ${bobotPerSoal} poin`);
+      fetchSoal();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal update bobot");
+    }
+  };
+
   if (loading) return <div>Memuat data bank soal...</div>;
 
   return (
@@ -388,8 +414,13 @@ export default function BankSoalPage() {
         <div className="flex gap-4">
           <h2 className="font-bold text-lg" style={{ color: "var(--color-text)" }}>Daftar Soal ({soalList.length})</h2>
           <div className="hidden md:flex items-center gap-2 bg-[var(--color-primary-50)] text-[var(--color-primary)] px-3 py-1 rounded-xl text-xs font-bold">
-            <Activity size={14}/> Total Poin: {soalList.reduce((sum, s) => sum + s.bobot, 0)}
+            <Activity size={14}/> Total Poin: {Number(soalList.reduce((sum, s) => sum + s.bobot, 0).toFixed(2))}
           </div>
+          {soalList.length > 0 && (
+            <button onClick={handleAutoBobot} className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200 shadow-sm">
+              ⚖️ Auto Bobot (100/{soalList.length})
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-sm px-4 py-2 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 transition-colors flex gap-2 items-center shadow-sm disabled:opacity-50">
@@ -437,7 +468,7 @@ export default function BankSoalPage() {
                   <div className="flex-1 pr-20">
                     <div className="flex gap-3 mb-3 items-center flex-wrap">
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">Tipe: {soal.tipeSoal}</span>
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {soal.bobot} Poin</span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {Number.isInteger(soal.bobot) ? soal.bobot : soal.bobot.toFixed(2)} Poin</span>
                       <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-600">Paket: {soal.paketSoal || "A"}</span>
                       {/* Indikator Grup Qiro'ah */}
                       {soal.grupSoalId ? (
@@ -527,10 +558,10 @@ export default function BankSoalPage() {
                 <div className="flex items-center gap-3">
                   <label className="text-sm font-bold text-gray-500">Bobot Poin:</label>
                   <input 
-                    type="number" min="1" required 
+                    type="number" min="0.01" step="any" required 
                     value={formData.bobot} 
                     onChange={e => setFormData({ ...formData, bobot: e.target.value })} 
-                    className="neu-input w-24 p-3 text-sm text-center font-bold focus:border-[var(--color-primary)]" 
+                    className="neu-input w-28 p-3 text-sm text-center font-bold focus:border-[var(--color-primary)]" 
                   />
                 </div>
               </div>

@@ -334,21 +334,23 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
 
       const effectiveUsbuainMode = riwayat ? (riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0) : 0;
 
-      const hasCompleteNilai = totalMapel > 0 && nilaiList.length === totalMapel &&
-        nilaiList.every((n: any) => {
-          if (isAkbarnas) return n.nilaiAkhir !== null;
-          const m = program?.programMapels.find((pm: any) => pm.mapelId === n.mapelId)?.mapel;
-          if (m?.jumlah_tes === 1) return n.nilaiAkhir !== null;
-          // Usbuain modes: check only the relevant columns
-          if (effectiveUsbuainMode === 1 && m?.jumlah_tes === 3) return n.nilaiNihai !== null;
-          if (effectiveUsbuainMode === 2 && m?.jumlah_tes === 3) return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null;
-          // Normal 3 kolom
-          return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null && n.nilaiNihai !== null;
-        });
+      const hasCompleteNilai = totalMapel > 0 && program?.programMapels.every((pm: any) => {
+        const n = nilaiList.find((nl: any) => nl.mapelId === pm.mapelId);
+        if (!n) return false;
+        if (isAkbarnas) return n.nilaiAkhir !== null;
+        const m = pm.mapel;
+        if (m?.jumlah_tes === 1) return n.nilaiAkhir !== null;
+        // Usbuain modes: check only the relevant columns
+        if (effectiveUsbuainMode === 1 && m?.jumlah_tes === 3) return n.nilaiNihai !== null;
+        if (effectiveUsbuainMode === 2 && m?.jumlah_tes === 3) return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null;
+        // Normal 3 kolom
+        return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null && n.nilaiNihai !== null;
+      });
 
       const accumulativeNilai = nilaiList.filter((n: any) => {
-        const m = program?.programMapels.find((pm: any) => pm.mapelId === n.mapelId)?.mapel;
-        return m?.masuk_akumulasi !== false;
+        const pm = program?.programMapels.find((p: any) => p.mapelId === n.mapelId);
+        if (!pm) return false;
+        return pm.mapel.masuk_akumulasi !== false;
       });
       const status = calculateStatus(
         {
@@ -846,19 +848,21 @@ export async function getRiwayatSantriRows() {
 
     const totalMapel = program?.programMapels.length ?? 0;
     const effectiveUsbuainMode2 = riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0;
-    const hasCompleteNilai = totalMapel > 0 && nilaiList.length === totalMapel &&
-      nilaiList.every((n: any) => {
-        const m = program?.programMapels.find((pm: any) => pm.mapelId === n.mapelId)?.mapel;
-        if (m?.jumlah_tes === 1) return n.nilaiAkhir !== null;
-        // Usbuain modes
-        if (effectiveUsbuainMode2 === 1 && m?.jumlah_tes === 3) return n.nilaiNihai !== null;
-        if (effectiveUsbuainMode2 === 2 && m?.jumlah_tes === 3) return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null;
-        // Normal
-        return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null && n.nilaiNihai !== null;
-      });
+    const hasCompleteNilai = totalMapel > 0 && program?.programMapels.every((pm: any) => {
+      const n = nilaiList.find((nl: any) => nl.mapelId === pm.mapelId);
+      if (!n) return false;
+      const m = pm.mapel;
+      if (m?.jumlah_tes === 1) return n.nilaiAkhir !== null;
+      // Usbuain modes
+      if (effectiveUsbuainMode2 === 1 && m?.jumlah_tes === 3) return n.nilaiNihai !== null;
+      if (effectiveUsbuainMode2 === 2 && m?.jumlah_tes === 3) return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null;
+      // Normal
+      return n.nilaiUsbu1 !== null && n.nilaiUsbu2 !== null && n.nilaiNihai !== null;
+    });
     const accumulativeNilai = nilaiList.filter((n: any) => {
-      const m = program?.programMapels.find((pm: any) => pm.mapelId === n.mapelId)?.mapel;
-      return m?.masuk_akumulasi !== false;
+      const pm = program?.programMapels.find((p: any) => p.mapelId === n.mapelId);
+      if (!pm) return false;
+      return pm.mapel.masuk_akumulasi !== false;
     });
     const status = calculateStatus(
       { is_tasmi: riwayat.is_tasmi },

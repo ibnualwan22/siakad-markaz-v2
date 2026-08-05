@@ -65,8 +65,21 @@ function elProps(
 export function SyahadahDocument({ qrUrl, data, layout, editorMode, selectedElement, onSelectElement }: SyahadahDocumentProps) {
   const lo = layout || getDefaultLayout();
   const isMusyarokah = data.status === "MUSYAROKAH";
-  const tanggalMulai = data.template.tgl_mulai_arab || "........";
+  let tanggalMulai = data.template.tgl_mulai_arab || "........";
   const tanggalSampai = data.template.tgl_selesai_arab || "........";
+
+  if (tanggalMulai !== "........" && tanggalSampai !== "........") {
+    const partsMulai = tanggalMulai.trim().split(/\s+/);
+    const partsSampai = tanggalSampai.trim().split(/\s+/);
+    if (partsMulai.length > 1 && partsSampai.length > 1) {
+      const yearMulai = partsMulai[partsMulai.length - 1];
+      const yearSampai = partsSampai[partsSampai.length - 1];
+      if (yearMulai === yearSampai && /^[\d٠-٩]+$/.test(yearMulai)) {
+        tanggalMulai = partsMulai.slice(0, -1).join(" ");
+      }
+    }
+  }
+
   const averageValue = isMusyarokah ? "" : convertToArabicNumerals(Math.round(data.average));
   const averagePredikat = isMusyarokah ? "" : data.averagePredikat.arab;
 

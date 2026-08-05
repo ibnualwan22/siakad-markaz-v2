@@ -470,9 +470,9 @@ export async function getSantriFormData(id: string) {
       ? {
         id: santriInternal.id,
         tempat_lahir: masterSantri.tempatLahir,
-        tanggal_lahir: masterSantri.tanggalLahir
+        tanggal_lahir: (masterSantri.tanggalLahir && !isNaN(new Date(masterSantri.tanggalLahir).getTime()))
           ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(masterSantri.tanggalLahir))
-          : "",
+          : (masterSantri.tanggalLahir || ""),
         alamat: masterSantri.alamat,
       }
       : null,
@@ -717,9 +717,9 @@ export async function getCertificateData(id: string) {
     santriInternal: {
       ...riwayat.santri,
       tempat_lahir: masterSantri.tempatLahir?.trim() ?? "",
-      tanggal_lahir: masterSantri.tanggalLahir
+      tanggal_lahir: (masterSantri.tanggalLahir && !isNaN(new Date(masterSantri.tanggalLahir).getTime()))
         ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(new Date(masterSantri.tanggalLahir))
-        : "",
+        : (masterSantri.tanggalLahir || ""),
       alamat: masterSantri.alamat,
     },
     program: serializeProgram(riwayat.program),

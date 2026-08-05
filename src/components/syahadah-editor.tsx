@@ -6,6 +6,7 @@ import { SyahadahDocument } from "@/components/syahadah-document";
 import { SyahadahTuratsDocument } from "@/components/syahadah-turats-document";
 import { SyahadahMartabahDocument } from "@/components/syahadah-martabah-document";
 import { SyahadahMartabahTuratsDocument } from "@/components/syahadah-martabah-turats-document";
+import { SyahadahCacDocument } from "@/components/syahadah-cac-document";
 import { LayoutData, LayoutElementKey, LAYOUT_ELEMENT_KEYS, ELEMENT_LABELS, getDefaultLayout } from "@/lib/syahadah-layout";
 
 type SyahadahEditorProps = {
@@ -21,6 +22,7 @@ type SyahadahEditorProps = {
   titleLabel?: string;
   isTurats?: boolean;
   isMartabah?: boolean;
+  isCac?: boolean;
 };
 
 const STEP_OPTIONS = [0.5, 1, 2, 5];
@@ -38,6 +40,7 @@ export function SyahadahEditor({
   titleLabel,
   isTurats = false,
   isMartabah = false,
+  isCac = false,
 }: SyahadahEditorProps) {
   const router = useRouter();
   const [layout, setLayout] = useState<LayoutData>(initialLayout);
@@ -81,7 +84,7 @@ export function SyahadahEditor({
           riwayatId: mode === "per-santri" ? riwayatId : null,
           programId: mode === "per-program" ? programId : null,
           layoutData: layout,
-          mode: isMartabah ? (isTurats ? "MARTABAH_TURATS" : "MARTABAH_REGULER") : musyarokah ? "MUSYAROKAH" : "REGULER",
+          mode: isCac ? "MARTABAH_CAC" : (isMartabah ? (isTurats ? "MARTABAH_TURATS" : "MARTABAH_REGULER") : musyarokah ? "MUSYAROKAH" : "REGULER"),
         }),
       });
       if (res.ok) {
@@ -487,7 +490,9 @@ export function SyahadahEditor({
         <div className="flex flex-col items-center gap-10 print:gap-0">
           {(() => {
             let DocumentComponent: any = isTurats ? SyahadahTuratsDocument : SyahadahDocument;
-            if (isMartabah) {
+            if (isCac) {
+              DocumentComponent = SyahadahCacDocument;
+            } else if (isMartabah) {
               DocumentComponent = isTurats ? SyahadahMartabahTuratsDocument : SyahadahMartabahDocument;
             }
 

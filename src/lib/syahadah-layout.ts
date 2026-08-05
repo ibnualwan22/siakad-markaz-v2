@@ -182,9 +182,20 @@ export async function getMartabahLayout(isTurats: boolean = false): Promise<Layo
   return mergeLayout(data.martabahLayoutData as Partial<LayoutData>);
 }
 
+export async function getMartabahCacLayout(): Promise<LayoutData> {
+  const global = await prisma.syahadahLayout.findFirst({
+    where: { riwayatId: null, programId: null },
+  });
+
+  if (!global) return getDefaultLayout();
+
+  const data = global as any;
+  return mergeLayout(data.martabahCacLayoutData as Partial<LayoutData>);
+}
+
 /** Save layout (global, per-program, or per-santri). */
 export async function saveLayout(
-  params: { riwayatId?: string | null; programId?: string | null; mode?: "REGULER" | "MUSYAROKAH" | "MARTABAH_REGULER" | "MARTABAH_TURATS" },
+  params: { riwayatId?: string | null; programId?: string | null; mode?: "REGULER" | "MUSYAROKAH" | "MARTABAH_REGULER" | "MARTABAH_TURATS" | "MARTABAH_CAC" },
   layoutData: LayoutData
 ) {
   const isMusyarokah = params.mode === "MUSYAROKAH";
@@ -192,6 +203,7 @@ export async function saveLayout(
   const getUpdateData = () => {
     if (params.mode === "MARTABAH_REGULER") return { martabahLayoutData: layoutData as any };
     if (params.mode === "MARTABAH_TURATS") return { martabahTuratsLayoutData: layoutData as any };
+    if (params.mode === "MARTABAH_CAC") return { martabahCacLayoutData: layoutData as any };
     if (isMusyarokah) return { musyarokahLayoutData: layoutData as any };
     return { layoutData: layoutData as any };
   };
@@ -200,6 +212,7 @@ export async function saveLayout(
     const base: any = { layoutData: getDefaultLayout() as any };
     if (params.mode === "MARTABAH_REGULER") base.martabahLayoutData = layoutData as any;
     else if (params.mode === "MARTABAH_TURATS") base.martabahTuratsLayoutData = layoutData as any;
+    else if (params.mode === "MARTABAH_CAC") base.martabahCacLayoutData = layoutData as any;
     else if (isMusyarokah) base.musyarokahLayoutData = layoutData as any;
     else base.layoutData = layoutData as any;
     return base;
@@ -209,7 +222,7 @@ export async function saveLayout(
   let targetProgramId = params.programId;
 
   // Force global for Martabah modes
-  if (params.mode === "MARTABAH_REGULER" || params.mode === "MARTABAH_TURATS") {
+  if (params.mode === "MARTABAH_REGULER" || params.mode === "MARTABAH_TURATS" || params.mode === "MARTABAH_CAC") {
     targetRiwayatId = null;
     targetProgramId = null;
   }

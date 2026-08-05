@@ -419,7 +419,7 @@ export function SyahadahDocument({ qrUrl, data, layout, editorMode, selectedElem
               position: "relative",
             }}
           >
-            برنامج <strong style={{ color: "#8B1A1A" }}>{data.program.nama_arab}</strong>
+            برنامج <strong style={{ color: "#8B1A1A" }}>{convertToArabicNumerals(data.program.nama_arab)}</strong>
           </p>
 
           {/* Teks Periode */}

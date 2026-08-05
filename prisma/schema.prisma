@@ -142,6 +142,7 @@ model RiwayatSantri {
   jumlah_kolom_usbu     Int? // null=ikut kelas, 0=normal, 1=satu kolom, 2=dua kolom
   checkoutPengajuanList CheckoutPengajuan[]
   sesiUjianList         SesiUjianSantri[]
+  syahadahCacRecord     SyahadahCacRecord?
 
   @@unique([santriId, dufahNama])
 }
@@ -207,6 +208,7 @@ model SyahadahLayout {
   musyarokahLayoutData     Json?          @default("{}")
   martabahLayoutData       Json?          @default("{}")
   martabahTuratsLayoutData Json           @default("{}")
+  martabahCacLayoutData    Json           @default("{}")
   riwayat                  RiwayatSantri? @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
   program                  Program?       @relation(fields: [programId], references: [id], onDelete: Cascade)
 }
@@ -860,4 +862,17 @@ model JawabanUjianSantri {
   sesi   SesiUjianSantri @relation(fields: [sesiId], references: [id], onDelete: Cascade)
 
   @@unique([sesiId, soalId])
+}
+
+// ===== SYAHADAH CAC RECORD =====
+
+model SyahadahCacRecord {
+  id           String        @id @default(cuid())
+  riwayatId    String        @unique
+  serialNumber String        @unique
+  tahunCetak   Int
+  urutan       Int
+  createdAt    DateTime      @default(now())
+  
+  riwayat      RiwayatSantri @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
 }

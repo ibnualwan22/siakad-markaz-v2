@@ -155,6 +155,12 @@ function MartabahUlaTable({
                         Cetak Penghargaan
                       </Link>
                       <Link
+                        href={`/admin/martabah-ula/${santri.id}/cetak-cac`}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 border border-orange-200 px-4 py-2 text-xs font-semibold text-orange-700 transition hover:bg-orange-100 hover:border-orange-300 shadow-sm"
+                      >
+                        Cetak CAC
+                      </Link>
+                      <Link
                         href={`/cetak/${santri.id}`}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-4 py-2 text-xs font-semibold text-[var(--color-info)] transition hover:bg-blue-100"
                       >

@@ -190,6 +190,7 @@ export function SyahadahMartabahDocument({ qrUrl, data, layout, editorMode, sele
                 letterSpacing: "0.01em",
                 lineHeight: 1.2,
                 display: "inline-block",
+                whiteSpace: "nowrap",
                 borderBottom: "2px solid #b08527",
                 paddingBottom: "2mm",
                 paddingLeft: "10mm",

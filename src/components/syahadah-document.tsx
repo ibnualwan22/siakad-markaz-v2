@@ -360,6 +360,7 @@ export function SyahadahDocument({ qrUrl, data, layout, editorMode, selectedElem
                 letterSpacing: "0.01em",
                 lineHeight: 1,
                 display: "inline-block",
+                whiteSpace: "nowrap",
               }}
             >
               {data.masterSantri.nama}

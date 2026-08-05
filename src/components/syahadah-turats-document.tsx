@@ -374,6 +374,7 @@ export function SyahadahTuratsDocument({
                 letterSpacing: "0.01em",
                 lineHeight: 1.2,
                 display: "inline-block",
+                whiteSpace: "nowrap",
               }}
             >
               {data.masterSantri.nama}

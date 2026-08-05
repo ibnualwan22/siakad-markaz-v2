@@ -220,6 +220,7 @@ export function SyahadahOnlineDocument({ data, qrUrl, layout, editorMode, select
                 letterSpacing: "0.01em",
                 lineHeight: 1.1,
                 display: "inline-block",
+                whiteSpace: "nowrap",
               }}
             >
               {data.nama}

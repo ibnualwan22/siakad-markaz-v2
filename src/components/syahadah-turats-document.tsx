@@ -2,9 +2,11 @@
 
 import React from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { convertToArabicNumerals } from "@/lib/formatters";
+import { translateDufahToArabic } from "@/lib/formatters";
 import { LayoutData, LayoutElementKey, getDefaultLayout } from "@/lib/syahadah-layout";
 
-// Reuses same prop shape as SyahadahDocument for compatibility
+// Define a minimal required type derived from getCertificateData
 type SyahadahTuratsDocumentProps = {
   qrUrl: string;
   data: {
@@ -20,23 +22,20 @@ type SyahadahTuratsDocumentProps = {
       nama_arab: string;
     };
     template: {
-      tgl_cetak_indo: string;
-      tgl_mulai_indo: string | null;
-      tgl_selesai_indo: string | null;
-      jabatan_mudir_indo: string;
-      nama_mudir_indo: string;
-      // Turats-specific (optional, falls back to Indo fields)
-      nama_mudir_turats?: string | null;
-      jabatan_mudir_turats?: string | null;
-      tgl_cetak_turats?: string | null;
-      tgl_mulai_turats?: string | null;
-      tgl_selesai_turats?: string | null;
+      tgl_cetak_arab: string;
+      tgl_mulai_arab: string | null;
+      tgl_selesai_arab: string | null;
+      jabatan_mudir_arab: string;
+      nama_mudir_arab: string;
+      teks_dufah_akbarnas_arab?: string | null;
+      teks_dufah_arab?: string | null;
     };
     nilaiRows: Array<{
       mapelId: string;
-      nama_indo: string;
+      nama_arab: string;
       skor: number | null;
     }>;
+    dufahNamaArab?: string | null;
   };
   layout?: LayoutData;
   editorMode?: boolean;
@@ -63,38 +62,31 @@ function elProps(
   };
 }
 
-export function SyahadahTuratsDocument({
-  qrUrl,
-  data,
-  layout,
-  editorMode,
-  selectedElement,
-  onSelectElement,
-}: SyahadahTuratsDocumentProps) {
+export function SyahadahTuratsDocument({ qrUrl, data, layout, editorMode, selectedElement, onSelectElement }: SyahadahTuratsDocumentProps) {
   const lo = layout || getDefaultLayout();
   const isMusyarokah = data.status === "MUSYAROKAH";
+  let tanggalMulai = data.template.tgl_mulai_arab || "........";
+  const tanggalSampai = data.template.tgl_selesai_arab || "........";
 
-  // Use Turats-specific template fields with fallbacks
-  const tglCetak = data.template.tgl_cetak_turats || data.template.tgl_cetak_indo;
-  const tglMulai = data.template.tgl_mulai_turats || data.template.tgl_mulai_indo || "........";
-  const tglSelesai = data.template.tgl_selesai_turats || data.template.tgl_selesai_indo || "........";
-  // Hardcoded for Turats
-  const namaMudir = "Ustadz Abdul Wahhab, M.Pd.";
-  const jabatanMudir = "Direktur Markaz Turats";
+  if (tanggalMulai !== "........" && tanggalSampai !== "........") {
+    const partsMulai = tanggalMulai.trim().split(/\s+/);
+    const partsSampai = tanggalSampai.trim().split(/\s+/);
+    if (partsMulai.length > 1 && partsSampai.length > 1) {
+      const yearMulai = partsMulai[partsMulai.length - 1];
+      const yearSampai = partsSampai[partsSampai.length - 1];
+      if (yearMulai === yearSampai && /^[\d٠-٩]+$/.test(yearMulai)) {
+        tanggalMulai = partsMulai.slice(0, -1).join(" ");
+      }
+    }
+  }
 
-  const averageValue = isMusyarokah ? "" : Math.round(data.average).toString();
-  const averagePredikat = isMusyarokah ? "" : data.averagePredikat.indo;
+  const averageValue = isMusyarokah ? "" : convertToArabicNumerals(Math.round(data.average));
+  const averagePredikat = isMusyarokah ? "" : data.averagePredikat.arab;
 
   const namaFontSize = lo.namaSantri.fontSize ?? 40;
 
-  // Extract marhalah from program name (e.g., "Marhalah 1", "Marhalah 2")
-  const programNama = data.program.nama_indo;
-
   return (
-    <div
-      className="container-syahadah print:block print:min-h-0 mx-auto mb-12"
-      style={{ pageBreakAfter: "always" }}
-    >
+    <div className="container-syahadah print:block print:min-h-0 mx-auto mb-12" style={{ pageBreakAfter: "always" }}>
       <div
         className="doc-syahadah"
         style={{
@@ -103,14 +95,12 @@ export function SyahadahTuratsDocument({
           position: "relative",
           overflow: "hidden",
           boxShadow: "0 24px 80px rgba(0,0,0,0.7)",
-          fontFamily: "'Crimson Text', Georgia, 'Times New Roman', serif",
+          fontFamily: "'Traditional Arabic', 'Scheherazade New', 'Amiri', serif",
           flexShrink: 0,
           background: "white",
-          color: "#1a1a1a",
         }}
         onClick={() => editorMode && onSelectElement?.(null as any)}
       >
-        {/* Turats Background */}
         <img
           src="/images/syahadah-turats.png"
           alt=""
@@ -126,9 +116,10 @@ export function SyahadahTuratsDocument({
           }}
         />
 
-        {/* Garis Bantu Editor */}
+        {/* Garis Bantu Editor (Crosshairs) */}
         {editorMode && (
           <>
+            {/* Vertical Center Line */}
             <div
               className="editor-crosshair"
               style={{
@@ -142,6 +133,7 @@ export function SyahadahTuratsDocument({
                 pointerEvents: "none",
               }}
             />
+            {/* Horizontal Center Line */}
             <div
               className="editor-crosshair"
               style={{
@@ -163,8 +155,9 @@ export function SyahadahTuratsDocument({
           {...elProps("qrCode", editorMode, selectedElement, onSelectElement, "QR Code")}
           style={{
             position: "absolute",
-            bottom: `calc(8mm + ${lo.qrCode.offsetY}mm)`,
+            top: `calc(70mm + ${lo.qrCode.offsetY}mm)`,
             right: `calc(8mm + ${-lo.qrCode.offsetX}mm)`,
+            width: "88mm",
             zIndex: 3,
             display: "flex",
             flexDirection: "column",
@@ -174,32 +167,33 @@ export function SyahadahTuratsDocument({
         >
           <p
             style={{
-              fontSize: "9pt",
-              color: "#444",
+              fontSize: "14pt",
+              color: "#000",
               textAlign: "center",
-              marginBottom: "3mm",
+              marginBottom: "5mm",
               marginTop: 0,
+              direction: "rtl",
             }}
           >
-            Pindai kode untuk verifikasi
+            امسح الكود للتحقق من الأصالة
           </p>
           <QRCodeSVG
             value={qrUrl}
-            size={80}
+            size={100}
             level="H"
             imageSettings={{ src: "/images/logo-turats.png", height: 28, width: 28, excavate: true }}
           />
         </div>
 
-        {/* Grade Table — bottom-right */}
+        {/* Tabel Nilai */}
         {!isMusyarokah && (
           <div
             {...elProps("tabelNilai", editorMode, selectedElement, onSelectElement, "Tabel Nilai")}
             style={{
               position: "absolute",
               top: `calc(130mm + ${lo.tabelNilai.offsetY}mm)`,
-              left: `calc(48mm + ${lo.tabelNilai.offsetX}mm)`,
-              width: "88mm",
+              right: `calc(0mm + ${-lo.tabelNilai.offsetX}mm)`,
+              width: "90mm", // Default width, can adjust if columns > 1
               zIndex: 3,
               ...(editorMode ? { cursor: "pointer" } : {}),
             }}
@@ -207,6 +201,7 @@ export function SyahadahTuratsDocument({
             {(() => {
               const numCols = lo.tabelNilai.columns || 1;
               const totalItems = data.nilaiRows.length;
+              // Ceiling division
               const rowsPerCol = Math.ceil(totalItems / numCols);
               const tableWidth = lo.tabelNilai.tableWidth ?? (numCols === 1 ? 80 : 100);
 
@@ -215,8 +210,10 @@ export function SyahadahTuratsDocument({
                   style={{
                     width: `${tableWidth}%`,
                     borderCollapse: "collapse",
-                    fontSize: "10pt",
-                    border: "1px solid #333",
+                    fontSize: "15pt",
+                    direction: "rtl",
+                    border: "1px solid #000",
+                    marginLeft: numCols > 1 ? "-20mm" : "0", // expand left if multiple cols
                   }}
                 >
                   <thead>
@@ -226,14 +223,13 @@ export function SyahadahTuratsDocument({
                         style={{
                           padding: "1.5mm 3mm",
                           textAlign: "center",
-                          fontWeight: "700",
-                          color: "#1a1a1a",
-                          border: "1px solid #333",
-                          fontSize: "10pt",
-                          background: "#f5f5f5",
+                          fontWeight: "500",
+                          color: "#000",
+                          border: "1px solid #000",
+                          fontSize: "15pt",
                         }}
                       >
-                        Daftar Nilai Santri
+                        حصيلة نتائج الطالب/الطالبة
                       </th>
                     </tr>
                     <tr>
@@ -244,27 +240,25 @@ export function SyahadahTuratsDocument({
                               padding: "1mm 3mm",
                               textAlign: "center",
                               fontWeight: "700",
-                              color: "#1a1a1a",
-                              border: "1.2px solid #333",
-                              fontSize: "10pt",
-                              background: "#f5f5f5",
+                              color: "#1a0e00",
+                              border: "1.2px solid #000",
+                              fontSize: "15pt",
                             }}
                           >
-                            Mata Pelajaran
+                            المادة
                           </th>
                           <th
                             style={{
                               padding: "1mm 2mm",
                               textAlign: "center",
                               fontWeight: "700",
-                              color: "#1a1a1a",
-                              border: "1.2px solid #333",
-                              width: `${lo.tabelNilai.colWidthDarajah ?? 25}mm`,
-                              fontSize: "10pt",
-                              background: "#f5f5f5",
+                              color: "#1a0e00",
+                              border: "1.2px solid #000",
+                              width: `${lo.tabelNilai.colWidthDarajah ?? 35}mm`,
+                              fontSize: "15pt",
                             }}
                           >
-                            Nilai
+                            الدرجة
                           </th>
                         </React.Fragment>
                       ))}
@@ -280,8 +274,8 @@ export function SyahadahTuratsDocument({
                           if (!row) {
                             return (
                               <React.Fragment key={colIndex}>
-                                <td style={{ border: "1px solid #333" }}></td>
-                                <td style={{ border: "1px solid #333" }}></td>
+                                <td style={{ border: "1px solid #000" }}></td>
+                                <td style={{ border: "1px solid #000" }}></td>
                               </React.Fragment>
                             );
                           }
@@ -291,25 +285,25 @@ export function SyahadahTuratsDocument({
                               <td
                                 style={{
                                   padding: "1mm 3mm",
-                                  textAlign: "left",
-                                  color: "#1a1a1a",
-                                  border: "1px solid #333",
-                                  fontSize: "10pt",
+                                  textAlign: "center",
+                                  color: "#1a0e00",
+                                  border: "1px solid #000",
+                                  fontSize: "16pt",
                                 }}
                               >
-                                {row.nama_indo}
+                                {row.nama_arab}
                               </td>
                               <td
                                 style={{
                                   padding: "1mm 2mm",
                                   textAlign: "center",
                                   fontWeight: "700",
-                                  color: "#1a1a1a",
-                                  border: "1px solid #333",
-                                  fontSize: "10pt",
+                                  color: "#1a0e00",
+                                  border: "1px solid #000",
+                                  fontSize: "13pt",
                                 }}
                               >
-                                {isMusyarokah || row.skor === null ? "" : Math.round(row.skor)}
+                                {isMusyarokah || row.skor === null ? "" : convertToArabicNumerals(Math.round(row.skor))}
                               </td>
                             </React.Fragment>
                           );
@@ -323,45 +317,50 @@ export function SyahadahTuratsDocument({
           </div>
         )}
 
-        {/* Main Content Area — LTR, left of center */}
+        {/* Main Content Area */}
         <div
-          dir="ltr"
+          dir="rtl"
           style={{
             position: "absolute",
-            top: "48mm",
-            left: "48mm",
-            right: "20mm",
-            bottom: "20mm",
+            top: "72mm",
+            left: "55%",
+            transform: "translateX(-62%)",
+            width: "175mm",
+            bottom: "10mm",
             zIndex: 3,
             display: "flex",
             flexDirection: "column",
+            overflow: "visible",
           }}
         >
           {/* Paragraf Pembuka */}
           <div
             {...elProps("paragrafPembuka", editorMode, selectedElement, onSelectElement, "Paragraf Pembuka")}
             style={{
-              fontSize: "11.5pt",
-              lineHeight: 1.8,
-              color: "#1a1a1a",
-              textAlign: "center",
-              marginBottom: "3mm",
+              fontSize: "18pt",
+              lineHeight: 2,
+              color: "#1a0e00",
+              textAlign: "justify",
+              marginBottom: "4mm",
+              marginTop: 0,
               transform: `translate(${lo.paragrafPembuka.offsetX}mm, ${lo.paragrafPembuka.offsetY}mm)`,
             }}
           >
-            <p style={{ margin: 0 }}>
-              Setelah berwasiat untuk senantiasa bertakwa kepada Allah SWT<br />
-              dan mengikuti sunnah Rasulullah SAW, Markaz Turats Pare, Kediri, Indonesia<br />
-              memutuskan untuk memberikan sertifikat kelulusan kepada santri:
+            <p dir="rtl" style={{ textAlign: "center", marginLeft: "100px", marginTop: "27px" }}>
+              بعد الوصية بتقوى الله واتباع سنة رسول الله، قرر مركز التراث بباري كديري إندونيسيا،
+              <br />
+              منح شهادة الاستكمال للطالب/الطالبة :
             </p>
           </div>
 
           {/* Nama Santri */}
           <div
             {...elProps("namaSantri", editorMode, selectedElement, onSelectElement, "Nama Santri")}
+            dir="ltr"
             style={{
               textAlign: "center",
-              marginBottom: "3mm",
+              marginBottom: "2mm",
+              marginLeft: "50px",
               transform: `translate(${lo.namaSantri.offsetX}mm, ${lo.namaSantri.offsetY}mm)`,
             }}
           >
@@ -369,10 +368,10 @@ export function SyahadahTuratsDocument({
               style={{
                 fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
-                color: "#1a4a1a",
+                color: "#1a6b1a",
                 fontFamily: "Georgia, 'Times New Roman', serif",
                 letterSpacing: "0.01em",
-                lineHeight: 1.2,
+                lineHeight: 1,
                 display: "inline-block",
                 whiteSpace: "nowrap",
               }}
@@ -381,56 +380,56 @@ export function SyahadahTuratsDocument({
             </span>
           </div>
 
-          {/* Teks Keterangan */}
+          {/* Teks Duf'ah */}
           <p
-            {...elProps("teksDufah", editorMode, selectedElement, onSelectElement, "Teks Keterangan")}
+            {...elProps("teksDufah", editorMode, selectedElement, onSelectElement, "Teks Duf'ah")}
             style={{
-              fontSize: "11.5pt",
-              lineHeight: 1.8,
-              color: "#1a1a1a",
-              textAlign: "justify",
+              fontSize: "18pt",
+              lineHeight: 2,
+              color: "#1a0e00",
+              textAlign: "center",
               margin: 0,
-              marginBottom: "1mm",
               transform: `translate(${lo.teksDufah.offsetX}mm, ${lo.teksDufah.offsetY}mm)`,
+              position: "relative",
             }}
           >
-            telah menyelesaikan serangkaian pembelajaran dan ujian pada Marhalah 1
+            وذلك لإكماله/لإكمالها الدراسات والامتحانات التي أقيمت
+             في <strong style={{ color: "#8B1A1A" }}>المرحلة الثانية</strong>
           </p>
 
           {/* Teks Program */}
           <p
             {...elProps("teksProgram", editorMode, selectedElement, onSelectElement, "Teks Program")}
             style={{
-              fontSize: "11.5pt",
-              lineHeight: 1.8,
-              color: "#1a1a1a",
-              textAlign: "justify",
+              fontSize: "18pt",
+              lineHeight: 2,
+              color: "#1a0e00",
+              textAlign: "center",
               margin: 0,
-              marginBottom: "1mm",
               transform: `translate(${lo.teksProgram.offsetX}mm, ${lo.teksProgram.offsetY}mm)`,
+              position: "relative",
             }}
           >
-            pada program{" "}
-            <strong style={{ color: "#6b1a1a" }}>{programNama}</strong>
+            برنامج <strong style={{ color: "#8B1A1A" }}>{data.program.nama_arab}</strong>
           </p>
 
           {/* Teks Periode */}
           <p
             {...elProps("teksPeriode", editorMode, selectedElement, onSelectElement, "Teks Periode")}
             style={{
-              fontSize: "11.5pt",
-              lineHeight: 1.8,
-              color: "#1a1a1a",
-              textAlign: "justify",
+              fontSize: "18pt",
+              lineHeight: 2,
+              fontWeight: "700",
+              textAlign: "center",
               margin: 0,
-              marginBottom: "1mm",
               transform: `translate(${lo.teksPeriode.offsetX}mm, ${lo.teksPeriode.offsetY}mm)`,
+              position: "relative",
             }}
           >
-            yang diselenggarakan pada tanggal{" "}
-            <strong style={{ color: "#6b1a1a" }}>{tglMulai}</strong>{" "}
-            sampai{" "}
-            <strong style={{ color: "#6b1a1a" }}>{tglSelesai}</strong>,
+            <span style={{ color: "#1a0e00" }}>التي تقام خلال فترات </span>
+            <strong style={{ color: "#8B1A1A" }}>{tanggalMulai}</strong>
+            <span style={{ color: "#8B1A1A" }}> إلى </span>
+            <strong style={{ color: "#8B1A1A" }}>{tanggalSampai}</strong>
           </p>
 
           {/* Rata-rata */}
@@ -438,17 +437,16 @@ export function SyahadahTuratsDocument({
             <p
               {...elProps("rataRata", editorMode, selectedElement, onSelectElement, "Rata-rata")}
               style={{
-                fontSize: "11.5pt",
-                lineHeight: 1.8,
-                color: "#1a1a1a",
-                textAlign: "justify",
+                fontSize: "20pt",
+                lineHeight: 2,
+                color: "#1a0e00",
+                textAlign: "center",
                 margin: 0,
-                marginBottom: "1mm",
                 transform: `translate(${lo.rataRata.offsetX}mm, ${lo.rataRata.offsetY}mm)`,
+                position: "relative",
               }}
             >
-              dengan nilai rata-rata kumulatif{" "}
-              <strong style={{ color: "#6b1a1a" }}>{averageValue}</strong>
+              بمعدل تراكمي عام (<strong>{averageValue}</strong>)
             </p>
           )}
 
@@ -457,17 +455,16 @@ export function SyahadahTuratsDocument({
             <p
               {...elProps("predikat", editorMode, selectedElement, onSelectElement, "Predikat")}
               style={{
-                fontSize: "11.5pt",
-                lineHeight: 1.8,
-                color: "#1a1a1a",
-                textAlign: "justify",
+                fontSize: "20pt",
+                lineHeight: 2,
+                color: "#1a0e00",
+                textAlign: "center",
                 margin: 0,
-                marginBottom: "1mm",
-                transform: `translate(${(lo.predikat?.offsetX ?? 0)}mm, ${(lo.predikat?.offsetY ?? 0)}mm)`,
+                transform: `translate(${lo.predikat?.offsetX ?? 0}mm, ${lo.predikat?.offsetY ?? 0}mm)`,
+                position: "relative",
               }}
             >
-              Predikat{" "}
-              <strong style={{ color: "#6b1a1a" }}>{averagePredikat}</strong>
+              وبتقدير <strong style={{ color: "#8B1A1A" }}>{averagePredikat}</strong>
             </p>
           )}
 
@@ -475,50 +472,35 @@ export function SyahadahTuratsDocument({
           <p
             {...elProps("doaPenutup", editorMode, selectedElement, onSelectElement, "Doa Penutup")}
             style={{
-              fontSize: "11.5pt",
-              lineHeight: 1.8,
-              color: "#1a1a1a",
+              fontSize: "20pt",
+              lineHeight: 2,
+              color: "#1a0e00",
               textAlign: "center",
               margin: 0,
-              marginTop: "2mm",
               transform: `translate(${lo.doaPenutup.offsetX}mm, ${lo.doaPenutup.offsetY}mm)`,
+              position: "relative",
             }}
           >
-            Kami memohon kepada Allah SWT agar menganugerahkan kesuksesan kepadanya<br />
-            dalam mengabdi kepada Islam dan ilmu pengetahuan.
+            نسأل الله أن يوفقه/يوفقها لخدمة الإسلام والعلم
           </p>
 
-          {/* Signature Area */}
-          <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-start" }}>
-            <div style={{ textAlign: "center", minWidth: "60mm", position: "relative" }}>
-              {/* Tanggal Cetak */}
-              <p
-                {...elProps("tanggalCetak", editorMode, selectedElement, onSelectElement, "Tanggal Cetak")}
-                style={{
-                  fontSize: "11pt",
-                  color: "#1a1a1a",
-                  marginBottom: "2mm",
-                  marginTop: 0,
-                  transform: `translate(${lo.tanggalCetak.offsetX}mm, ${lo.tanggalCetak.offsetY}mm)`,
-                  position: "relative",
-                }}
-              >
-                Diterbitkan di Pare, {tglCetak}
-              </p>
-
+          {/* Signature Area - Each element separate */}
+          <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ textAlign: "center", minWidth: "55mm", position: "relative" }}>
               {/* Jabatan Mudir */}
               <p
                 {...elProps("jabatanMudir", editorMode, selectedElement, onSelectElement, "Jabatan Mudir")}
                 style={{
-                  fontSize: "11pt",
-                  color: "#1a1a1a",
-                  marginBottom: "1mm",
-                  marginTop: 0,
+                  fontSize: "18pt",
+                  color: "#1a0e00",
+                  marginBottom: "2mm",
+                  marginTop: -50,
+                  marginLeft: "-39mm",
                   transform: `translate(${lo.jabatanMudir.offsetX}mm, ${lo.jabatanMudir.offsetY}mm)`,
                   position: "relative",
                 }}
               >
-                {jabatanMudir}
+                {"مدير مركز التراث"}
               </p>
 
               <div style={{ position: "relative", height: "19mm", marginBottom: "1mm" }}>
@@ -529,28 +511,27 @@ export function SyahadahTuratsDocument({
                   alt="Stempel"
                   style={{
                     position: "absolute",
-                    left: `calc(0mm + ${lo.stempel.offsetX}mm)`,
+                    left: `calc(-29mm + ${lo.stempel.offsetX}mm)`,
                     bottom: `calc(-13mm + ${-lo.stempel.offsetY}mm)`,
                     height: "40mm",
                     objectFit: "contain",
-                    opacity: 0.88,
-                    zIndex: 1,
-                    transform: "rotate(-15deg)",
+                    opacity: 0.88, transform: "rotate(-15deg)",
+                    zIndex: 3,
                     ...(editorMode ? { cursor: "pointer" } : {}),
                   }}
                 />
-                {/* Tanda Tangan Turats */}
+                {/* Tanda Tangan */}
                 <img
                   {...elProps("tandaTangan", editorMode, selectedElement, onSelectElement, "Tanda Tangan")}
                   src="/images/signature-turats.png"
                   alt="Tanda Tangan"
                   style={{
                     position: "absolute",
-                    left: `calc(0mm + ${lo.tandaTangan.offsetX}mm)`,
+                    left: `calc(-29mm + ${lo.tandaTangan.offsetX}mm)`,
                     bottom: `calc(-2mm + ${-lo.tandaTangan.offsetY}mm)`,
                     height: "40mm",
                     objectFit: "contain",
-                    zIndex: 2,
+                    zIndex: 1,
                     filter: "brightness(0)",
                     ...(editorMode ? { cursor: "pointer" } : {}),
                   }}
@@ -561,19 +542,38 @@ export function SyahadahTuratsDocument({
               <p
                 {...elProps("namaMudir", editorMode, selectedElement, onSelectElement, "Nama Mudir")}
                 style={{
-                  fontSize: "11pt",
-                  fontWeight: "700",
-                  color: "#1a1a1a",
+                  fontSize: "18pt",
+                  fontWeight: "400",
+                  color: "#1a0e00",
                   paddingTop: "1mm",
                   margin: 0,
+                  marginLeft: "-50mm",
                   transform: `translate(${lo.namaMudir.offsetX}mm, ${lo.namaMudir.offsetY}mm)`,
                   position: "relative",
                 }}
               >
-                {namaMudir}
+                {"الأستاذ عبد الوهاب الماجستير"}
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Tanggal Cetak */}
+        <div
+          {...elProps("tanggalCetak", editorMode, selectedElement, onSelectElement, "Tanggal Cetak")}
+          style={{
+            position: "absolute",
+            bottom: `calc(8mm + ${-lo.tanggalCetak.offsetY}mm)`,
+            left: `calc(45% + ${lo.tanggalCetak.offsetX}mm)`,
+            transform: "translateX(-50%)",
+            zIndex: 4,
+            direction: "rtl",
+            ...(editorMode ? { cursor: "pointer" } : {}),
+          }}
+        >
+          <p style={{ fontSize: "18pt", color: "#1a0e00", margin: 0, whiteSpace: "nowrap" }}>
+            صدرت في باري بتاريخ {data.template.tgl_cetak_arab} م
+          </p>
         </div>
       </div>
     </div>

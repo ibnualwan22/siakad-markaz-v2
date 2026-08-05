@@ -486,7 +486,7 @@ export function SyahadahEditor({
         {/* Syahadah Preview */}
         <div className="flex flex-col items-center gap-10 print:gap-0">
           {(() => {
-            let DocumentComponent = isTurats ? SyahadahTuratsDocument : SyahadahDocument;
+            let DocumentComponent: any = isTurats ? SyahadahTuratsDocument : SyahadahDocument;
             if (isMartabah) {
               DocumentComponent = isTurats ? SyahadahMartabahTuratsDocument : SyahadahMartabahDocument;
             }

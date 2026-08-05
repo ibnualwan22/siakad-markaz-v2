@@ -49,12 +49,12 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-function padAndReverse(chunk: any[], size: number) {
+function padAndDirection(chunk: any[], size: number, start: "right" | "left") {
   const padded = [...chunk];
   while (padded.length < size) {
     padded.push(null);
   }
-  return padded.reverse();
+  return start === "right" ? padded.reverse() : padded;
 }
 
 export function HaflahWadaClient({
@@ -68,6 +68,7 @@ export function HaflahWadaClient({
 }) {
   const [activeTab, setActiveTab] = useState<"denah" | "pemanggilan">("denah");
   const [colCount, setColCount] = useState<number>(10);
+  const [doorOption, setDoorOption] = useState<"masuk-kanan-keluar-kiri" | "masuk-kiri-keluar-kanan" | "kanan-kiri" | "kanan" | "kiri">("masuk-kanan-keluar-kiri");
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
@@ -81,14 +82,14 @@ export function HaflahWadaClient({
   const openOrderModal = () => {
     // Sort taking 0 as the bottom to match processedSantri behavior
     const sorted = [...kelasList].sort((a, b) => {
-       const uA = a.urutan_haflah || 0;
-       const uB = b.urutan_haflah || 0;
-       if (uA !== uB) {
-         if (uA === 0) return 1;
-         if (uB === 0) return -1;
-         return uA - uB;
-       }
-       return a.nama.localeCompare(b.nama, "id");
+      const uA = a.urutan_haflah || 0;
+      const uB = b.urutan_haflah || 0;
+      if (uA !== uB) {
+        if (uA === 0) return 1;
+        if (uB === 0) return -1;
+        return uA - uB;
+      }
+      return a.nama.localeCompare(b.nama, "id");
     });
     setClassOrder(sorted);
     setShowOrderModal(true);
@@ -122,7 +123,7 @@ export function HaflahWadaClient({
       });
       window.location.reload();
     } catch (e) {
-       console.error("Gagal simpan urutan", e);
+      console.error("Gagal simpan urutan", e);
     } finally {
       setSavingOrder(false);
     }
@@ -141,7 +142,7 @@ export function HaflahWadaClient({
   const processedSantri = useMemo(() => {
     const topByProgram = new Map<string, string>();
     const programGroups = new Map<string, SantriRow[]>();
-    
+
     santriRows.forEach(s => {
       const pId = s.programId || "unknown_program";
       if (!programGroups.has(pId)) programGroups.set(pId, []);
@@ -166,30 +167,30 @@ export function HaflahWadaClient({
       // 1. Structural sort by strictly defined Class urutan_haflah priority
       const classA = a.kelasId ? kelasMap.get(a.kelasId) : undefined;
       const classB = b.kelasId ? kelasMap.get(b.kelasId) : undefined;
-      
+
       const urutanA = classA?.urutan_haflah || 0;
       const urutanB = classB?.urutan_haflah || 0;
 
       if (urutanA !== urutanB) {
-         if (urutanA === 0) return 1;
-         if (urutanB === 0) return -1;
-         return urutanA - urutanB;
+        if (urutanA === 0) return 1;
+        if (urutanB === 0) return -1;
+        return urutanA - urutanB;
       }
 
       // 2. Primary sort by program structurally first to keep logic intact when unconfigured
       const pA = getProgramOrder(a.programNama);
       const pB = getProgramOrder(b.programNama);
       if (pA !== pB) return pA - pB;
-      
+
       // 3. Fallback sort structurally straight down by Class Alphabetically
       const kA = a.kelasNama.localeCompare(b.kelasNama, "id");
       if (kA !== 0) return kA;
-      
+
       // 4. Group graduates above non-graduates inside the class if preferred, or just by score.
       const statA = (a.statusKelulusan === "TIDAK_LULUS") ? 2 : (a.statusKelulusan === "MUSYAROKAH" ? 1 : 0);
       const statB = (b.statusKelulusan === "TIDAK_LULUS") ? 2 : (b.statusKelulusan === "MUSYAROKAH" ? 1 : 0);
       if (statA !== statB) return statA - statB;
-      
+
       // 5. Finally by average score
       return b.average - a.average;
     });
@@ -224,23 +225,23 @@ export function HaflahWadaClient({
     const sortedClassIds = Array.from(groups.keys()).sort((a, b) => {
       const classA = kelasMap.get(a);
       const classB = kelasMap.get(b);
-      
+
       const urutanA = classA?.urutan_haflah || 0;
       const urutanB = classB?.urutan_haflah || 0;
 
       if (urutanA !== urutanB) {
-         if (urutanA === 0) return 1;
-         if (urutanB === 0) return -1;
-         return urutanA - urutanB;
+        if (urutanA === 0) return 1;
+        if (urutanB === 0) return -1;
+        return urutanA - urutanB;
       }
 
       const programA = processedSantri.graduates.find((s: SantriRow) => s.kelasId === a)?.programNama || "";
       const programB = processedSantri.graduates.find((s: SantriRow) => s.kelasId === b)?.programNama || "";
-      
+
       const pA = getProgramOrder(programA);
       const pB = getProgramOrder(programB);
       if (pA !== pB) return pA - pB;
-      
+
       return (classA?.nama || "").localeCompare(classB?.nama || "", "id");
     });
 
@@ -266,7 +267,7 @@ export function HaflahWadaClient({
       const f4Width = isLandscape ? 330.2 : 215.9;
       const f4Height = isLandscape ? 215.9 : 330.2;
       const orientation = isLandscape ? "landscape" : "portrait";
-      const winWidth = isLandscape ? 1200 : 800; // Narrower window for portrait brings columns closer
+      const winWidth = isLandscape ? 1200 : 800; // Keep fixed horizontal bounds and allow text wrapping vertically
       const margin = 10;
       const usableWidth = f4Width - margin * 2;
       const usableHeight = f4Height - margin * 2;
@@ -278,6 +279,13 @@ export function HaflahWadaClient({
         const resetStyle = clonedDoc.createElement("style");
         resetStyle.textContent = `* { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-sizing: border-box; }`;
         clonedDoc.head.appendChild(resetStyle);
+
+        const cloneContainer = clonedDoc.querySelector('.neu-card-white');
+        if (cloneContainer) {
+          (cloneContainer as HTMLElement).style.overflow = 'visible';
+          (cloneContainer as HTMLElement).style.width = `${winWidth}px`;
+          (cloneContainer as HTMLElement).style.maxWidth = 'none';
+        }
       };
 
       // Find all sections
@@ -335,7 +343,7 @@ export function HaflahWadaClient({
             // Find row boundaries for clean cuts
             const sectionRect = section.getBoundingClientRect();
             const rowBottoms: number[] = [];
-            
+
             // Add all valid horizontal cut lines (bottom of rows and headers)
             section.querySelectorAll("tr, :scope > div, :scope > table").forEach((el) => {
               const elRect = el.getBoundingClientRect();
@@ -371,11 +379,11 @@ export function HaflahWadaClient({
               sc.width = canvas.width;
               sc.height = sliceH;
               sc.getContext("2d")!.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-              
+
               pdf.addImage(sc.toDataURL("image/jpeg", 0.95), "JPEG", margin, currentY, usableWidth, sliceH * ratio);
-              
+
               srcY += sliceH;
-              
+
               if (srcY < canvas.height - 2) {
                 // Still more to draw, add a new page
                 pdf.addPage([215.9, 330.2], orientation as "landscape" | "portrait");
@@ -407,29 +415,36 @@ export function HaflahWadaClient({
   if (!mounted) return null;
 
   // Render a cell for denah grid — with seat number
-  const renderDenahCell = (student: any, colIdx: number, seatNo?: number) => (
-    <td key={colIdx} style={{
-      border: "1.5px solid #000",
-      padding: "6px 4px",
-      verticalAlign: "middle",
-      height: 90,
-      width: "10%",
-      backgroundColor: !student ? "#fafafa" : "#ffffff",
-      position: "relative",
-    }}>
-      {student && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", height: "100%", textAlign: "center", lineHeight: 1.2 }}>
-          {seatNo !== undefined && (
-            <div style={{ position: "absolute", top: 2, left: 4, fontSize: 10, color: "#94a3b8", fontWeight: 600 }}>{seatNo}</div>
-          )}
-          <div style={{ fontSize: 14, fontWeight: 700 }}>
-            {student.nama}
+  const renderDenahCell = (student: any, colIdx: number, seatNo?: number) => {
+    const cellFontSize = colCount > 12 ? 10 : 14;
+    const kelasFontSize = colCount > 12 ? 9 : 11;
+    const cellPadding = colCount > 12 ? "4px 2px" : "6px 4px";
+
+    return (
+      <td key={colIdx} style={{
+        border: "1.5px solid #000",
+        padding: cellPadding,
+        verticalAlign: "top",
+        height: 120,
+        width: `${100 / colCount}%`,
+        backgroundColor: !student ? "#fafafa" : "#ffffff",
+        position: "relative",
+        overflow: "hidden"
+      }}>
+        {student && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", paddingTop: 16, width: "100%", height: "100%", textAlign: "center", lineHeight: 1.2, wordBreak: "break-word" }}>
+            {seatNo !== undefined && (
+              <div style={{ position: "absolute", top: 2, left: 3, fontSize: 9, color: "#94a3b8", fontWeight: 700 }}>{seatNo}</div>
+            )}
+            <div style={{ fontSize: cellFontSize, fontWeight: 700 }}>
+              {student.nama}
+            </div>
+            <div style={{ fontSize: kelasFontSize, color: "#475569", marginTop: 4, fontWeight: 600 }}>({student.kelasNama})</div>
           </div>
-          <div style={{ fontSize: 11, color: "#475569", marginTop: 3, fontWeight: 500 }}>({student.kelasNama})</div>
-        </div>
-      )}
-    </td>
-  );
+        )}
+      </td>
+    )
+  };
 
   // Render pemanggilan row — with column borders
   const renderPemanggilanRow = (s: any, idx: number) => (
@@ -474,28 +489,47 @@ export function HaflahWadaClient({
             Urutan Pemanggilan
           </button>
         </div>
-        
+
         {/* Settings Bar */}
         {activeTab === "denah" && (
-          <div className="flex items-center gap-2 bg-[var(--color-surface)] p-2 px-4 rounded-xl shadow-sm border border-slate-100">
-             <span className="text-sm font-bold text-[var(--color-text-muted)]">Grid Area:</span>
-             <input 
-                type="number" 
-                min={5} max={25} 
-                value={colCount} 
-                onChange={e => setColCount(Math.max(5, parseInt(e.target.value) || 10))} 
-                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center outline-none focus:border-blue-500" 
+          <div className="flex flex-wrap items-center gap-4 bg-[var(--color-surface)] p-2 px-4 rounded-xl shadow-sm border border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-[var(--color-text-muted)]">Grid Area:</span>
+              <input
+                type="number"
+                min={5} max={25}
+                value={colCount}
+                onChange={e => setColCount(Math.max(5, parseInt(e.target.value) || 10))}
+                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm font-bold text-center outline-none focus:border-blue-500"
               />
-             <span className="text-xs font-semibold text-[var(--color-text-muted)]">Kolom</span>
+              <span className="text-xs font-semibold text-[var(--color-text-muted)]">Kolom</span>
+            </div>
+
+            <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-[var(--color-text-muted)]">Pintu:</span>
+              <select
+                value={doorOption}
+                onChange={e => setDoorOption(e.target.value as any)}
+                className="rounded-md border border-slate-300 px-2 py-1 text-sm font-bold outline-none focus:border-blue-500 max-w-[200px]"
+              >
+                <option value="masuk-kanan-keluar-kiri">Masuk Kanan, Keluar Kiri</option>
+                <option value="masuk-kiri-keluar-kanan">Masuk Kiri, Keluar Kanan</option>
+                <option value="kanan-kiri">Kanan & Kiri</option>
+                <option value="kanan">Kanan Saja</option>
+                <option value="kiri">Kiri Saja</option>
+              </select>
+            </div>
           </div>
         )}
 
         <div className="flex items-center justify-between w-full md:w-auto gap-4">
           <div className="hidden lg:block text-sm font-semibold text-[var(--color-text-muted)]">
-            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.graduates.length}</span> |  
+            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.graduates.length}</span> |
             Total Denah: <span className="font-bold text-[var(--color-text)]">{denahBanin.length + denahBanat.length}</span>
           </div>
-          
+
           <button
             onClick={openOrderModal}
             className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl font-bold shadow-sm transition border border-slate-300"
@@ -504,7 +538,7 @@ export function HaflahWadaClient({
             <ListOrdered className="w-4 h-4" />
             <span className="hidden md:inline">Urutan Kelas</span>
           </button>
-          
+
           <button
             onClick={handleExportPDF}
             disabled={exporting}
@@ -517,25 +551,35 @@ export function HaflahWadaClient({
       </div>
 
       {/* Content that gets captured for PDF */}
-      <div ref={printRef} className="neu-card-white overflow-hidden">
-        
+      <div ref={printRef} className="neu-card-white overflow-hidden bg-white">
+
         {/* Tab: DENAH */}
         {activeTab === "denah" && (
           <div className="p-3 md:p-6">
             {/* Header Panggung */}
             <div data-pdf-section>
-            <div style={{ width: "100%", backgroundColor: "#f8981d", color: "black", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
-              PANGGUNG ACARA
-            </div>
-            <div style={{ width: "100%", display: "flex", border: "2px solid black", borderBottom: "none", height: 48 }}>
-              <div style={{ width: 100, backgroundColor: "#00ff00", borderRight: "2px solid black", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, textAlign: "center", textTransform: "uppercase", lineHeight: 1.2, padding: 4 }}>
-                PALING KIRI<br/>JALAN KELUAR
+              <div style={{ width: "100%", backgroundColor: "#f8981d", color: "black", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
+                PANGGUNG ACARA
               </div>
-              <div style={{ flex: 1 }}></div>
-              <div style={{ width: 100, backgroundColor: "#00ff00", borderLeft: "2px solid black", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, textAlign: "center", textTransform: "uppercase", lineHeight: 1.2, padding: 4 }}>
-                PALING KANAN<br/>JALAN MASUK
+              <div style={{ width: "100%", display: "flex", border: "2px solid black", borderBottom: "none", height: 48 }}>
+                {(doorOption === 'masuk-kanan-keluar-kiri' || doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kanan-kiri' || doorOption === 'kiri') && (
+                  <div style={{ width: 85, backgroundColor: "#00ff00", borderRight: "2px solid black", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, textAlign: "center", textTransform: "uppercase", lineHeight: 1.2, padding: 4 }}>
+                    {doorOption === 'masuk-kanan-keluar-kiri' ? <>P. KIRI<br />KELUAR</> : null}
+                    {doorOption === 'masuk-kiri-keluar-kanan' ? <>P. KIRI<br />MASUK</> : null}
+                    {doorOption === 'kanan-kiri' || doorOption === 'kiri' ? <>KIRI<br />MASUK & KELUAR</> : null}
+                  </div>
+                )}
+
+                <div style={{ flex: 1 }}></div>
+
+                {(doorOption === 'masuk-kanan-keluar-kiri' || doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kanan-kiri' || doorOption === 'kanan') && (
+                  <div style={{ width: 85, backgroundColor: "#00ff00", borderLeft: "2px solid black", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, textAlign: "center", textTransform: "uppercase", lineHeight: 1.2, padding: 4 }}>
+                    {doorOption === 'masuk-kanan-keluar-kiri' ? <>P. KANAN<br />MASUK</> : null}
+                    {doorOption === 'masuk-kiri-keluar-kanan' ? <>P. KANAN<br />KELUAR</> : null}
+                    {doorOption === 'kanan-kiri' || doorOption === 'kanan' ? <>KANAN<br />MASUK & KELUAR</> : null}
+                  </div>
+                )}
               </div>
-            </div>
             </div>
 
             {/* BANIN */}
@@ -544,13 +588,14 @@ export function HaflahWadaClient({
                 ★★★ BANIN ★★★
               </div>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black" }}>
+                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
                   <tbody>
                     {chunkArray(denahBanin, colCount).map((chunk, rowIdx) => {
-                      const reversed = padAndReverse(chunk, colCount);
+                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
+                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
                       return (
                         <tr key={rowIdx}>
-                          {reversed.map((student, colIdx) => {
+                          {paddedChunk.map((student, colIdx) => {
                             const actualIdx = student ? denahBanin.indexOf(student) : -1;
                             return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
                           })}
@@ -571,13 +616,14 @@ export function HaflahWadaClient({
                 ★★★ BANAT ★★★
               </div>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black" }}>
+                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
                   <tbody>
                     {chunkArray(denahBanat, colCount).map((chunk, rowIdx) => {
-                      const reversed = padAndReverse(chunk, colCount);
+                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
+                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
                       return (
                         <tr key={rowIdx}>
-                          {reversed.map((student, colIdx) => {
+                          {paddedChunk.map((student, colIdx) => {
                             const actualIdx = student ? denahBanat.indexOf(student) : -1;
                             return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
                           })}
@@ -600,12 +646,32 @@ export function HaflahWadaClient({
               <div style={{ padding: "16px 24px", fontSize: 12, lineHeight: 1.8, backgroundColor: "white" }}>
                 <p style={{ marginBottom: 8, color: "#334155" }}>Diharapkan seluruh peserta memperhatikan hal-hal berikut agar prosesi berjalan dengan tertib dan lancar:</p>
                 <div style={{ color: "#334155" }}>
-                  <p>1. Terdapat dua jalur:</p>
-                  <ul style={{ listStyle: "none", paddingLeft: 24, margin: "4px 0" }}>
-                    <li>• Jalur masuk berada di sebelah kanan</li>
-                    <li>• Jalur keluar berada di sebelah kiri</li>
+                  <p>1. Ketentuan Jalur Pintu:</p>
+                  <ul style={{ listStyle: "none", paddingLeft: 24, margin: "4px 0", fontSize: 11 }}>
+                    {doorOption === 'masuk-kanan-keluar-kiri' && (
+                      <>
+                        <li>• Jalur masuk berada di sebelah kanan</li>
+                        <li>• Jalur keluar berada di sebelah kiri</li>
+                      </>
+                    )}
+                    {doorOption === 'masuk-kiri-keluar-kanan' && (
+                      <>
+                        <li>• Jalur masuk berada di sebelah kiri</li>
+                        <li>• Jalur keluar berada di sebelah kanan</li>
+                      </>
+                    )}
+                    {doorOption === 'kanan-kiri' && (
+                      <li>• Terdapat pintu di sebelah kanan dan kiri yang dapat digunakan untuk masuk dan keluar</li>
+                    )}
+                    {doorOption === 'kanan' && (
+                      <li>• Hanya terdapat satu pintu masuk dan keluar, yaitu di sebelah kanan</li>
+                    )}
+                    {doorOption === 'kiri' && (
+                      <li>• Hanya terdapat satu pintu masuk dan keluar, yaitu di sebelah kiri</li>
+                    )}
                   </ul>
-                  <p style={{ fontWeight: 700 }}>Maka dari itu, tepi kiri wajib dikosongkan.</p>
+                  {doorOption === 'masuk-kanan-keluar-kiri' && <p style={{ fontWeight: 700, margin: "4px 0" }}>Maka dari itu, tepi kiri wajib dikosongkan.</p>}
+                  {doorOption === 'masuk-kiri-keluar-kanan' && <p style={{ fontWeight: 700, margin: "4px 0" }}>Maka dari itu, tepi kanan wajib dikosongkan.</p>}
                   <p>2. Urutan keluar barisan dimulai dari banat (putri) terlebih dahulu, kemudian disusul oleh banin (putra).</p>
                   <p>3. Saat turun, transisi berjalan dipercepat agar prosesi selanjutnya tidak terhambat.</p>
                   <p>4. Saat sesi foto, mohon menyimak dan mengikuti arahan dari pengatur barisan foto di depan.</p>
@@ -723,7 +789,7 @@ export function HaflahWadaClient({
                   </div>
                 </div>
               ))}
-              
+
               {pemanggilanGroups.length === 0 && (
                 <div style={{ textAlign: "center", padding: 48, border: "2px dashed #cbd5e1", color: "#94a3b8", borderRadius: 16 }}>
                   Belum ada data santri yang dapat dipanggil.
@@ -740,14 +806,14 @@ export function HaflahWadaClient({
             <div className="p-4 border-b border-slate-100 font-black text-lg text-[var(--color-text)]">
               Atur Urutan Pemanggilan Kelas
             </div>
-            
+
             <div className="p-4 overflow-y-auto flex-1 space-y-2">
               <p className="text-sm text-[var(--color-text-muted)] mb-4 leading-relaxed">
                 Tarik lalu geser <i>(drag-and-drop)</i> kelas di bawah ini untuk mengatur posisi mereka saat dipanggil pada Haflah Wada'.
               </p>
-              
+
               {classOrder.map((cls, idx) => (
-                <div 
+                <div
                   key={cls.id}
                   draggable
                   onDragStart={() => handleDragStart(idx)}
@@ -769,13 +835,13 @@ export function HaflahWadaClient({
             </div>
 
             <div className="p-4 border-t border-slate-100 flex items-center gap-3 bg-slate-50">
-              <button 
+              <button
                 onClick={() => setShowOrderModal(false)}
                 className="px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-100"
               >
                 Batal
               </button>
-              <button 
+              <button
                 onClick={saveOrder}
                 disabled={savingOrder}
                 className="flex-1 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"

@@ -248,8 +248,8 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
             alignItems: "center"
           }}
         >
-          <div style={{ background: "linear-gradient(135deg, #1d4ed8, #60a5fa)", padding: "1.5mm", borderRadius: "3mm" }}>
-            <div style={{ background: "white", padding: "1.5mm", borderRadius: "2mm", display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div style={{ background: "linear-gradient(135deg, #1d4ed8, #60a5fa)", padding: "1.5mm", borderRadius: "3mm", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" as any }}>
+            <div style={{ background: "white", padding: "1.5mm", borderRadius: "2mm", display: "flex", justifyContent: "center", alignItems: "center", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" as any }}>
               <QRCodeSVG value={qrUrl} size={90} fgColor="#1d4ed8" />
             </div>
           </div>

@@ -131,21 +131,25 @@ export async function POST() {
         if (count >= santriInNewDufah.length * 0.5) {
           console.log(`[SYNC] Detected dufah RENAME: "${oldDufahName}" → "${newDufahName}" (${count}/${santriInNewDufah.length} santri match)`);
           
-          // Rename in riwayatSantri
+          // Insert new dufah first to satisfy Foreign Key rules
+          await prisma.dufah.create({
+            data: { nama: newDufahName }
+          }).catch(() => {}); // in case of concurrent execution
+          
+          // Rename in riwayatSantri (children)
           await prisma.riwayatSantri.updateMany({
             where: { dufahNama: oldDufahName },
             data: { dufahNama: newDufahName }
           });
-          // Rename in santriInternal
+          // Rename in santriInternal (children)
           await prisma.santriInternal.updateMany({
             where: { dufahNama: oldDufahName },
             data: { dufahNama: newDufahName }
           });
-          // Rename the dufah record itself
-          await prisma.dufah.updateMany({
-            where: { nama: oldDufahName },
-            data: { nama: newDufahName }
-          });
+          // Delete the old empty dufah record (if no other orphaned tables depend on it)
+          await prisma.dufah.delete({
+            where: { nama: oldDufahName }
+          }).catch(() => {});
           
           renamedDufahCount++;
           break; // Only one rename per new dufah name

@@ -192,8 +192,8 @@ export default function SantriDashboardPage() {
 
   const isDurasiLow = sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
 
-  const daftarUlangLink = santri.kategori?.toUpperCase() === 'TUROTS' 
-    ? 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS' 
+  const daftarUlangLink = santri.kategori?.toUpperCase() === 'TUROTS'
+    ? 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS'
     : 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=REGULER';
 
   return (
@@ -259,165 +259,6 @@ export default function SantriDashboardPage() {
         </div>
       )}
 
-      {/* Status Durasi Card */}
-      {!statusLoading && !statusError && statusData?.masaAktif && (
-        <div
-          className="neu-card p-5"
-          style={{
-            background: isDurasiLow
-              ? "linear-gradient(135deg, var(--color-danger-light), var(--bg-card))"
-              : "linear-gradient(135deg, var(--color-primary-50), var(--bg-card))",
-          }}
-        >
-          <div className="flex items-start gap-4">
-            <div
-              className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center"
-              style={{
-                background: isDurasiLow ? "var(--color-danger-light)" : "var(--color-primary-50)",
-                boxShadow: "var(--shadow-inset-sm)",
-              }}
-            >
-              <Hourglass
-                size={22}
-                style={{
-                  color: isDurasiLow ? "var(--color-danger)" : "var(--color-primary)",
-                }}
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3
-                className="text-xs font-bold uppercase tracking-wider"
-                style={{ color: "var(--color-text-muted)" }}
-              >
-                Masa Aktif Asrama
-              </h3>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span
-                  className="text-3xl font-bold"
-                  style={{
-                    color: isDurasiLow ? "var(--color-danger)" : "var(--color-primary)",
-                  }}
-                >
-                  {sisaBulan ?? "-"}
-                </span>
-                <span
-                  className="text-sm font-semibold"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  bulan tersisa
-                </span>
-              </div>
-              {berakhirDufah && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Calendar size={12} style={{ color: "var(--color-text-subtle)" }} />
-                    <span
-                      className="text-[11px]"
-                      style={{ color: "var(--color-text-muted)" }}
-                    >
-                      Berakhir pada {berakhirDufah}
-                    </span>
-                  </div>
-                  {dufahSekarang && (
-                    <div className="flex items-center gap-1.5">
-                      <Hourglass size={12} style={{ color: "var(--color-text-subtle)" }} />
-                      <span
-                        className="text-[11px]"
-                        style={{ color: "var(--color-text-muted)" }}
-                      >
-                        Sedang berjalan: {dufahSekarang}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-              {isDurasiLow && (
-                <a
-                  href={daftarUlangLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all"
-                  style={{
-                    background: "var(--color-danger)",
-                    color: "#fff",
-                    boxShadow: "2px 2px 6px rgba(255,33,87,0.25)",
-                  }}
-                >
-                  <RefreshCw size={13} />
-                  Segera Daftar Ulang
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Program Info Card */}
-      {!tauziLoading && tauziData && (
-        <div className="neu-card p-5" style={{ background: "linear-gradient(135deg, var(--bg-card), var(--color-primary-50))", border: "2px solid var(--color-primary)" }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-xl" style={{ background: "var(--color-primary)", color: "white" }}>
-              <ClipboardList size={22} />
-            </div>
-            <div>
-              <h3 className="font-bold text-sm" style={{ color: "var(--color-text)" }}>Program Pembelajaran</h3>
-              <p className="text-[11px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
-                {tauziData.riwayat?.program?.nama_indo ? 'Pilih ulang jika ingin mengubah kategori' : 'Silakan pilih kategori/program tujuan Anda'}
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3 mt-3">
-            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">Pilih Tujuan Program Anda</label>
-            <select
-              value={selectedTauziProg}
-              onChange={e => setSelectedTauziProg(e.target.value)}
-              className="neu-input w-full p-2.5 text-sm font-bold"
-              style={{ color: "var(--color-text)" }}
-            >
-              <option value="">-- Pilih Kategori Program --</option>
-              {tauziData.programs.map((p: any) => <option key={p.id} value={p.id}>{p.nama_indo}</option>)}
-            </select>
-            <button
-              onClick={async () => {
-                if (!selectedTauziProg) return;
-                setSubmittingTauzi(true);
-                try {
-                  const res = await fetch("/api/santri/me/tauzi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ programId: selectedTauziProg }) });
-                  if (res.ok) {
-                    const updated = await res.json();
-                    setTauziData((prev: any) => ({ ...prev, riwayat: updated.riwayat }));
-                    alert("Berhasil menyimpan program Anda!");
-                    // Option to force reload to show new program in Profile Card
-                    window.location.reload();
-                  } else {
-                    alert("Gagal menyimpan program. Silakan coba lagi.");
-                  }
-                } finally { setSubmittingTauzi(false); }
-              }}
-              disabled={!selectedTauziProg || submittingTauzi || selectedTauziProg === tauziData.riwayat?.programId}
-              className={`w-full py-3 rounded-xl text-xs font-bold transition-all ${(!selectedTauziProg || submittingTauzi || selectedTauziProg === tauziData.riwayat?.programId) ? "bg-gray-100 text-gray-400" : "neu-button-primary"}`}
-            >
-              {submittingTauzi ? "Menyimpan..." : (selectedTauziProg === tauziData.riwayat?.programId ? "Program Telah Disimpan" : "Simpan Pilihan Program")}
-            </button>
-
-            {/* TOMBOL TAUZI HANYA MUNCUL JIKA SUDAH MEMILIH PROGRAM */}
-            {tauziData.riwayat?.programId && (
-              <div className="pt-4 mt-2 border-t border-slate-200">
-                <Link 
-                  href="/tauzi/login"
-                  className="w-full inline-flex justify-center items-center gap-2 py-3 rounded-xl text-sm font-bold transition-all shadow-md hover:scale-[1.02] hover:shadow-lg"
-                  style={{ background: "var(--color-primary)", color: "white" }}
-                >
-                  <ClipboardList size={18} /> Mengerjakan Tauzi&apos; Fushul
-                </Link>
-                <p className="text-[10px] text-center mt-2 font-semibold" style={{ color: "var(--color-text-muted)" }}>Tekan tombol di atas untuk masuk ke portal ujian</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Profile Card */}
       <div className="neu-card p-5">
         <div className="flex items-start gap-4">
@@ -470,6 +311,198 @@ export default function SantriDashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Status Durasi Card */}
+        {!statusLoading && !statusError && statusData?.masaAktif && (
+          <div
+            className="neu-card p-5 flex flex-col h-full"
+            style={{
+              background: isDurasiLow
+                ? "linear-gradient(135deg, var(--color-danger-light), var(--bg-card))"
+                : "linear-gradient(135deg, var(--color-primary-50), var(--bg-card))",
+            }}
+          >
+            <div className="flex items-start gap-4 flex-1">
+              <div
+                className="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{
+                  background: isDurasiLow ? "var(--color-danger-light)" : "var(--color-primary-50)",
+                  boxShadow: "var(--shadow-inset-sm)",
+                }}
+              >
+                <Hourglass
+                  size={22}
+                  style={{
+                    color: isDurasiLow ? "var(--color-danger)" : "var(--color-primary)",
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Masa Aktif Asrama
+                </h3>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span
+                    className="text-3xl font-bold"
+                    style={{
+                      color: isDurasiLow ? "var(--color-danger)" : "var(--color-primary)",
+                    }}
+                  >
+                    {sisaBulan ?? "-"}
+                  </span>
+                  <span
+                    className="text-sm font-semibold"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    bulan tersisa
+                  </span>
+                </div>
+                {berakhirDufah && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={12} style={{ color: "var(--color-text-subtle)" }} />
+                      <span
+                        className="text-[11px]"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        Berakhir pada {berakhirDufah}
+                      </span>
+                    </div>
+                    {dufahSekarang && (
+                      <div className="flex items-center gap-1.5">
+                        <Hourglass size={12} style={{ color: "var(--color-text-subtle)" }} />
+                        <span
+                          className="text-[11px]"
+                          style={{ color: "var(--color-text-muted)" }}
+                        >
+                          Sedang berjalan: {dufahSekarang}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isDurasiLow && (
+                  <a
+                    href={daftarUlangLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center w-full gap-1.5 mt-3 px-3.5 py-2.5 rounded-xl text-[11px] font-bold transition-all"
+                    style={{
+                      background: "var(--color-danger)",
+                      color: "#fff",
+                      boxShadow: "2px 2px 6px rgba(255,33,87,0.25)",
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    Segera Daftar Ulang
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Program Info Card */}
+        {!tauziLoading && tauziData && (
+          <div className="neu-card p-5 flex flex-col h-full" style={{ background: "linear-gradient(135deg, var(--bg-card), var(--color-primary-50))", border: "2px solid var(--color-primary)" }}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-xl" style={{ background: "var(--color-primary)", color: "white" }}>
+                <ClipboardList size={22} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm" style={{ color: "var(--color-text)" }}>Program Pembelajaran</h3>
+                <p className="text-[11px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
+                  {tauziData.riwayat?.program?.nama_indo ? 'Pilih ulang jika ingin mengubah kategori' : 'Silakan pilih kategori/program tujuan Anda'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mt-auto">
+              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">Pilih Tujuan Program Anda</label>
+              <select
+                value={selectedTauziProg}
+                onChange={e => setSelectedTauziProg(e.target.value)}
+                className="neu-input w-full p-2.5 text-sm font-bold"
+                style={{ color: "var(--color-text)" }}
+              >
+                <option value="">-- Pilih Kategori Program --</option>
+                {tauziData.programs.map((p: any) => <option key={p.id} value={p.id}>{p.nama_indo}</option>)}
+              </select>
+              <button
+                onClick={async () => {
+                  if (!selectedTauziProg) return;
+                  setSubmittingTauzi(true);
+                  try {
+                    const res = await fetch("/api/santri/me/tauzi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ programId: selectedTauziProg }) });
+                    if (res.ok) {
+                      const updated = await res.json();
+                      setTauziData((prev: any) => ({ ...prev, riwayat: updated.riwayat }));
+                      alert("Berhasil menyimpan program Anda!");
+                      window.location.reload();
+                    } else {
+                      alert("Gagal menyimpan program. Silakan coba lagi.");
+                    }
+                  } finally { setSubmittingTauzi(false); }
+                }}
+                disabled={!selectedTauziProg || submittingTauzi || selectedTauziProg === tauziData.riwayat?.programId}
+                className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${(!selectedTauziProg || submittingTauzi || selectedTauziProg === tauziData.riwayat?.programId) ? "bg-gray-100 text-gray-400" : "neu-button-primary"}`}
+              >
+                {submittingTauzi ? "Menyimpan..." : (selectedTauziProg === tauziData.riwayat?.programId ? "Program Telah Disimpan" : "Simpan Pilihan Program")}
+              </button>
+
+              {tauziData.riwayat?.programId && (
+                <div className="pt-3 mt-1 border-t border-slate-200">
+                  <Link
+                    href="/tauzi/login"
+                    className="w-full inline-flex justify-center items-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md hover:scale-[1.02] hover:shadow-lg"
+                    style={{ background: "var(--color-primary)", color: "white" }}
+                  >
+                    <ClipboardList size={18} /> Mengerjakan Tauzi&apos; Fushul
+                  </Link>
+                  <p className="text-[10px] text-center mt-1.5 font-semibold" style={{ color: "var(--color-text-muted)" }}>Tekan tombol di atas untuk masuk ke portal ujian</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Kartu Santri Digital */}
+      <div className="neu-card p-4 sm:p-5 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div
+            className="p-2 sm:p-2.5 rounded-xl"
+            style={{
+              background: "var(--color-primary-50)",
+              color: "var(--color-primary)",
+            }}
+          >
+            <Award size={20} className="sm:w-6 sm:h-6" />
+          </div>
+          <div>
+            <h3
+              className="text-xs sm:text-sm font-bold"
+              style={{ color: "var(--color-text)" }}
+            >
+              Kartu Santri Digital
+            </h3>
+            <p className="text-[10px] sm:text-[11px] font-semibold mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+              Download kartu identitas santri Anda
+            </p>
+          </div>
+        </div>
+        <a
+          href={`https://ppdb.markazarabiyah.site/api/digital-card/siakad/${santri.id}?download=1`}
+          className="inline-flex flex-shrink-0 items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white transition-all hover:scale-[1.02] shadow-md hover:shadow-lg"
+          style={{ background: "var(--color-primary)", whiteSpace: 'nowrap' }}
+        >
+          Download Kartu
+        </a>
       </div>
 
       {/* Summary Cards */}
@@ -641,43 +674,43 @@ export default function SantriDashboardPage() {
             },
           ].map((item) => {
             const Icon = item.icon;
-            
+
             const isExternal = item.href.startsWith("http");
 
             if (isExternal) {
-               return (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="neu-card-white p-4 flex items-center gap-3 hover:scale-[1.01] transition-transform"
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="neu-card-white p-4 flex items-center gap-3 hover:scale-[1.01] transition-transform"
+                >
+                  <div
+                    className="flex-shrink-0 p-2 rounded-xl"
+                    style={{
+                      background: "var(--color-primary-50)",
+                      color: "var(--color-primary)",
+                    }}
                   >
-                    <div
-                      className="flex-shrink-0 p-2 rounded-xl"
-                      style={{
-                        background: "var(--color-primary-50)",
-                        color: "var(--color-primary)",
-                      }}
+                    <Icon size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p
+                      className="text-xs font-bold"
+                      style={{ color: "var(--color-text)" }}
                     >
-                      <Icon size={18} />
-                    </div>
-                    <div className="min-w-0">
-                      <p
-                        className="text-xs font-bold"
-                        style={{ color: "var(--color-text)" }}
-                      >
-                        {item.label}
-                      </p>
-                      <p
-                        className="text-[10px]"
-                        style={{ color: "var(--color-text-muted)" }}
-                      >
-                        {item.desc}
-                      </p>
-                    </div>
-                  </a>
-               );
+                      {item.label}
+                    </p>
+                    <p
+                      className="text-[10px]"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      {item.desc}
+                    </p>
+                  </div>
+                </a>
+              );
             }
             return (
               <Link

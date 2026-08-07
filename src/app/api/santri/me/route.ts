@@ -60,6 +60,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Data santri tidak ditemukan' }, { status: 404 });
     }
 
+    // Fix lexicographical sort issues (e.g. "Dufah 91" vs "Duf'ah 92") by sorting numerically
+    santri.riwayatRecords.sort((a, b) => {
+      const getNum = (name: string) => {
+        const match = name.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
+      };
+      return getNum(b.dufahNama) - getNum(a.dufahNama);
+    });
+
     const riwayatResult = santri.riwayatRecords.map((riwayat) => {
       const program = riwayat.program;
       const isAkbarnas = program?.nama_indo.toLowerCase().includes('akbarnas') ?? false;

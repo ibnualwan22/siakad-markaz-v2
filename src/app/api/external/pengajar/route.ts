@@ -61,14 +61,10 @@ export async function GET(request: Request) {
     const queryEndDate = new Date(endDate);
     queryEndDate.setHours(23, 59, 59, 999);
 
-    // Ambil semua user pengajar aktif beserta detail absensi
+    // Ambil semua user aktif beserta detail absensi
     const users = await prisma.user.findMany({
       where: {
         isActive: true,
-        OR: [
-          { pengajarSesiList: { some: {} } },
-          { pengajarSesiProgramList: { some: {} } },
-        ]
       },
       select: {
         id: true,

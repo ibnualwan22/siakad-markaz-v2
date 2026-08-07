@@ -356,11 +356,37 @@ export default function SantriDaftarUlangPage() {
               <Loader2 size={24} className="animate-spin" style={{ color: "var(--color-primary)" }} />
               <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>Mensinkronisasi program dengan pusat keuangan...</p>
             </div>
-        ) : filteredPrograms.length === 0 ? (
-          <div className="neu-card p-6 text-center">
-            <p className="text-xs" style={{ color: "var(--color-text-subtle)" }}>
-              Tidak ada program pendaftaran yang dibuka saat ini.
-            </p>
+        ) : true ? (
+          <div className="neu-card p-6 text-center space-y-4">
+            <div className="flex flex-col items-center justify-center gap-2 mb-4">
+              <Info size={32} style={{ color: "var(--color-primary)" }} />
+              <h2 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>
+                Pendaftaran Ulang Dialihkan
+              </h2>
+              <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
+                Untuk sementara, pendaftaran ulang dilakukan melalui portal PPDB pusat. Silakan pilih kategori Anda di bawah ini:
+              </p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <a
+                href="https://ppdb.markazarabiyah.site/daftar-ulang?kategori=REGULER"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-3 rounded-xl text-sm font-bold shadow-md hover:scale-[1.02] transition-all"
+                style={{ background: "var(--color-primary)", color: "white" }}
+              >
+                Daftar Ulang (Reguler)
+              </a>
+              <a
+                href="https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-6 py-3 rounded-xl text-sm font-bold shadow-md hover:scale-[1.02] transition-all"
+                style={{ background: "#b45309", color: "white" }}
+              >
+                Daftar Ulang (Turats)
+              </a>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -447,7 +473,7 @@ export default function SantriDaftarUlangPage() {
       </div>
 
       {/* Submission Panel */}
-      <div className="neu-card p-5 space-y-4">
+      {false && <div className="neu-card p-5 space-y-4">
         {/* Info */}
         <div
           className="rounded-xl p-3.5 flex items-start gap-2.5"
@@ -494,12 +520,12 @@ export default function SantriDaftarUlangPage() {
                     className="text-[11px] font-semibold mt-0.5"
                     style={{ color: "var(--color-text)" }}
                 >
-                    {selectedProgramData.nama}
+                    {selectedProgramData?.nama}
                 </p>
                 </div>
             </div>
             <p className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
-                {selectedProgramData.hargaFormatted}
+                {selectedProgramData?.hargaFormatted}
             </p>
           </div>
         )}
@@ -509,13 +535,13 @@ export default function SantriDaftarUlangPage() {
           <div
             className="rounded-xl p-4 flex items-start gap-3"
             style={{
-              background: result.success
+              background: result?.success
                 ? "var(--color-success-light)"
                 : "var(--color-danger-light)",
               boxShadow: "var(--shadow-inset-sm)",
             }}
           >
-            {result.success ? (
+            {result?.success ? (
               <CheckCircle
                 size={18}
                 className="flex-shrink-0 mt-0.5"
@@ -531,12 +557,12 @@ export default function SantriDaftarUlangPage() {
             <p
               className="text-xs font-semibold"
               style={{
-                color: result.success
+                color: result?.success
                   ? "var(--color-success)"
                   : "var(--color-danger)",
               }}
             >
-              {result.message}
+              {result?.message}
             </p>
           </div>
         )}
@@ -575,7 +601,7 @@ export default function SantriDaftarUlangPage() {
             </>
           )}
         </button>
-      </div>
+      </div>}
     </div>
   );
 }

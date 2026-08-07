@@ -40,17 +40,24 @@ export async function createSantriSession(payload: SantriSessionPayload) {
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const session = await encryptSantriSession(payload);
   const cookieStore = await cookies();
+  const isProd = process.env.NODE_ENV === 'production';
 
   cookieStore.set('santri-session', session, {
     expires,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProd,
     sameSite: 'lax',
     path: '/',
+    ...(isProd ? { domain: '.markazarabiyah.site' } : {}),
   });
 }
 
 export async function destroySantriSession() {
   const cookieStore = await cookies();
-  cookieStore.delete('santri-session');
+  const isProd = process.env.NODE_ENV === 'production';
+  cookieStore.set('santri-session', '', {
+    expires: new Date(0),
+    path: '/',
+    ...(isProd ? { domain: '.markazarabiyah.site' } : {}),
+  });
 }

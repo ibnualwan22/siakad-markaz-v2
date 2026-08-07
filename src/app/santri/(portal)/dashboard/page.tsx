@@ -192,6 +192,10 @@ export default function SantriDashboardPage() {
 
   const isDurasiLow = sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
 
+  const daftarUlangLink = santri.kategori?.toUpperCase() === 'TUROTS' 
+    ? 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS' 
+    : 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=REGULER';
+
   return (
     <div className="space-y-6">
       {/* Page Title */}
@@ -238,8 +242,10 @@ export default function SantriDashboardPage() {
               Anda tercatat tidak aktif. Silakan lakukan daftar ulang untuk
               mengaktifkan kembali status santri.
             </p>
-            <Link
-              href="/santri/daftar-ulang"
+            <a
+              href={daftarUlangLink}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg text-[11px] font-bold"
               style={{
                 background: "var(--color-warning)",
@@ -247,8 +253,8 @@ export default function SantriDashboardPage() {
               }}
             >
               <RefreshCw size={12} />
-              Daftar Ulang Sekarang
-            </Link>
+              Daftar Ulang (Eksternal)
+            </a>
           </div>
         </div>
       )}
@@ -326,8 +332,10 @@ export default function SantriDashboardPage() {
                 </div>
               )}
               {isDurasiLow && (
-                <Link
-                  href="/santri/daftar-ulang"
+                <a
+                  href={daftarUlangLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all"
                   style={{
                     background: "var(--color-danger)",
@@ -337,7 +345,7 @@ export default function SantriDashboardPage() {
                 >
                   <RefreshCw size={13} />
                   Segera Daftar Ulang
-                </Link>
+                </a>
               )}
             </div>
           </div>
@@ -626,13 +634,51 @@ export default function SantriDashboardPage() {
               desc: "Status izin dan tasrih",
             },
             {
-              href: "/santri/daftar-ulang",
+              href: daftarUlangLink,
               icon: RefreshCw,
               label: "Daftar Ulang",
-              desc: "Perpanjang masa aktif asrama",
+              desc: "Via Website PPDB Pusat",
             },
           ].map((item) => {
             const Icon = item.icon;
+            
+            const isExternal = item.href.startsWith("http");
+
+            if (isExternal) {
+               return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="neu-card-white p-4 flex items-center gap-3 hover:scale-[1.01] transition-transform"
+                  >
+                    <div
+                      className="flex-shrink-0 p-2 rounded-xl"
+                      style={{
+                        background: "var(--color-primary-50)",
+                        color: "var(--color-primary)",
+                      }}
+                    >
+                      <Icon size={18} />
+                    </div>
+                    <div className="min-w-0">
+                      <p
+                        className="text-xs font-bold"
+                        style={{ color: "var(--color-text)" }}
+                      >
+                        {item.label}
+                      </p>
+                      <p
+                        className="text-[10px]"
+                        style={{ color: "var(--color-text-muted)" }}
+                      >
+                        {item.desc}
+                      </p>
+                    </div>
+                  </a>
+               );
+            }
             return (
               <Link
                 key={item.href}

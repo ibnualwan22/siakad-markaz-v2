@@ -139,7 +139,7 @@ export default function SantriAbsenMandiriPage() {
     fetch("/api/santri/absen-kegiatan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kode })
+      body: JSON.stringify({ kode: kode.toUpperCase() })
       // [GEOFENCING DISABLED] — Kirim koordinat saat geofencing aktif:
       // body: JSON.stringify({ kode, latitude: userLat, longitude: userLng })
     })
@@ -204,7 +204,7 @@ export default function SantriAbsenMandiriPage() {
           <input
             type="text"
             value={kode}
-            onChange={(e) => setKode(e.target.value.toUpperCase())}
+            onChange={(e) => setKode(e.target.value)}
             maxLength={6}
             placeholder="X X X X X X"
             disabled={isLoading}

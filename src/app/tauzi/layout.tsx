@@ -1,6 +1,8 @@
 import { Toaster } from "react-hot-toast";
 import Image from "next/image";
 
+export const dynamic = "force-dynamic";
+
 import prisma from "@/lib/prisma";
 
 export default async function TauziLayout({

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSantriSession } from '@/lib/santri-auth';
@@ -265,6 +266,7 @@ export async function GET() {
         tempatLahir: santri.tempat_lahir,
         tanggalLahir: santri.tanggal_lahir,
         alamat: santri.alamat,
+        bulanKe: santri.bulanKe,
       },
       riwayat: riwayatResult,
     });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   User,
@@ -33,6 +34,7 @@ type SantriData = {
     tempatLahir: string;
     tanggalLahir: string;
     alamat: string;
+    bulanKe?: number;
   };
   riwayat: Array<{
     id: string;
@@ -60,6 +62,7 @@ type StatusData = {
 };
 
 export default function SantriDashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<SantriData | null>(null);
   const [statusData, setStatusData] = useState<StatusData | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -71,9 +74,11 @@ export default function SantriDashboardPage() {
   const [tauziLoading, setTauziLoading] = useState(true);
   const [selectedTauziProg, setSelectedTauziProg] = useState("");
   const [submittingTauzi, setSubmittingTauzi] = useState(false);
+  const [updatingBulan, setUpdatingBulan] = useState(false);
+  const [selectedBulan, setSelectedBulan] = useState<string>("");
 
   useEffect(() => {
-    fetch("/api/santri/me")
+    fetch("/api/santri/me", { cache: "no-store", headers: { "Pragma": "no-cache", "Cache-Control": "no-cache" } })
       .then((r) => r.json())
       .then((d) => {
         if (d.success) setData(d);
@@ -81,7 +86,7 @@ export default function SantriDashboardPage() {
       })
       .catch(() => setLoading(false));
 
-    fetch("/api/santri/me/status")
+    fetch("/api/santri/me/status", { cache: "no-store", headers: { "Pragma": "no-cache", "Cache-Control": "no-cache" } })
       .then((r) => r.json())
       .then((d) => {
         if (d.success) setStatusData(d.data);
@@ -94,7 +99,7 @@ export default function SantriDashboardPage() {
       });
 
     // Fetch tauzi/program Data
-    fetch("/api/santri/me/tauzi")
+    fetch("/api/santri/me/tauzi", { cache: "no-store", headers: { "Pragma": "no-cache", "Cache-Control": "no-cache" } })
       .then(res => res.json())
       .then(data => {
         if (!data.error && data.programs) {
@@ -470,6 +475,76 @@ export default function SantriDashboardPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Pengaturan Bulan Ke */}
+      <div className="neu-card p-4 sm:p-5 flex items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div
+            className="p-2 sm:p-2.5 rounded-xl flex-shrink-0"
+            style={{
+              background: "var(--color-primary-50)",
+              color: "var(--color-primary)",
+            }}
+          >
+            <Calendar size={20} className="sm:w-6 sm:h-6" />
+          </div>
+          <div>
+            <h3
+              className="text-xs sm:text-sm font-bold"
+              style={{ color: "var(--color-text)" }}
+            >
+              Fase Pembelajaran
+            </h3>
+            <p className="text-[10px] sm:text-[11px] font-semibold mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+              Pilih bulan ke- berapa Anda belajar saat ini
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <select 
+            value={selectedBulan || santri.bulanKe?.toString() || "0"}
+            onChange={(e) => setSelectedBulan(e.target.value)}
+            className="w-full sm:w-auto neu-input text-xs sm:text-sm font-bold py-2 px-3 m-0"
+            style={{ minWidth: "120px" }}
+          >
+            <option value="0">Belum diatur</option>
+            {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+              <option key={n} value={n}>Bulan ke-{n}</option>
+            ))}
+          </select>
+          <button 
+            disabled={!selectedBulan || selectedBulan === santri.bulanKe?.toString() || updatingBulan}
+            onClick={async () => {
+              setUpdatingBulan(true);
+              try {
+                const res = await fetch("/api/santri/me/update-bulan", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ bulanKe: parseInt(selectedBulan) })
+                });
+                if(res.ok) {
+                  alert(`Berhasil memperbarui ke bulan ke-${selectedBulan}!`);
+                  router.refresh();
+                  // Juga fetch ulang data agar state terupdate tanpa full reload
+                  fetch("/api/santri/me", { cache: "no-store" })
+                    .then(r => r.json())
+                    .then(d => { if (d.success) setData(d); });
+                } else {
+                  alert("Gagal memperbarui bulan ke-.");
+                }
+              } catch(e) {
+                alert("Terjadi kesalahan.");
+              } finally {
+                setUpdatingBulan(false);
+              }
+            }}
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white transition-all shadow-md flex-shrink-0 ${!selectedBulan || selectedBulan === santri.bulanKe?.toString() || updatingBulan ? 'bg-gray-400 opacity-60 cursor-not-allowed hover:scale-100 hover:shadow-none' : 'hover:scale-[1.02] hover:shadow-lg'}`}
+            style={ (!selectedBulan || selectedBulan === santri.bulanKe?.toString() || updatingBulan) ? {} : {background: "var(--color-primary)"}}
+          >
+            {updatingBulan ? "..." : "Simpan"}
+          </button>
+        </div>
       </div>
 
       {/* Kartu Santri Digital */}

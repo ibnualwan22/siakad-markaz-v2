@@ -34,7 +34,7 @@ export default function HasilTauziPage({ hasEditAccess }: { hasEditAccess: boole
     try {
       const [sesiRes, progRes] = await Promise.all([
         fetch("/api/admin/tauzi/sesi"),
-        fetch("/api/admin/program")
+        fetch("/api/admin/program?bypassFilter=true")
       ]);
       const sesiData = await sesiRes.json();
       const progData = await progRes.json();
@@ -92,6 +92,7 @@ export default function HasilTauziPage({ hasEditAccess }: { hasEditAccess: boole
       "Nilai Muqobalah": p.nilaiMuqobalah ?? "-",
       "Kategori": p.santri.bulanKe === 1 ? "Santri Baru" : "Santri Lama",
       "Program Pilihan": p.program?.nama_indo || "-",
+      "Kelas": p.currentKelas?.nama || "-",
       "Program Rekomendasi": p.programRekomendasi?.nama_indo || "Belum ditentukan",
       "Penyimak": p.penyimakNama || "-"
     }));
@@ -316,7 +317,12 @@ export default function HasilTauziPage({ hasEditAccess }: { hasEditAccess: boole
                         </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600 font-medium">
-                        {p.program?.nama_indo || '-'}
+                        <div className="font-bold">{p.program?.nama_indo || '-'}</div>
+                        {p.currentKelas?.nama && (
+                          <div className="text-xs bg-gray-100 mt-1 px-2 py-0.5 rounded inline-block text-gray-500 font-bold border border-gray-200">
+                            {p.currentKelas.nama}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {p.programRekomendasi ? (

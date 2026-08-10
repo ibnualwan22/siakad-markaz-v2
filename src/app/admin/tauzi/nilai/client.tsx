@@ -47,7 +47,7 @@ export default function InputNilaiTauziClient({ userName }: { userName: string }
     try {
       const [sesiRes, progRes] = await Promise.all([
         fetch("/api/admin/tauzi/sesi"),
-        fetch("/api/admin/program")
+        fetch("/api/admin/program?bypassFilter=true")
       ]);
       const sesiData = await sesiRes.json();
       const progData = await progRes.json();

@@ -13,8 +13,13 @@ export async function GET(req: Request) {
   // Periksa izin akses CBT ujian_usbu untuk bypass filter
   let hasCbtAccess = session?.role === "ADMIN";
   if (!hasCbtAccess && session && bypassFilter) {
-    const p = await prisma.rolePermission.findUnique({
-      where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
+    const p = await prisma.rolePermission.findFirst({
+      where: { 
+        role: session.role, 
+        permission: {
+          in: ["ujian_usbu", "tauzi_hasil", "tauzi_nilai", "tauzi"]
+        } 
+      }
     });
     if (p) hasCbtAccess = true;
   }

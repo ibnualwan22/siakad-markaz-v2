@@ -43,7 +43,8 @@ export async function GET(request: Request) {
       where: riwayatWhere,
       include: {
         santri: { select: { nama: true, id: true, gender: true, bulanKe: true } },
-        program: { select: { nama_indo: true, nama_arab: true } }
+        program: { select: { nama_indo: true, nama_arab: true } },
+        kelas: { select: { nama: true } }
       }
     });
 
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
         // Kita biarkan objek utuh agar Admin tahu anak tsb mengerjakan ujian program lama/lainnya.
         // Tapi kita tempelkan currentProgram (opsional untuk UI)
         p.currentProgram = r.program;
+        p.currentKelas = r.kelas;
         
         finalResults.push(p);
       } else {
@@ -87,6 +89,7 @@ export async function GET(request: Request) {
           programId: r.programId,
           program: r.program,
           currentProgram: r.program,
+          currentKelas: r.kelas,
           sudahUjian: false,
           nilaiTahriri: null,
           nilaiMuqobalah: null,

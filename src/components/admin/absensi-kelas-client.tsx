@@ -1875,11 +1875,17 @@ export function AbsensiKelasClient({
           </div>
         </div>
       )}
-      {/* Floating Save Button — untuk semua role saat ada sesi aktif */}
-      {activeSession && (
+      {/* Floating Save Button — untuk semua role saat ada sesi aktif (atau khusus ADMIN) */}
+      {(activeSession || userRole === "ADMIN") && (
         <button
           onClick={handleSave}
-          disabled={isSaving || !materi || !tanggal || !sesi || isLiburSesi}
+          disabled={
+            isSaving || 
+            !tanggal || 
+            !sesi || 
+            isLiburSesi || 
+            ((isTeacher || (userRole === "ADMIN" && showAdminPengajarForm)) && !materi)
+          }
           title={isLiburSesi ? "Sesi libur" : "Simpan absensi"}
           className={`fixed bottom-24 right-6 z-50 flex items-center gap-2 rounded-full px-5 py-3.5 text-sm font-bold text-white shadow-lg transition-all duration-300 ${isSaving
             ? "bg-amber-400 scale-90 shadow-amber-200"

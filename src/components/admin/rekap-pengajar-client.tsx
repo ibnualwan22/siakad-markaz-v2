@@ -45,8 +45,8 @@ const HARI_OPTIONS = [
   { value: "Minggu", label: "Minggu" },
 ];
 
-export function RekapPengajarClient({ userRole = "", pengajarList = [] }: { userRole?: string, pengajarList?: { id: string, nama: string }[] }) {
-  const isAdmin = userRole === "ADMIN";
+export function RekapPengajarClient({ userRole = "", pengajarList = [], hasEditPerm = false }: { userRole?: string, pengajarList?: { id: string, nama: string }[], hasEditPerm?: boolean }) {
+  const isAdmin = userRole === "ADMIN" || hasEditPerm;
   const searchParams = useSearchParams();
   const dari = searchParams.get("dari");
   const sampai = searchParams.get("sampai");

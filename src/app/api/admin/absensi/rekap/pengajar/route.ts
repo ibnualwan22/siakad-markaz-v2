@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -236,8 +237,8 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "ADMIN") {
+  const hasEditPerm = await checkPermission("rekap_pengajar_edit");
+  if (!hasEditPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -325,8 +326,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "ADMIN") {
+  const hasEditPerm = await checkPermission("rekap_pengajar_edit");
+  if (!hasEditPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

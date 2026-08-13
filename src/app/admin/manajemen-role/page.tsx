@@ -45,7 +45,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: "rekap_kelas", label: "Rekap Kelas (Lihat)", desc: "Akses melihat rekap absensi kelas", category: "Divisi Absensi", type: "lihat" },
   { id: "rekap_kelas_edit", label: "Rekap Kelas (Aksi)", desc: "Akses mendownload/mencetak rekap kelas", category: "Divisi Absensi", type: "aksi" },
   { id: "rekap_pengajar", label: "Rekap Pengajar (Lihat)", desc: "Akses melihat rekap absensi pengajar", category: "Divisi Absensi", type: "lihat" },
-  { id: "rekap_pengajar_edit", label: "Rekap Pengajar (Aksi)", desc: "Akses mendownload/mencetak rekap pengajar", category: "Divisi Absensi", type: "aksi" },
+  { id: "rekap_pengajar_edit", label: "Rekap Pengajar (Aksi)", desc: "Akses mengubah jam / mengelola absen pengajar", category: "Divisi Absensi", type: "aksi" },
   { id: "pengaturan_kegiatan", label: "Pengaturan Kegiatan (Lihat)", desc: "Akses melihat jenis kegiatan absensi", category: "Divisi Absensi", type: "lihat" },
   { id: "pengaturan_kegiatan_edit", label: "Pengaturan Kegiatan (Aksi)", desc: "Akses menambah/mengedit jenis kegiatan absensi", category: "Divisi Absensi", type: "aksi" },
 

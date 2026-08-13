@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/permission";
+import { requirePermission, checkPermission } from "@/lib/permission";
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { RekapFilterClient } from "@/components/admin/rekap-filter-client";
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RekapPengajarPage() {
   await requirePermission("rekap_pengajar");
+  const hasEditPerm = await checkPermission("rekap_pengajar_edit");
   const session = await getSession();
   const userRole = session?.role || "";
 
@@ -42,7 +43,7 @@ export default async function RekapPengajarPage() {
       </Suspense>
 
       <Suspense fallback={<div className="animate-pulse p-10 text-center text-[var(--color-text-subtle)] font-medium">Memuat Rincian...</div>}>
-        <RekapPengajarClient userRole={userRole} pengajarList={pengajarList} />
+        <RekapPengajarClient userRole={userRole} pengajarList={pengajarList} hasEditPerm={hasEditPerm} />
       </Suspense>
     </div>
   );

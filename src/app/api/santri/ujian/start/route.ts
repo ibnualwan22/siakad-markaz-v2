@@ -81,18 +81,48 @@ export async function POST(req: Request) {
       }
     });
 
-    // Handle return soal
-    let soalDisajikan = paket.soalPaketList.map(sp => ({
-      soalId: sp.soal.id,
-      mapelId: sp.soal.mapelId,
-      pertanyaan: sp.soal.pertanyaan,
-      gambarUrl: sp.soal.gambarUrl,
-      grupSoalId: sp.soal.grupSoalId,
-      tipeSoal: sp.soal.tipeSoal,
-      bobot: sp.soal.bobot,
-      opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(sp.soal.opsiList) : sp.soal.opsiList.map((o: any) => o),
-      urutanAsli: sp.urutan
-    }));
+    // Handle return soal secara tertutup (amankan kunci jawaban & acak)
+    let soalDisajikan = paket.soalPaketList.map(sp => {
+      let extractedData = sp.soal.dataTambahan ? (typeof sp.soal.dataTambahan === 'string' ? JSON.parse(sp.soal.dataTambahan) : JSON.parse(JSON.stringify(sp.soal.dataTambahan))) : null;
+
+      if (extractedData) {
+        if (sp.soal.tipeSoal === "MENJODOHKAN" && extractedData.pairs) {
+          const lefts = extractedData.pairs.map((p: any) => p.left);
+          const rights = shuffleArray(extractedData.pairs.map((p: any) => p.right));
+          extractedData = { lefts, rights };
+        } else if (sp.soal.tipeSoal === "MENGURUTKAN" && extractedData.items) {
+          extractedData.items = shuffleArray(extractedData.items);
+        } else if (sp.soal.tipeSoal === "KITABAH" && extractedData.huruf) {
+          extractedData.huruf = shuffleArray(extractedData.huruf);
+          delete extractedData.jawaban;
+        } else if (sp.soal.tipeSoal === "DRAG_KATEGORI" && extractedData.items) {
+          extractedData.categories = extractedData.categories || [];
+          extractedData.items = shuffleArray(extractedData.items.map((it: any) => ({ text: it.text }))); // remove category
+        } else if (sp.soal.tipeSoal === "ISIAN_SAMPING" || sp.soal.tipeSoal === "ISIAN_BAWAH") {
+          delete extractedData.jawaban; // ensure no jawaban
+        }
+      }
+
+      // Hapus isCorrect dari opsi
+      const safeOpsi = sp.soal.opsiList.map((o: any) => {
+         const { isCorrect, ...rest } = o;
+         return rest;
+      });
+
+      return {
+        soalId: sp.soal.id,
+        mapelId: sp.soal.mapelId,
+        pertanyaan: sp.soal.pertanyaan,
+        gambarUrl: sp.soal.gambarUrl,
+        grupSoalId: sp.soal.grupSoalId,
+        tipeSoal: sp.soal.tipeSoal,
+        perintah: sp.soal.perintah,
+        dataTambahan: extractedData,
+        bobot: sp.soal.bobot,
+        opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(safeOpsi) : safeOpsi,
+        urutanAsli: sp.urutan
+      };
+    });
 
     if (paket.sesiGlobal.acakSoal) {
       // Kelompokkan berdasarkan mapelId agar mapel tidak tercampur

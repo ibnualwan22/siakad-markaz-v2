@@ -11,13 +11,25 @@ export async function GET(req: Request) {
     const mapelId = searchParams.get("mapelId");
     const programId = searchParams.get("programId");
     const usbuKe = searchParams.get("usbuKe");
+    const jenisSoalId = searchParams.get("jenisSoalId");
     const paketSoal = searchParams.get("paketSoal");
 
     const where: any = {};
     if (mapelId) where.mapelId = mapelId;
     if (programId) where.programId = programId;
-    if (usbuKe) where.usbuKe = Number(usbuKe);
+    
+    // For legacy usages if they still pass paketSoal, although we use jenisSoalId now
     if (paketSoal) where.paketSoal = paketSoal;
+    if (jenisSoalId) where.jenisSoalId = jenisSoalId;
+
+    // For usbuKe filter, we now filter by relations if usbuKe is present!
+    if (usbuKe) {
+      where.usbuAssignments = {
+        some: {
+          usbuKe: Number(usbuKe)
+        }
+      };
+    }
 
     const soal = await prisma.bankSoalUsbu.findMany({
       where,
@@ -26,7 +38,9 @@ export async function GET(req: Request) {
           orderBy: { urutan: 'asc' }
         },
         mapel: { select: { nama_indo: true } },
-        program: { select: { nama_indo: true } }
+        program: { select: { nama_indo: true } },
+        jenisSoal: { select: { nama: true } },
+        usbuAssignments: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -48,7 +62,7 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { mapelId, programId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, usbuKe, paketSoal, grupSoalId } = await req.json();
+    const { mapelId, programId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
     if (!mapelId || !programId || (!pertanyaan && !gambarUrl)) {
       return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
@@ -58,12 +72,14 @@ export async function POST(req: Request) {
       data: {
         mapelId,
         programId,
-        usbuKe: Number(usbuKe) || 1,
-        paketSoal: paketSoal || "A",
+        jenisSoalId,
         tipeSoal: tipeSoal || "PG",
         pertanyaan: pertanyaan || "",
         gambarUrl: gambarUrl || null,
         grupSoalId: grupSoalId || null,
+        perintah: perintah || null,
+        kunciJawaban: kunciJawaban || null,
+        dataTambahan: dataTambahan || null,
         bobot: Number(bobot) || 10,
         opsiList: {
           create: opsiList?.map((opsi: any, i: number) => ({
@@ -75,7 +91,8 @@ export async function POST(req: Request) {
         }
       },
       include: {
-        opsiList: true
+        opsiList: true,
+        usbuAssignments: true
       }
     });
 

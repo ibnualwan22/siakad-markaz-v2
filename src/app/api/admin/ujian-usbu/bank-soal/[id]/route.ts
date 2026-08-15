@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, paketSoal, grupSoalId } = await req.json();
+    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
     if (!pertanyaan && !gambarUrl) {
       return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
@@ -32,9 +32,13 @@ export async function PUT(
         gambarUrl: gambarUrl || null,
         grupSoalId: grupSoalId !== undefined ? (grupSoalId || null) : undefined,
         tipeSoal: tipeSoal || "PG",
+        perintah: perintah !== undefined ? (perintah || null) : undefined,
+        kunciJawaban: kunciJawaban !== undefined ? (kunciJawaban || null) : undefined,
+        dataTambahan: dataTambahan !== undefined ? (dataTambahan || null) : undefined,
         bobot: Number(bobot) || 10,
         ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
         ...(paketSoal !== undefined && { paketSoal }),
+        ...(jenisSoalId !== undefined && { jenisSoalId }),
         opsiList: {
           deleteMany: {},
           create: opsiList?.map((opsi: any, i: number) => ({

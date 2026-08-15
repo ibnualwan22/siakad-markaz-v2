@@ -45,10 +45,12 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programPaketMap } = await req.json();
+    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programIds, programPaketMap } = await req.json();
 
-    if (!usbuKe || !programPaketMap) {
-      return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
+    const selectedPrograms = programIds || (programPaketMap ? Object.keys(programPaketMap) : []);
+
+    if (!usbuKe || selectedPrograms.length === 0) {
+      return NextResponse.json({ error: "Data tidak lengkap. Pilih program." }, { status: 400 });
     }
 
     // Get active dufah
@@ -74,12 +76,14 @@ export async function POST(req: Request) {
       });
 
       // 2. Create PaketUjian per selected program
-      for (const [programId, paketId] of Object.entries(programPaketMap)) {
-        const paketSoalStr = String(paketId); // A, B, C...
-
-        // Find all questions for this program, usbuKe, and paketSoal
+      for (const programId of selectedPrograms) {
+        
+        // Find all questions assigned to this usbuKe for this program
         const soalList = await tx.bankSoalUsbu.findMany({
-          where: { programId, usbuKe: Number(usbuKe), paketSoal: paketSoalStr }
+          where: { 
+            programId, 
+            usbuAssignments: { some: { usbuKe: Number(usbuKe) } }
+          }
         });
 
         // Skip if no questions
@@ -89,16 +93,16 @@ export async function POST(req: Request) {
 
         const paket = await tx.paketUjian.create({
           data: {
-            nama: `Uj.Usbu' ${usbuKe} - ${p?.nama_indo} (P. ${paketSoalStr})`,
+            nama: `Uj.Usbu' ${usbuKe} - ${p?.nama_indo || 'Program'}`,
             programId,
             sesiGlobalId: sesi.id,
-            paketSoal: paketSoalStr
+            paketSoal: "A" // Legacy fallback, hidden from UI
           }
         });
 
         // 3. Assign soal to this paket
         await tx.soalPaket.createMany({
-          data: soalList.map((s, index) => ({
+          data: soalList.map((s: any, index: number) => ({
             paketId: paket.id,
             soalId: s.id,
             urutan: index + 1

@@ -58,6 +58,7 @@ model Mapel {
   programMapels      ProgramMapel[]
   nilaiList          Nilai[]
   bankSoalUsbuList   BankSoalUsbu[]
+  jenisSoalList      JenisSoal[]
 }
 
 model ProgramMapel {
@@ -751,24 +752,53 @@ model AbsenTabirot {
 
 // ===== CBT UJIAN USBU' =====
 
+model JenisSoal {
+  id        String   @id @default(cuid())
+  mapelId   String
+  nama      String
+  urutan    Int      @default(0)
+  createdAt DateTime @default(now())
+
+  mapel     Mapel          @relation(fields: [mapelId], references: [id], onDelete: Cascade)
+  soalList  BankSoalUsbu[]
+
+  @@unique([mapelId, nama])
+}
+
+model SoalUsbuAssignment {
+  id      String @id @default(cuid())
+  soalId  String
+  usbuKe  Int    // 1, 2, atau 3
+
+  soal BankSoalUsbu @relation(fields: [soalId], references: [id], onDelete: Cascade)
+
+  @@unique([soalId, usbuKe])
+}
+
 model BankSoalUsbu {
   id          String   @id @default(cuid())
   mapelId     String
   programId   String
-  usbuKe      Int      @default(1)    // 1, 2, atau 3
-  paketSoal   String   @default("A")  // "A", "B", "C", dll
-  tipeSoal    String   @default("PG") // "PG", "PG_MULTI", "ISIAN", "BENAR_SALAH"
+  usbuKe      Int      @default(1)    // Legacy: will be unused soon
+  paketSoal   String   @default("A")  // Legacy: will be unused soon
+  jenisSoalId String?
+  tipeSoal    String   @default("PG") // All 14 types
   pertanyaan  String
   gambarUrl   String?
   bobot       Float    @default(10)
   grupSoalId  String?  // ID soal induk untuk grup qiro'ah (jika null = soal mandiri)
+  perintah    String?  // Section header/instruction for this question type group
+  kunciJawaban String? // Correct answer text for essay/isian types
+  dataTambahan Json?   // Extra data: matching pairs, ordering items, categories, etc.
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  mapel         Mapel    @relation(fields: [mapelId], references: [id], onDelete: Restrict)
-  program       Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
-  opsiList      OpsiSoalUsbu[]
-  soalPaketList SoalPaket[]
+  mapel           Mapel    @relation(fields: [mapelId], references: [id], onDelete: Restrict)
+  program         Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  jenisSoal       JenisSoal? @relation(fields: [jenisSoalId], references: [id], onDelete: SetNull)
+  opsiList        OpsiSoalUsbu[]
+  soalPaketList   SoalPaket[]
+  usbuAssignments SoalUsbuAssignment[]
   
   // Self-relation: grup qiro'ah
   grupInduk     BankSoalUsbu?  @relation("GrupSoal", fields: [grupSoalId], references: [id], onDelete: SetNull)
@@ -806,10 +836,10 @@ model SesiUjianGlobal {
 
 model PaketUjian {
   id           String    @id @default(cuid())
-  nama         String // Auto generated nama (misal: "Ujian Usbu 1 - Shifr Awal (Paket A)")
+  nama         String // Auto generated nama (misal: "Ujian Usbu 1 - Shifr Awal")
   programId    String
   sesiGlobalId String
-  paketSoal    String    @default("A") // A, B, C
+  paketSoal    String    @default("A") // Legacy
   createdAt    DateTime  @default(now())
 
   program       Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
@@ -858,6 +888,11 @@ model JawabanUjianSantri {
   soalId String
   opsiId String?
   rpiId  String? // flag ragu-ragu
+  jawabanTeks  String?  // For essay, isian, kitabah answers
+  jawabanData  Json?    // For matching pairs, ordering, drag-category answers
+  nilaiManual  Float?   // Manual/AI grade for essay types (0-100 scale of bobot)
+  aiGraded     Boolean  @default(false)
+  aiFeedback   String?  // AI feedback/explanation
 
   sesi   SesiUjianSantri @relation(fields: [sesiId], references: [id], onDelete: Cascade)
 

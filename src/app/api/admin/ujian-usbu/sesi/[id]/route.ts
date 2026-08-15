@@ -72,8 +72,7 @@ export async function PUT(
         const soalList = await prisma.bankSoalUsbu.findMany({
           where: { 
             programId: paket.programId, 
-            usbuKe: sesi.usbuKe, 
-            paketSoal: paket.paketSoal 
+            usbuAssignments: { some: { usbuKe: Number(sesi.usbuKe) } }
           }
         });
 

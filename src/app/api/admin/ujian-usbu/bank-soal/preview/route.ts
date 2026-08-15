@@ -20,21 +20,29 @@ export async function GET(req: Request) {
     const usbuKe = searchParams.get("usbuKe");
     const paketSoal = searchParams.get("paketSoal");
 
-    if (!programId || !usbuKe || !paketSoal) {
-      return NextResponse.json({ error: "programId, usbuKe, dan paketSoal diperlukan" }, { status: 400 });
+    if (!programId || !usbuKe) {
+      return NextResponse.json({ error: "programId dan usbuKe diperlukan" }, { status: 400 });
     }
 
     // Fetch ALL soal for this program + usbu + paket (across all mapels)
+    const where: any = {
+      programId,
+      usbuAssignments: {
+        some: {
+          usbuKe: Number(usbuKe)
+        }
+      }
+    };
+    if (paketSoal && paketSoal !== "undefined" && paketSoal !== "null") {
+      where.paketSoal = paketSoal;
+    }
+
     const soalList = await prisma.bankSoalUsbu.findMany({
-      where: {
-        programId,
-        usbuKe: Number(usbuKe),
-        paketSoal
-      },
+      where,
       include: {
         opsiList: {
           orderBy: { urutan: 'asc' },
-          select: { id: true, teks: true, gambarUrl: true, urutan: true }
+          select: { id: true, teks: true, gambarUrl: true, urutan: true, isCorrect: true }
         },
         mapel: { select: { nama_indo: true } }
       },
@@ -56,10 +64,14 @@ export async function GET(req: Request) {
         grupSoalId: s.grupSoalId,
         tipeSoal: s.tipeSoal,
         bobot: s.bobot,
+        perintah: s.perintah,
+        kunciJawaban: s.kunciJawaban,
+        dataTambahan: s.dataTambahan,
         opsiList: s.opsiList.map(o => ({
           id: o.id,
           teks: o.teks,
-          gambarUrl: o.gambarUrl
+          gambarUrl: o.gambarUrl,
+          isCorrect: o.isCorrect
         }))
       });
     }

@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const { sesiId, soalId, opsiId, rpiId } = body; // rpiId = tag ragu-ragu
+    const { sesiId, soalId, opsiId, rpiId, jawabanTeks, jawabanData } = body; // rpiId = tag ragu-ragu
 
     if (!sesiId || !soalId) {
       return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
@@ -39,6 +39,9 @@ export async function POST(req: Request) {
     }
 
     // Update Jawaban
+    const rawData = jawabanData !== undefined ? (Object.keys(jawabanData || {}).length > 0 ? jawabanData : null) : undefined;
+    const rawTeks = jawabanTeks !== undefined ? jawabanTeks : undefined;
+
     const jawaban = await prisma.jawabanUjianSantri.upsert({
       where: {
         sesiId_soalId: {
@@ -47,14 +50,18 @@ export async function POST(req: Request) {
         }
       },
       update: {
-        opsiId: opsiId !== undefined ? opsiId : undefined,
-        rpiId: rpiId !== undefined ? rpiId : undefined,
+        opsiId: opsiId !== undefined ? (opsiId || null) : undefined,
+        rpiId: rpiId !== undefined ? (rpiId || null) : undefined,
+        jawabanTeks: rawTeks,
+        jawabanData: rawData,
       },
       create: {
         sesiId,
         soalId,
-        opsiId,
-        rpiId
+        opsiId: opsiId || null,
+        rpiId: rpiId || null,
+        jawabanTeks: jawabanTeks || null,
+        jawabanData: (jawabanData && Object.keys(jawabanData).length > 0) ? jawabanData : null,
       }
     });
 

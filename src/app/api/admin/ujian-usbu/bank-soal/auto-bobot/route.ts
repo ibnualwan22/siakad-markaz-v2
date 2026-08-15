@@ -14,19 +14,22 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { programId, mapelId, usbuKe, paketSoal, bobot } = await req.json();
+    const { programId, mapelId, jenisSoalId, usbuKe, bobot } = await req.json();
 
-    if (!programId || !mapelId || !usbuKe || !paketSoal || bobot === undefined) {
+    if (!programId || !mapelId || (!jenisSoalId && !usbuKe) || bobot === undefined) {
       return NextResponse.json({ error: "Parameter tidak lengkap" }, { status: 400 });
     }
 
+    const where: any = { programId, mapelId };
+    
+    if (jenisSoalId) {
+      where.jenisSoalId = jenisSoalId;
+    } else if (usbuKe) {
+      where.usbuAssignments = { some: { usbuKe: Number(usbuKe) } };
+    }
+
     const result = await prisma.bankSoalUsbu.updateMany({
-      where: {
-        programId,
-        mapelId,
-        usbuKe: Number(usbuKe),
-        paketSoal
-      },
+      where,
       data: {
         bobot: Number(bobot)
       }

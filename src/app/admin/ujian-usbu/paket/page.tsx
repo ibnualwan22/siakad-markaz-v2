@@ -19,8 +19,8 @@ export default function SesiUjianPage() {
   const [acakSoal, setAcakSoal] = useState(true);
   const [acakOpsi, setAcakOpsi] = useState(true);
   
-  // Map of Program Selection -> PaketId (A/B/C/D)
-  const [programPaketMap, setProgramPaketMap] = useState<Record<string, string>>({});
+  // Program Selection
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
 
   useEffect(() => {
     fetchInitialData();
@@ -45,11 +45,8 @@ export default function SesiUjianPage() {
       }
 
       // Initialize map: select all programs by default
-      const initialMap: Record<string, string> = {};
-      programs.forEach((p: any) => {
-        initialMap[p.id] = "A";
-      });
-      setProgramPaketMap(initialMap);
+      setSelectedPrograms(programs.map((p: any) => p.id));
+
 
     } catch {
       toast.error("Gagal memuat data awal");
@@ -70,36 +67,20 @@ export default function SesiUjianPage() {
   const handleCreateNew = () => {
     setUsbuKe("1");
     setDurasiMenit("120");
-    const initialMap: Record<string, string> = {};
-    programList.forEach((p: any) => {
-      initialMap[p.id] = "A";
-    });
-    setProgramPaketMap(initialMap);
+    setSelectedPrograms(programList.map(p => p.id));
     setIsModalOpen(true);
   };
 
   const toggleProgramSelection = (progId: string) => {
-    setProgramPaketMap(prev => {
-      const newMap = { ...prev };
-      if (newMap[progId]) {
-        delete newMap[progId];
-      } else {
-        newMap[progId] = "A";
-      }
-      return newMap;
+    setSelectedPrograms(prev => {
+      if (prev.includes(progId)) return prev.filter(id => id !== progId);
+      return [...prev, progId];
     });
-  };
-
-  const updateProgramPaket = (progId: string, paket: string) => {
-    setProgramPaketMap(prev => ({
-      ...prev,
-      [progId]: paket
-    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (Object.keys(programPaketMap).length === 0) {
+    if (selectedPrograms.length === 0) {
       return toast.error("Pilih minimal satu program!");
     }
 
@@ -108,7 +89,7 @@ export default function SesiUjianPage() {
       durasiMenit: Number(durasiMenit),
       acakSoal,
       acakOpsi,
-      programPaketMap
+      programIds: selectedPrograms
     };
 
     try {
@@ -269,15 +250,12 @@ export default function SesiUjianPage() {
                         {sesi.paketUjianList.length === 0 ? (
                            <div className="text-sm text-gray-400 italic">Tidak ada program karena tidak ada soal.</div>
                         ) : sesi.paketUjianList.map((paket: any) => (
-                           <div key={paket.id} className="text-xs font-bold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm hover:border-blue-300 transition-colors">
-                               {paket.program.nama_indo} 
-                               <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md font-black">
-                                   P. {paket.paketSoal}
-                               </span>
-                               <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${paket._count.soalPaketList > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                   {paket._count.soalPaketList} Soal
-                               </span>
-                           </div>
+                            <div key={paket.id} className="text-xs font-bold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm hover:border-blue-300 transition-colors">
+                                {paket.program.nama_indo} 
+                                <span className={`px-2 py-0.5 rounded-md font-black text-[10px] ${paket._count.soalPaketList > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                    {paket._count.soalPaketList} Soal Link
+                                </span>
+                            </div>
                         ))}
                     </div>
                  </div>
@@ -364,17 +342,17 @@ export default function SesiUjianPage() {
               <div className="w-full md:w-[60%] p-8 flex flex-col h-[550px] bg-white">
                 <div className="flex justify-between items-end mb-6 shrink-0">
                   <div>
-                    <h3 className="font-bold text-gray-800 text-lg mb-1">Target Kelas & Paket</h3>
-                    <p className="text-xs text-gray-500 font-medium">Centang program yang mengikuti sesi ini dan set opsi paket soalnya.</p>
+                    <h3 className="font-bold text-gray-800 text-lg mb-1">Target Kelas</h3>
+                    <p className="text-xs text-gray-500 font-medium">Centang program yang akan diikutsertakan di Sesi ini.</p>
                   </div>
                   <div className="bg-gray-100 text-gray-600 border px-3 py-1.5 rounded-lg text-xs font-bold">
-                    {Object.keys(programPaketMap).length} Terpilih
+                    {selectedPrograms.length} Terpilih
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                     {programList.map(prog => {
-                        const isSelected = !!programPaketMap[prog.id];
+                        const isSelected = selectedPrograms.includes(prog.id);
                         return (
                             <div key={prog.id} className={`flex items-center justify-between p-4 rounded-2xl transition-all duration-200 cursor-pointer ${isSelected ? 'bg-blue-50/50 outline outline-2 outline-blue-500 shadow-sm' : 'bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`} onClick={() => toggleProgramSelection(prog.id)}>
                                 <div className="flex items-center gap-4">
@@ -383,31 +361,14 @@ export default function SesiUjianPage() {
                                     </div>
                                     <div className={`font-bold ${isSelected ? 'text-blue-900' : 'text-gray-600'}`}>{prog.nama_indo}</div>
                                 </div>
-                                <div onClick={e => e.stopPropagation()}>
-                                    {isSelected && (
-                                        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-blue-200 shadow-sm hover:border-blue-300 transition-colors">
-                                            <span className="text-[10px] font-black text-blue-400 tracking-wider">PAKET</span>
-                                            <select 
-                                              value={programPaketMap[prog.id]} 
-                                              onChange={(e) => updateProgramPaket(prog.id, e.target.value)}
-                                              className="bg-transparent text-sm font-black text-blue-700 outline-none cursor-pointer"
-                                            >
-                                                <option value="A">Paket A</option>
-                                                <option value="B">Paket B</option>
-                                                <option value="C">Paket C</option>
-                                                <option value="D">Paket D</option>
-                                            </select>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
-                        )
+                        );
                     })}
                 </div>
                 
                 <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end shrink-0">
-                  <button type="submit" disabled={Object.keys(programPaketMap).length === 0} className="w-full md:w-auto px-8 py-4 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 flex items-center justify-center gap-3 font-bold hover:bg-blue-700 hover:shadow-xl transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <ServerCog size={20}/> Generate {Object.keys(programPaketMap).length} Paket Ujian
+                  <button type="submit" disabled={selectedPrograms.length === 0} className="w-full md:w-auto px-8 py-4 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 flex items-center justify-center gap-3 font-bold hover:bg-blue-700 hover:shadow-xl transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <ServerCog size={20}/> Generate Sesi untuk {selectedPrograms.length} Kelas
                   </button>
                 </div>
               </div>

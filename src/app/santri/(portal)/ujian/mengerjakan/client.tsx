@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, X } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
+import QuestionRenderer from "@/components/ujian/QuestionRenderer";
 
 export default function ClientMengerjakanUjian() {
   const router = useRouter();
@@ -282,7 +283,7 @@ export default function ClientMengerjakanUjian() {
     }
   };
 
-  const handleAnswerSelect = async (soalId: string, opsiId: string) => {
+  const handleAnswerSubmit = async (soalId: string, payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => {
     if (isSaving.current || hasSubmitted.current) return;
     
     // Optimistic UI Update
@@ -290,7 +291,10 @@ export default function ClientMengerjakanUjian() {
     const curSoal = newExamData.soal.find((s:any) => s.soalId === soalId);
     if (!curSoal) return;
     
-    curSoal.opsiTerpilih = opsiId;
+    if (payload.opsiId !== undefined) curSoal.opsiTerpilih = payload.opsiId;
+    if (payload.jawabanTeks !== undefined) curSoal.jawabanTeks = payload.jawabanTeks;
+    if (payload.jawabanData !== undefined) curSoal.jawabanData = payload.jawabanData;
+
     setExamData(newExamData);
     sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     
@@ -303,7 +307,7 @@ export default function ClientMengerjakanUjian() {
         body: JSON.stringify({
           sesiId,
           soalId,
-          opsiId
+          ...payload
         })
       });
     } catch (error) {
@@ -331,7 +335,9 @@ export default function ClientMengerjakanUjian() {
         body: JSON.stringify({
           sesiId,
           soalId: curSoal.soalId,
-          opsiId: curSoal.opsiTerpilih, // retain
+          opsiId: curSoal.opsiTerpilih,
+          jawabanTeks: curSoal.jawabanTeks,
+          jawabanData: curSoal.jawabanData,
           rpiId: newRagu
         })
       });
@@ -384,17 +390,18 @@ export default function ClientMengerjakanUjian() {
   }
 
   // Failsafe jika currentIdx di luar batas (misal dari cache lama saat mapel ditambah admin)
-  if (!examData.soal[currentIdx] && currentIdx > 0) {
-    setCurrentIdx(0);
-    return null;
-  }
-
   const soal = examData.soal[currentIdx];
-  const answeredCount = examData.soal.filter((s:any) => !!s.opsiTerpilih).length;
+  const sameTypeSoals = examData.soal.filter((s:any) => s.tipeSoal === soal.tipeSoal);
+  const currentTypeIdx = sameTypeSoals.findIndex((s:any) => s.soalId === soal.soalId) + 1;
+  const currentTypeTotal = sameTypeSoals.length;
+  const readableType = (soal.tipeSoal || "Soal").replace(/_/g, ' ');
+
+  const isAnswered = (s: any) => !!s.opsiTerpilih || !!s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
+  const answeredCount = examData.soal.filter(isAnswered).length;
   const isLastQuestion = currentIdx === examData.soal.length - 1;
 
   const raguList = examData.soal.filter((s:any) => s.rpiId === "RAGU");
-  const unansweredList = examData.soal.filter((s:any) => !s.opsiTerpilih);
+  const unansweredList = examData.soal.filter((s:any) => !isAnswered(s));
   const canSubmit = raguList.length === 0 && unansweredList.length === 0;
 
   if (showSummary) {
@@ -411,7 +418,7 @@ export default function ClientMengerjakanUjian() {
           
           <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="bg-green-50 p-3 md:p-4 rounded-2xl text-center border border-green-100">
-               <div className="text-2xl md:text-3xl font-black text-green-700 mb-1">{answeredCount - raguList.filter((r:any) => !!r.opsiTerpilih).length}</div>
+               <div className="text-2xl md:text-3xl font-black text-green-700 mb-1">{answeredCount - raguList.filter(isAnswered).length}</div>
                <div className="text-[10px] md:text-xs font-bold text-green-600 uppercase tracking-wider">Terjawab</div>
             </div>
             <div className="bg-orange-50 p-3 md:p-4 rounded-2xl text-center border border-orange-100">
@@ -529,10 +536,10 @@ export default function ClientMengerjakanUjian() {
         <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
            <div className="flex items-center gap-2 md:gap-3">
              <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
-               {soal.urutanUI}
+               {currentTypeIdx}
              </div>
              <div>
-                <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">SOAL {soal.urutanUI} / {examData.soal.length}</h1>
+                <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
                 <p className="text-[9px] md:text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">Mata Pelajaran</p>
              </div>
            </div>
@@ -566,18 +573,33 @@ export default function ClientMengerjakanUjian() {
                 </div>
                 <span className="text-xs font-bold text-gray-500">{answeredCount}/{examData.soal.length}</span>
               </div>
-              <div className="grid grid-cols-6 gap-2 mb-4">
-                {examData.soal.map((s:any, idx:number) => {
-                  const Active = currentIdx === idx;
-                  const Answered = !!s.opsiTerpilih;
-                  const Ragu = s.rpiId === "RAGU";
-                  let cls = "h-11 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
-                  if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
-                  else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
-                  else if (Answered) cls += "bg-green-500 border-green-600 text-white";
-                  else cls += "bg-white border-gray-200 text-gray-500";
-                  return <button key={s.soalId} onClick={() => { setCurrentIdx(idx); setShowMobileNav(false); }} className={cls}>{idx+1}</button>;
-                })}
+              <div className="flex flex-col gap-4 mb-4">
+                 {(() => {
+                    const grouped = examData.soal.reduce((acc: any, s:any) => {
+                       if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
+                       acc[s.tipeSoal].push(s);
+                       return acc;
+                    }, {});
+                    return Object.entries(grouped).map(([type, list]: [string, any]) => (
+                       <div key={type}>
+                          <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">{type.replace(/_/g, ' ')}</h4>
+                          <div className="grid grid-cols-6 gap-2">
+                            {list.map((s:any, idx:number) => {
+                              const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
+                              const Active = currentIdx === globalIdx;
+                              const Answered = isAnswered(s);
+                              const Ragu = s.rpiId === "RAGU";
+                              let cls = "h-10 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
+                              if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
+                              else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
+                              else if (Answered) cls += "bg-green-500 border-green-600 text-white";
+                              else cls += "bg-white border-gray-200 text-gray-500";
+                              return <button key={s.soalId} onClick={() => { setCurrentIdx(globalIdx); setShowMobileNav(false); }} className={cls}>{idx+1}</button>;
+                            })}
+                          </div>
+                       </div>
+                    ));
+                 })()}
               </div>
               <div className="flex gap-3 text-[10px] font-semibold text-gray-500 justify-center">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded border border-green-600"></div> Terjawab</div>
@@ -590,6 +612,16 @@ export default function ClientMengerjakanUjian() {
 
         {/* Soal Content */}
         <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-8">
+           
+           {soal.perintah && (
+             <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 md:mb-6 rounded-r-xl shadow-sm">
+                <h3 className="font-bold text-sm text-blue-900 mb-1 flex items-center gap-2">
+                   <Grid3X3 size={16} /> Arah Pengerjaan Bagian {readableType}
+                </h3>
+                <SoalText html={soal.perintah} className="text-sm text-blue-800 prose prose-sm max-w-none" />
+             </div>
+           )}
+
            {/* Qiro'ah Parent Passage — ditampilkan jika soal ini adalah anak grup */}
            {soal.grupSoalId && (() => {
              const parentSoal = examData.soal.find((s:any) => s.soalId === soal.grupSoalId);
@@ -626,42 +658,10 @@ export default function ClientMengerjakanUjian() {
               />
            </div>
 
-           <div className="space-y-4">
-             {soal.opsiList.map((opt:any, index:number) => {
-               const isSelected = soal.opsiTerpilih === opt.id;
-               return (
-                 <label 
-                   key={opt.id} 
-                   className={`flex gap-4 p-4 md:p-5 rounded-2xl cursor-pointer transition-all border-2 group ${isSelected ? 'bg-blue-50 border-blue-500 shadow-sm shadow-blue-100' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
-                 >
-                   <div className="pt-0.5">
-                     <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center text-xs md:text-sm font-bold transition-colors ${isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-gray-500 group-hover:border-blue-400 group-hover:text-blue-500'}`}>
-                       {String.fromCharCode(65 + index)}
-                     </div>
-                   </div>
-                   <div className="flex-1">
-                     <input 
-                       type="radio" 
-                       name={`opsi-${soal.soalId}`} 
-                       className="hidden" 
-                       checked={isSelected}
-                       onChange={() => handleAnswerSelect(soal.soalId, opt.id)}
-                     />
-                     <SoalText
-                       html={opt.teks}
-                       className={`text-sm md:text-base transition-colors block ${isSelected ? 'font-medium text-blue-900' : 'text-gray-700'}`} 
-                     />
-                     {opt.gambarUrl && (
-                       <div className="mt-3">
-                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                         <img src={opt.gambarUrl} alt={`Opsi ${String.fromCharCode(65 + index)} Image`} className="max-w-full max-h-[200px] rounded-lg border border-gray-200 shadow-sm" />
-                       </div>
-                     )}
-                   </div>
-                 </label>
-               );
-             })}
-           </div>
+           <QuestionRenderer 
+             soal={soal}
+             onAnswer={(payload) => handleAnswerSubmit(soal.soalId, payload)}
+           />
         </div>
 
         {/* Footer Navigation Area */}
@@ -711,35 +711,40 @@ export default function ClientMengerjakanUjian() {
         </div>
         
         <div className="p-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
-             {examData.soal.map((s:any, idx:number) => {
-               const Active = currentIdx === idx;
-               const Answered = !!s.opsiTerpilih;
-               const Ragu = s.rpiId === "RAGU";
-               
-               let classes = "h-11 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 text-center ";
-               
-               if (Active) {
-                 classes += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
-               } else if (Ragu) {
-                 classes += "bg-orange-400 border-orange-500 text-white";
-               } else if (Answered) {
-                 classes += "bg-green-500 border-green-600 text-white";
-               } else {
-                 classes += "bg-white border-gray-200 text-gray-500 hover:border-gray-300";
-               }
+           <div className="flex flex-col gap-6">
+             {(() => {
+                const grouped = examData.soal.reduce((acc: any, s:any) => {
+                   if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
+                   acc[s.tipeSoal].push(s);
+                   return acc;
+                }, {});
+                return Object.entries(grouped).map(([type, list]: [string, any]) => (
+                   <div key={type}>
+                      <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">{type.replace(/_/g, ' ')}</h4>
+                      <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
+                         {list.map((s:any, idx:number) => {
+                           const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
+                           const Active = currentIdx === globalIdx;
+                           const Answered = isAnswered(s);
+                           const Ragu = s.rpiId === "RAGU";
+                           
+                           let classes = "h-10 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 text-center ";
+                           if (Active) classes += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
+                           else if (Ragu) classes += "bg-orange-400 border-orange-500 text-white";
+                           else if (Answered) classes += "bg-green-500 border-green-600 text-white";
+                           else classes += "bg-white border-gray-200 text-gray-500 hover:border-gray-300";
 
-               return (
-                 <button 
-                   key={s.soalId}
-                   onClick={() => setCurrentIdx(idx)}
-                   className={classes}
-                 >
-                   {idx + 1}
-                 </button>
-               );
-             })}
-          </div>
+                           return (
+                             <button key={s.soalId} onClick={() => setCurrentIdx(globalIdx)} className={classes}>
+                               {idx + 1}
+                             </button>
+                           );
+                         })}
+                      </div>
+                   </div>
+                ));
+             })()}
+           </div>
         </div>
 
         <div className="p-4 border-t bg-gray-50 shrink-0">

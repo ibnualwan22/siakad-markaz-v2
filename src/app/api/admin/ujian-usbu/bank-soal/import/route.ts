@@ -85,9 +85,10 @@ export async function POST(req: Request) {
     const mapelId = formData.get("mapelId") as string;
     const usbuKe = Number(formData.get("usbuKe") || "1");
     const paketSoal = (formData.get("paketSoal") as string) || "A";
+    const jenisSoalId = formData.get("jenisSoalId") as string;
     const timpaSoal = formData.get("timpaSoal") === "true";
 
-    if (!file || !programId || !mapelId) {
+    if (!file || !programId || !mapelId || !jenisSoalId) {
       return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
     }
 
@@ -135,7 +136,7 @@ export async function POST(req: Request) {
     await prisma.$transaction(async (tx: any) => {
       if (timpaSoal) {
         await tx.bankSoalUsbu.deleteMany({
-          where: { programId, mapelId, usbuKe, paketSoal }
+          where: { programId, mapelId, jenisSoalId }
         });
       }
 
@@ -180,6 +181,7 @@ export async function POST(req: Request) {
           data: {
             programId,
             mapelId,
+            jenisSoalId,
             usbuKe,
             paketSoal: rowPaketSoal,
             tipeSoal: "PG",

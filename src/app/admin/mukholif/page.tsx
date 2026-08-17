@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertTriangle, Clock, MapPin, MessageSquare, Image as ImageIcon, Users, CheckCircle2, ChevronRight, X, Loader2, BarChart3, Filter } from "lucide-react";
+import { AlertTriangle, Clock, MapPin, MessageSquare, Image as ImageIcon, Users, CheckCircle2, ChevronRight, X, Loader2, BarChart3, Filter, Award, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Pelanggar = {
@@ -41,6 +41,10 @@ export default function TabayunMukholifPage() {
   const [laporanList, setLaporanList] = useState<Laporan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
   // Modal State
   const [selectedLaporan, setSelectedLaporan] = useState<Laporan | null>(null);
   const [tabayunForm, setTabayunForm] = useState<Record<string, Partial<Pelanggar>>>({});
@@ -48,6 +52,14 @@ export default function TabayunMukholifPage() {
 
   // Stats State
   const [statsData, setStatsData] = useState<any>(null);
+  const [statsUsbu, setStatsUsbu] = useState("ALL");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (activeTab === "daftar") {
@@ -55,12 +67,12 @@ export default function TabayunMukholifPage() {
     } else {
       fetchStats();
     }
-  }, [activeTab, filterStatus]);
+  }, [activeTab, filterStatus, statsUsbu, debouncedQuery]);
 
   const fetchLaporan = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/admin/mukholif?status=${filterStatus}`);
+      const res = await fetch(`/api/admin/mukholif?status=${filterStatus}&q=${encodeURIComponent(debouncedQuery)}`);
       if (res.ok) {
         const data = await res.json();
         setLaporanList(data);
@@ -75,7 +87,7 @@ export default function TabayunMukholifPage() {
   const fetchStats = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/admin/mukholif/stats");
+      const res = await fetch(`/api/admin/mukholif/stats?usbu=${statsUsbu}`);
       if (res.ok) {
         const data = await res.json();
         setStatsData(data);
@@ -183,21 +195,36 @@ export default function TabayunMukholifPage() {
 
       {activeTab === "daftar" && (
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-[var(--color-surface-dark)]">
-          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-100">
-            <h2 className="text-lg font-bold text-slate-800">Daftar Laporan Jasus</h2>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
+            <h2 className="text-lg font-bold text-slate-800 self-start md:self-center">Daftar Laporan Jasus</h2>
             
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-400" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as any)}
-                className="text-sm font-bold bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 outline-none hover:bg-slate-100 transition-colors"
-                title="Filter Status"
-              >
-                <option value="MENUNGGU">Menunggu Tabayun</option>
-                <option value="SELESAI">Sudah Selesai</option>
-                <option value="ALL">Semua Status</option>
-              </select>
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+              {/* Search Bar */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Cari nama pelanggar..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-xl text-sm font-medium bg-slate-50 text-slate-700 outline-none hover:border-emerald-300 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-100)] transition-all"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="text-sm font-bold bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-1.5 outline-none hover:border-emerald-300 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-100)] transition-all cursor-pointer box-border"
+                  title="Filter Status"
+                >
+                  <option value="MENUNGGU">Menunggu Tabayun</option>
+                  <option value="SELESAI">Sudah Selesai</option>
+                  <option value="ALL">Semua Status</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -278,23 +305,32 @@ export default function TabayunMukholifPage() {
                               )}
                             </div>
                             
-                            <div className="flex items-center gap-2 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
-                                <Users className="w-5 h-5" />
+                            <div className="flex items-center gap-3 mb-3 pr-2">
+                              <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 shrink-0">
+                                <AlertTriangle className="w-5 h-5" />
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-500 mb-0.5">Dilaporkan oleh</p>
-                                <p className="text-sm font-bold text-slate-800">{laporan.jasusNama}</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs text-gray-500 mb-0.5 uppercase tracking-wide font-bold">Tersangka Pelanggar</p>
+                                <p className="text-sm font-bold text-slate-800 line-clamp-1">
+                                  {laporan.pelanggarList.map((p: any) => p.santri?.nama).join(", ") || "Tanpa Nama"}
+                                </p>
                               </div>
                             </div>
                             
                             <div className="space-y-2 mt-4 ml-2">
                               <p className="text-xs text-gray-600 flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-gray-400" /> 
+                                <Clock className="w-4 h-4 text-gray-400 shrink-0" /> 
                                 {new Date(laporan.waktuMelanggar).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
                               </p>
                               <p className="text-xs text-gray-600 flex items-center gap-2">
-                                <MapPin className="w-4 h-4 text-gray-400" /> {laporan.tempatMelanggar}
+                                <MapPin className="w-4 h-4 text-gray-400 shrink-0" /> {laporan.tempatMelanggar}
+                              </p>
+                              <p className="text-xs text-gray-600 flex items-start gap-2 pr-2">
+                                <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" /> 
+                                <span className="line-clamp-2 leading-relaxed">
+                                  <span className="text-slate-400 mr-1">Dilaporkan oleh:</span>
+                                  <span className="font-bold text-slate-700">{laporan.jasusNama}</span>
+                                </span>
                               </p>
                             </div>
 
@@ -582,7 +618,21 @@ export default function TabayunMukholifPage() {
       {/* Tab Statistik */}
       {activeTab === "statistik" && (
         <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-[var(--color-surface-dark)]">
-          <h2 className="text-xl font-bold text-slate-800 mb-8 border-b pb-4">Statistik Pelanggaran 5 Minggu Terakhir</h2>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-4 border-b gap-4">
+            <h2 className="text-xl font-bold text-slate-800">
+              Persentase Pelanggar Bahasa {statsData?.activeDufah && `(${statsData.activeDufah})`}
+            </h2>
+            <select 
+              value={statsUsbu} 
+              onChange={(e) => setStatsUsbu(e.target.value)} 
+              className="px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-slate-50 text-slate-700 outline-none hover:border-emerald-300 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary-100)] transition-all cursor-pointer box-border"
+            >
+              <option value="ALL">Semua Usbu'</option>
+              <option value="usbu1">Usbu' 1</option>
+              <option value="usbu2">Usbu' 2</option>
+              <option value="usbu3">Usbu' 3</option>
+            </select>
+          </div>
           
           {isLoading ? (
             <div className="flex justify-center p-12">
@@ -602,48 +652,90 @@ export default function TabayunMukholifPage() {
                 <Users className="w-10 h-10 text-[var(--color-primary)] opacity-50" />
               </div>
               
-              <div className="relative h-[300px] w-full flex items-end justify-between px-4 sm:px-12 gap-2 mt-12 pb-6 border-b-2 border-slate-200">
-                {/* Y-Axis labels (approx) */}
-                <div className="absolute left-0 bottom-6 top-0 flex flex-col justify-between text-xs text-slate-400 font-bold border-r pr-2 border-slate-100">
-                   <span>100%</span>
-                   <span>75%</span>
-                   <span>50%</span>
-                   <span>25%</span>
-                   <span>0%</span>
-                </div>
-                
-                {/* Horizontal Guide lines */}
-                <div className="absolute left-10 right-0 top-[0%] h-px bg-slate-100" />
-                <div className="absolute left-10 right-0 top-[25%] h-px bg-slate-100" />
-                <div className="absolute left-10 right-0 top-[50%] h-px bg-slate-100" />
-                <div className="absolute left-10 right-0 top-[75%] h-px bg-slate-100" />
-                
-                {statsData.chartData.map((d: any) => (
-                  <div key={d.name} className="relative z-10 w-full max-w-[60px] flex flex-col items-center group">
-                    {/* Tooltip */}
-                    <div className="absolute -top-12 bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
-                      {d.pelanggar} Orang ({d.persentase}%)
-                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-800 rotate-45" />
-                    </div>
-                    
-                    {/* Bar */}
-                    <div 
-                      className="w-full bg-[var(--color-primary)] rounded-t-lg transition-all duration-1000 ease-out hover:opacity-80 relative overflow-hidden"
-                      style={{ height: `${Math.max(d.persentase, 2)}%` }} // min 2% to be visible
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-                    </div>
-                    
-                    {/* Label */}
-                    <p className="absolute -bottom-8 text-[10px] font-bold text-slate-500 text-center w-24 left-1/2 -translate-x-1/2 truncate">
-                      {d.name.split(',')[0]}
-                    </p>
+              <div className="w-full overflow-x-auto pb-4">
+                <div className="relative h-[250px] sm:h-[300px] w-max min-w-full flex items-end justify-start pr-8 pl-12 gap-1.5 mt-12 pb-8 border-b border-slate-200">
+                  {/* Y-Axis labels (approx) */}
+                  <div className="sticky left-0 bottom-8 top-0 h-full w-10 bg-white z-20 border-r border-slate-100 -ml-12 shrink-0">
+                     <span className="absolute top-[0%] -translate-y-1/2 right-2 text-[10px] text-slate-400 font-bold">100%</span>
+                     <span className="absolute top-[25%] -translate-y-1/2 right-2 text-[10px] text-slate-400 font-bold">75%</span>
+                     <span className="absolute top-[50%] -translate-y-1/2 right-2 text-[10px] text-slate-400 font-bold">50%</span>
+                     <span className="absolute top-[75%] -translate-y-1/2 right-2 text-[10px] text-slate-400 font-bold">25%</span>
+                     <span className="absolute bottom-0 translate-y-[20%] right-2 text-[10px] text-slate-400 font-bold">0%</span>
                   </div>
-                ))}
+                  
+                  {/* Horizontal Guide lines */}
+                  <div className="absolute left-10 right-0 top-[0%] h-px bg-slate-100" />
+                  <div className="absolute left-10 right-0 top-[25%] h-px bg-slate-100" />
+                  <div className="absolute left-10 right-0 top-[50%] h-px bg-slate-100" />
+                  <div className="absolute left-10 right-0 top-[75%] h-px bg-slate-100" />
+                  
+                  {statsData.chartData.map((d: any) => (
+                    <div key={d.name} className="relative z-10 w-full h-full min-w-[32px] sm:min-w-[40px] max-w-[48px] flex flex-col justify-end items-center group">
+                      
+                      {/* Values container */}
+                      <div 
+                        className="absolute w-full flex flex-col items-center justify-end z-30 pointer-events-none"
+                        style={{ bottom: `calc(${Math.max(d.persentase, 1)}% + 4px)` }}
+                      >
+                        {/* Hover state */}
+                        <div className="absolute bottom-0 flex flex-col items-center opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-white/90 px-1 rounded-md shadow-sm">
+                          <p className="text-sm font-black text-[var(--color-primary)] leading-none mb-1">{d.pelanggar}</p>
+                          <p className="text-[10px] font-bold text-slate-500 leading-none mb-1">{d.persentase}%</p>
+                        </div>
+                        {/* Default state */}
+                        <div className="absolute bottom-0 flex flex-col items-center group-hover:opacity-0 transition-opacity">
+                          <p className="text-[10px] font-bold text-slate-400 leading-none">{d.pelanggar > 0 ? d.pelanggar : ""}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Bar */}
+                      <div 
+                        className="w-full bg-[var(--color-primary)] rounded-t-sm sm:rounded-t-md transition-all duration-1000 ease-out hover:opacity-90 relative overflow-hidden shadow-sm shadow-[var(--color-primary-400)]"
+                        style={{ height: `${Math.max(d.persentase, 1)}%` }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                      </div>
+                      
+                      {/* Label */}
+                      <p className="absolute -bottom-8 text-[9px] font-bold text-slate-500 text-center w-12 left-1/2 -translate-x-1/2 break-words leading-tight">
+                        {d.name.split(' ')[0]}<br/>{d.name.split(' ')[1]}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
               <p className="text-xs text-center text-slate-400 mt-6 pt-4 font-medium italic">
                 * Persentase diambil dari jumlah santri yang melanggar dan berstatus "Sudah Tabayun/Pelanggar", dibandingkan dengan total santri aktif saat ini.
               </p>
+              
+              <div className="mt-16 pt-8 border-t border-slate-100">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-500" />
+                  Top 10 Jasus Teraktif (Laporan Valid)
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {statsData.topJasus && statsData.topJasus.length > 0 ? statsData.topJasus.map((jasus: any, idx: number) => (
+                    <div key={idx} className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center justify-between hover:border-amber-200 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${idx === 0 ? 'bg-amber-100 text-amber-600 ring-2 ring-amber-300 ring-offset-1' : idx === 1 ? 'bg-slate-200 text-slate-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-white border text-slate-400'}`}>
+                          #{idx + 1}
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm line-clamp-1">{jasus.nama}</p>
+                          <p className="text-[10px] text-gray-500 line-clamp-1">{jasus.sakan}</p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <p className="text-lg font-black text-[var(--color-primary)]">{jasus.score}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Valid</p>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="col-span-full py-8 text-sm font-bold text-slate-400 text-center">Belum ada jasus dengan laporan teguran yang valid sejauh ini.</div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -21,6 +21,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get("status") || "MENUNGGU"; // MENUNGGU | SELESAI | ALL
+  const q = searchParams.get("q") || "";
 
   try {
     const whereClause: any = {};
@@ -28,11 +29,27 @@ export async function GET(request: Request) {
       whereClause.status = statusFilter;
     }
 
+    if (q) {
+      whereClause.pelanggarList = {
+        some: {
+          santri: {
+            nama: { contains: q, mode: 'insensitive' }
+          }
+        }
+      };
+    }
+
     const laporanList = await prisma.laporanMukholif.findMany({
       where: whereClause,
       include: {
         pelanggarList: {
-          select: { id: true, statusTabayun: true, jumlahTidakHadir: true, tabayunAt: true }
+          select: { 
+            id: true, 
+            statusTabayun: true, 
+            jumlahTidakHadir: true, 
+            tabayunAt: true,
+            santri: { select: { nama: true } }
+          }
         },
         jasus: {
           select: {

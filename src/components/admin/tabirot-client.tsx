@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
-import { Plus, Users, MapPin, Calendar, X } from "lucide-react";
+import { Plus, Users, MapPin, Calendar, X, Edit, Trash2 } from "lucide-react";
 
 type Kelompok = {
   id: string;
@@ -21,6 +21,11 @@ export function TabirotClient({ canEdit }: { canEdit: boolean }) {
   const [tempat, setTempat] = useState("");
   const [bulanKe, setBulanKe] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [showEditLokasiModal, setShowEditLokasiModal] = useState(false);
+  const [showDeleteLokasiModal, setShowDeleteLokasiModal] = useState(false);
+  const [targetLokasi, setTargetLokasi] = useState("");
+  const [newLokasiName, setNewLokasiName] = useState("");
 
   const fetchKelompok = async () => {
     setIsLoading(true);
@@ -69,6 +74,51 @@ export function TabirotClient({ canEdit }: { canEdit: boolean }) {
     }
   };
 
+  const handleEditLokasi = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/absensi/tabirot/lokasi", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ oldTempat: targetLokasi, newTempat: newLokasiName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Nama lokasi berhasil diubah");
+        setShowEditLokasiModal(false);
+        fetchKelompok();
+      } else {
+        toast.error(data.error || "Gagal mengubah lokasi");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteLokasi = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/absensi/tabirot/lokasi?tempat=${encodeURIComponent(targetLokasi)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Lokasi berhasil dihapus");
+        setShowDeleteLokasiModal(false);
+        fetchKelompok();
+      } else {
+        toast.error(data.error || "Gagal menghapus lokasi");
+      }
+    } catch {
+      toast.error("Terjadi kesalahan sistem");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Kelompokkan berdasarkan tempat agar tampilannya lebih rapi
   const groupedList = kelompokList.reduce<Record<string, Kelompok[]>>((acc, k) => {
     if (!acc[k.tempat]) acc[k.tempat] = [];
@@ -105,9 +155,36 @@ export function TabirotClient({ canEdit }: { canEdit: boolean }) {
         <div className="space-y-8">
           {sortedTempat.map(tempatKey => (
             <div key={tempatKey} className="space-y-4">
-              <h3 className="text-lg font-bold text-[var(--color-text)] flex items-center gap-2 border-b border-[var(--color-surface-dark)] pb-2">
-                <MapPin size={20} className="text-pink-600" />
-                {tempatKey}
+              <h3 className="text-lg font-bold text-[var(--color-text)] flex items-center justify-between border-b border-[var(--color-surface-dark)] pb-2">
+                <div className="flex items-center gap-2">
+                  <MapPin size={20} className="text-pink-600" />
+                  {tempatKey}
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setTargetLokasi(tempatKey);
+                        setNewLokasiName(tempatKey);
+                        setShowEditLokasiModal(true);
+                      }}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"
+                      title="Edit Lokasi"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setTargetLokasi(tempatKey);
+                        setShowDeleteLokasiModal(true);
+                      }}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition"
+                      title="Hapus Lokasi"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
               </h3>
               <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {groupedList[tempatKey].sort((a,b) => a.bulanKe - b.bulanKe).map((k) => (
@@ -194,6 +271,90 @@ export function TabirotClient({ canEdit }: { canEdit: boolean }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Lokasi */}
+      {showEditLokasiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-[var(--radius-2xl)] shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-[var(--color-surface-dark)]">
+              <h3 className="text-lg font-bold text-[var(--color-text)]">Edit Nama Lokasi</h3>
+              <button 
+                onClick={() => setShowEditLokasiModal(false)}
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditLokasi} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">Nama Lokasi Baru</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Contoh: Qoah Baharun"
+                  value={newLokasiName}
+                  onChange={(e) => setNewLokasiName(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--color-surface-dark)] bg-[var(--color-surface-light)] px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:bg-white"
+                />
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-[var(--color-surface-dark)]">
+                <button
+                  type="button"
+                  onClick={() => setShowEditLokasiModal(false)}
+                  className="px-5 py-2 text-sm font-bold text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] rounded-full transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !newLokasiName || newLokasiName === targetLokasi}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-full transition disabled:opacity-50"
+                >
+                  {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Hapus Lokasi */}
+      {showDeleteLokasiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-white rounded-[var(--radius-2xl)] shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-[var(--color-surface-dark)]">
+              <h3 className="text-lg font-bold text-red-600">Hapus Lokasi</h3>
+              <button 
+                onClick={() => setShowDeleteLokasiModal(false)}
+                className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="p-4 bg-red-50 text-red-700 rounded-xl border border-red-100/50 text-sm">
+                Apakah Anda yakin ingin menghapus lokasi <strong className="font-bold">{targetLokasi}</strong>? Tindakan ini akan menghapus semua kelompok yang berada di lokasi ini beserta data di dalamnya secara permanen.
+              </div>
+              <div className="pt-4 flex justify-end gap-3 border-t border-[var(--color-surface-dark)]">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteLokasiModal(false)}
+                  className="px-5 py-2 text-sm font-bold text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] rounded-full transition"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteLokasi}
+                  disabled={isSubmitting}
+                  className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-full transition disabled:opacity-50"
+                >
+                  {isSubmitting ? "Menghapus..." : "Ya, Hapus"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

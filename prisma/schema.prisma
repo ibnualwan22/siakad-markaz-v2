@@ -98,6 +98,8 @@ model SantriInternal {
   beritaAcaraList       BeritaAcara[]
   anggotaTabirotList    AnggotaTabirot[]
   absenTabirotList      AbsenTabirot[]
+  laporanJasusList      LaporanMukholif[]  @relation("JasusLaporan")
+  pelanggarMukholifList PelanggarMukholif[] @relation("PelanggarMukholif")
 }
 
 model Dufah {
@@ -910,4 +912,45 @@ model SyahadahCacRecord {
   createdAt    DateTime      @default(now())
   
   riwayat      RiwayatSantri @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
+}
+
+// ===== PELANGGARAN KEBAHASAAN (MUKHOLIF LUGHOH) =====
+
+model LaporanMukholif {
+  id                   String   @id @default(cuid())
+  waktuMelanggar       DateTime               
+  tempatMelanggar      String                  
+  perkataanYgDiucapkan String              
+  fotoBuktiUrl         String?                
+  fotoBuktiPublicId    String?                
+  jasusId              String                 
+  jasusNama            String                 
+  status               String   @default("MENUNGGU") 
+  createdAt            DateTime @default(now()) 
+  
+  jasus                SantriInternal      @relation("JasusLaporan", fields: [jasusId], references: [id], onDelete: Cascade)
+  pelanggarList        PelanggarMukholif[]
+}
+
+model PelanggarMukholif {
+  id                String   @id @default(cuid())
+  laporanId         String
+  santriId          String
+  santriNama        String                 
+  santriKelas       String?                
+  santriAsrama      String?                
+  
+  statusTabayun     String?       // null | PELANGGAR | BUKAN_PELANGGAR | TIDAK_HADIR
+  jumlahTidakHadir  Int      @default(0)  
+  
+  iqobSounding      Boolean  @default(false)
+  iqobJawal         Boolean  @default(false)
+  iqobPenyetoran    Boolean  @default(false)
+  
+  tabayunAt         DateTime?              
+  
+  laporan           LaporanMukholif @relation(fields: [laporanId], references: [id], onDelete: Cascade)
+  santri            SantriInternal  @relation("PelanggarMukholif", fields: [santriId], references: [id], onDelete: Cascade)
+  
+  @@unique([laporanId, santriId])
 }

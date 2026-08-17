@@ -100,6 +100,12 @@ const navigationGroups = [
       { href: "/admin/manajemen-konten/agenda", label: "Agenda Rutinan", icon: CalendarDays, permissionId: "agenda_rutinan" },
       { href: "/admin/manajemen-konten/instagram", label: "Konten Instagram", icon: Instagram, permissionId: "konten_instagram" },
     ]
+  },
+  {
+    title: "Divisi Kebahasaan",
+    items: [
+      { href: "/admin/mukholif", label: "Tabayun Mukholif", icon: AlertTriangle, permissionId: "mukholif_lughoh" },
+    ]
   }
 ];
 

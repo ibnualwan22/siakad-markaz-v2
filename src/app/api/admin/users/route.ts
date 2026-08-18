@@ -57,6 +57,13 @@ export async function POST(request: Request) {
 
     const passwordHash = await hashPassword(password);
 
+    if (kelasId) {
+      await prisma.user.updateMany({
+        where: { kelasId },
+        data: { kelasId: null }
+      });
+    }
+
     const newUser = await prisma.user.create({
       data: {
         nama,

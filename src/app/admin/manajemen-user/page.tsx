@@ -322,6 +322,9 @@ export default function ManajemenUserPage() {
     return hasAccess;
   };
 
+  const existingUserForClass = formData.kelasId ? users.find(u => u.kelasId === formData.kelasId && u.id !== formData.id) : null;
+  const selectedKelas = formData.kelasId ? kelasList.find(k => k.id === formData.kelasId) : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -568,6 +571,13 @@ export default function ManajemenUserPage() {
                       <option key={k.id} value={k.id}>{k.nama}</option>
                     ))}
                   </select>
+                  {existingUserForClass && selectedKelas && (
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-xs text-amber-800">
+                        <span className="font-bold">Catatan:</span> Kelas <strong>{selectedKelas.nama}</strong> saat ini sudah terhubung dengan <strong>{existingUserForClass.nama}</strong>. Jika Anda menyimpan, maka user tersebut akan ditimpa.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 

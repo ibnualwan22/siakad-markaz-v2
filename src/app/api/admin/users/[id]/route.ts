@@ -31,6 +31,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       dataToUpdate.passwordHash = await hashPassword(password);
     }
 
+    if (kelasId) {
+      await prisma.user.updateMany({
+        where: { kelasId, id: { not: id } },
+        data: { kelasId: null }
+      });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id },
       data: dataToUpdate,

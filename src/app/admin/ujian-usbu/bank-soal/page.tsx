@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2, Eye, X, ChevronLeft, ChevronRight, Grid3X3, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
@@ -68,6 +68,30 @@ const TIPE_SOAL_MAP: Record<string, string> = {
   JARING_RELASI: "Jaring Relasi Kata"
 };
 
+function EditorDiv({ value, onChange, dir, className, id }: any) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    // Only set innerHTML if it's strictly different from external value (prevents cursor jumping)
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, [value]);
+
+  return (
+    <div
+      id={id}
+      ref={editorRef}
+      contentEditable
+      dir={dir}
+      className={className}
+      onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
+      onBlur={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
+      suppressContentEditableWarning
+    />
+  );
+}
+
 export default function BankSoalPage() {
   const [programList, setProgramList] = useState<any[]>([]);
   const [selectedProgram, setSelectedProgram] = useState("");
@@ -106,6 +130,7 @@ export default function BankSoalPage() {
   // Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [manualDir, setManualDir] = useState<'rtl'|'ltr'|'auto'|null>(null);
   const [formData, setFormData] = useState<any>({
     id: "",
     tipeSoal: "PG",
@@ -269,6 +294,7 @@ export default function BankSoalPage() {
         { id: `opt-${Date.now()}-4`, teks: "", gambarUrl: "", isCorrect: false }
       ]
     });
+    setManualDir(null);
     setIsEditing(false);
     setIsModalOpen(true);
   };
@@ -290,6 +316,7 @@ export default function BankSoalPage() {
         j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
       )
     });
+    setManualDir(null);
     setIsEditing(true);
     setIsModalOpen(true);
   };
@@ -750,9 +777,9 @@ export default function BankSoalPage() {
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                                     {(soal.dataTambahan.lefts || []).map((l: string, i: number) => (
                                       <div key={i} className="flex bg-white rounded border border-orange-100">
-                                        <div className="flex-1 p-2 border-r border-orange-100 break-words" dir={detectTextDirection(l)}>{l}</div>
+                                        <div className="flex-1 p-2 border-r border-orange-100 break-words" dir="auto">{l}</div>
                                         <div className="w-8 shrink-0 flex items-center justify-center bg-orange-100 text-orange-600 font-bold">↔</div>
-                                        <div className="flex-1 p-2 break-words" dir={detectTextDirection(soal.dataTambahan.rights?.[i] || "")}>{soal.dataTambahan.rights?.[i] || ""}</div>
+                                        <div className="flex-1 p-2 break-words" dir="auto">{soal.dataTambahan.rights?.[i] || ""}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -764,7 +791,7 @@ export default function BankSoalPage() {
                                   <h4 className="text-xs font-bold text-indigo-800 mb-2 uppercase tracking-wider block">Kunci Urutan:</h4>
                                   <ol className="list-decimal list-inside space-y-1">
                                     {(soal.dataTambahan.items || []).map((item: string, i: number) => (
-                                      <li key={i} className="text-sm bg-white p-2 border border-indigo-100 rounded shadow-sm break-words" dir={detectTextDirection(item)}>
+                                      <li key={i} className="text-sm bg-white p-2 border border-indigo-100 rounded shadow-sm break-words" dir="auto">
                                         {item}
                                       </li>
                                     ))}
@@ -795,7 +822,7 @@ export default function BankSoalPage() {
                                     {(soal.dataTambahan.items || []).map((item: any, i: number) => (
                                       <div key={i} className="flex flex-col border border-cyan-200 rounded bg-white overflow-hidden shadow-sm">
                                         <span className="bg-cyan-100 text-cyan-800 text-[9px] font-bold px-2 py-0.5 text-center">{item.category}</span>
-                                        <span className="p-2 text-sm text-center font-medium break-words" dir={detectTextDirection(item.text)}>{item.text}</span>
+                                        <span className="p-2 text-sm text-center font-medium break-words" dir="auto">{item.text}</span>
                                       </div>
                                     ))}
                                   </div>
@@ -1063,6 +1090,10 @@ export default function BankSoalPage() {
                       disabled={!!isUploadingImg}
                     />
                   </label>
+                  <label className="text-[10px] sm:text-xs text-gray-400 mr-auto self-center bg-gray-50 px-2 py-1 rounded font-medium">Bisa Upload Foto</label>
+                  <button type="button" title="Ganti Arah Teks (RTL/LTR)" onClick={() => setManualDir(prev => prev === 'rtl' ? 'ltr' : (prev === 'ltr' ? 'auto' : 'rtl'))} className="w-auto px-2 h-8 flex items-center justify-center rounded-lg hover:bg-white hover:shadow-sm transition-all text-blue-600 hover:text-blue-700 bg-blue-50 font-bold ml-auto font-mono text-xs gap-1 border border-blue-100">
+                    {manualDir === 'rtl' ? 'عر' : (manualDir === 'ltr' ? 'AB' : 'Auto')}
+                  </button>
                 </div>
                 {formData.gambarUrl && (
                   <div className="mb-4 relative w-fit">
@@ -1077,15 +1108,18 @@ export default function BankSoalPage() {
                     </button>
                   </div>
                 )}
-                <div
-                  contentEditable
-                  id="pertanyaan-editor"
-                  dir={detectTextDirection(formData.pertanyaan || "")}
-                  onInput={(e) => setFormData({ ...formData, pertanyaan: (e.target as HTMLDivElement).innerHTML })}
-                  className={`neu-input w-full p-4 text-base focus:border-[var(--color-primary)] focus:bg-white resize-y bg-white border border-gray-200 rounded-xl outline-none min-h-[100px] whitespace-pre-wrap ${detectTextDirection(formData.pertanyaan || "") === 'rtl' ? 'font-serif text-right text-xl' : ''}`}
-                  dangerouslySetInnerHTML={{ __html: formData.pertanyaan }}
-                  suppressContentEditableWarning
-                />
+                {(() => {
+                  const resolvedDir = manualDir || detectTextDirection(formData.pertanyaan || "");
+                  return (
+                    <EditorDiv
+                      id="pertanyaan-editor"
+                      value={formData.pertanyaan}
+                      onChange={(html: string) => setFormData((f:any) => ({...f, pertanyaan: html}))}
+                      dir={resolvedDir}
+                      className={`neu-input w-full p-4 text-base focus:border-[var(--color-primary)] focus:bg-white resize-y bg-white border border-gray-200 rounded-xl outline-none min-h-[100px] whitespace-pre-wrap ${resolvedDir === 'rtl' ? 'font-serif text-right text-xl' : 'text-left'}`}
+                    />
+                  );
+                })()}
               </div>
 
               {(() => {
@@ -1120,10 +1154,10 @@ export default function BankSoalPage() {
                   <label className="text-sm font-bold text-blue-800 block mb-2">Kunci Jawaban (Referensi Guru & AI)</label>
                   <textarea
                     value={formData.kunciJawaban || ""}
-                    dir={detectTextDirection(formData.kunciJawaban || "")}
+                    dir="auto"
                     onChange={e => setFormData({ ...formData, kunciJawaban: e.target.value })}
                     placeholder="Masukkan kunci jawaban yang benar..."
-                    className={`neu-input w-full p-3 text-sm focus:border-[var(--color-primary)] min-h-[100px] ${detectTextDirection(formData.kunciJawaban || "") === 'rtl' ? 'font-serif text-right text-lg' : ''}`}
+                    className={`neu-input w-full p-3 text-sm focus:border-[var(--color-primary)] min-h-[100px] font-serif`}
                   />
                   {formData.tipeSoal === "ESSAY_PANJANG" && (
                     <p className="text-xs text-blue-600 mt-2 font-medium">⚠️ Kunci jawaban ini akan digunakan oleh AI untuk mengoreksi jawaban santri secara otomatis.</p>
@@ -1168,13 +1202,13 @@ export default function BankSoalPage() {
                                   type="text"
                                   required={j.isCorrect || i < 2}
                                   value={j.teks}
-                                  dir={detectTextDirection(j.teks || "")}
+                                  dir="auto"
                                   onChange={e => {
                                     const newJawaban = [...formData.jawabanList];
                                     newJawaban[i].teks = e.target.value;
                                     setFormData({ ...formData, jawabanList: newJawaban });
                                   }}
-                                  className={`flex-1 bg-transparent border-0 border-b border-transparent focus:border-[var(--color-primary)] focus:ring-0 px-2 py-2 text-sm transition-colors ${detectTextDirection(j.teks || "") === 'rtl' ? 'font-serif text-right font-medium' : 'font-medium'}`}
+                                  className={`flex-1 bg-transparent border-0 border-b border-transparent focus:border-[var(--color-primary)] focus:ring-0 px-2 py-2 text-sm transition-colors font-serif`}
                                   placeholder={`Ketik opsi ${String.fromCharCode(65 + i)}...`}
                                 />
                                 <label className="p-2 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-all text-gray-500 hover:text-blue-600 cursor-pointer" title="Upload Gambar Opsi">
@@ -1242,7 +1276,7 @@ export default function BankSoalPage() {
                             <input
                               type="text"
                               value={lefts[idx] || ""}
-                              dir={detectTextDirection(lefts[idx] || "")}
+                              dir="auto"
                               onChange={e => {
                                 const newLefts = [...lefts];
                                 newLefts[idx] = e.target.value;
@@ -1254,7 +1288,7 @@ export default function BankSoalPage() {
                             <input
                               type="text"
                               value={rights[idx] || ""}
-                              dir={detectTextDirection(rights[idx] || "")}
+                              dir="auto"
                               onChange={e => {
                                 const newRights = [...rights];
                                 newRights[idx] = e.target.value;
@@ -1304,7 +1338,7 @@ export default function BankSoalPage() {
                             <input
                               type="text"
                               value={item}
-                              dir={detectTextDirection(item)}
+                              dir="auto"
                               onChange={e => {
                                 const newItems = [...items];
                                 newItems[idx] = e.target.value;
@@ -1445,7 +1479,7 @@ export default function BankSoalPage() {
                                 <input
                                   type="text"
                                   value={item.text}
-                                  dir={detectTextDirection(item.text)}
+                                  dir="auto"
                                   onChange={e => {
                                     const newItems = [...items];
                                     newItems[idx].text = e.target.value;
@@ -1505,9 +1539,9 @@ export default function BankSoalPage() {
                         <p className="text-xs text-purple-600 mb-2 font-medium">Gunakan tag <code className="bg-white font-mono px-1 rounded">{"{{1}}"}</code>, <code className="bg-white font-mono px-1 rounded">{"{{2}}"}</code>, dst untuk merepresentasikan titik-titik rumpang.</p>
                         <textarea
                           value={paragraf}
-                          dir={detectTextDirection(paragraf)}
+                          dir="auto"
                           onChange={e => setFormData({ ...formData, dataTambahan: { ...dt, paragraf: e.target.value } })}
-                          className={`w-full p-4 border border-purple-200 rounded-xl bg-white focus:ring-2 focus:outline-none min-h-[120px] ${detectTextDirection(paragraf) === 'rtl' ? 'font-serif text-right text-lg' : ''}`}
+                          className={`w-full p-4 border border-purple-200 rounded-xl bg-white focus:ring-2 focus:outline-none min-h-[120px] font-serif`}
                           placeholder="Contoh: Rukun iman berjumlah {{1}} perkara, sedangkan sholat masuk dalam rukun {{2}}."
                         />
 
@@ -1517,7 +1551,7 @@ export default function BankSoalPage() {
                         {blanks.map((b, i) => (
                           <div key={i} className="flex flex-wrap items-center gap-2 p-2 bg-white rounded-lg border border-purple-100 shadow-sm">
                             <div className="bg-purple-100 text-purple-800 font-bold px-3 py-2 rounded-lg">{`{{${b.index}}}`}</div>
-                            <input type="text" value={b.jawaban} dir={detectTextDirection(b.jawaban)} onChange={e => {
+                            <input type="text" value={b.jawaban} dir="auto" onChange={e => {
                               const nb = [...blanks];
                               nb[i].jawaban = e.target.value;
                               setFormData({ ...formData, dataTambahan: { ...dt, blanks: nb } });
@@ -2293,7 +2327,7 @@ export default function BankSoalPage() {
                           {soal.opsiList.map((j: any, i: number) => (
                             <div key={j.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 ${j.isCorrect ? 'border-green-500 bg-white ring-2 ring-green-100' : 'border-gray-100 bg-gray-50/50 opacity-50'}`}>
                               <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-sm ${j.isCorrect ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 text-gray-400 bg-white'}`}>{String.fromCharCode(65 + i)}</div>
-                              <div className="flex-1 font-medium text-gray-700" dangerouslySetInnerHTML={{ __html: j.teks }} dir={detectTextDirection(j.teks)}></div>
+                              <div className="flex-1 font-medium text-gray-700 font-serif" dangerouslySetInnerHTML={{ __html: j.teks }} dir="auto"></div>
                               {j.isCorrect && <CheckCircle2 size={20} className="text-green-500" />}
                             </div>
                           ))}

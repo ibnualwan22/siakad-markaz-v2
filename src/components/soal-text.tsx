@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { processArabicHtml } from "@/lib/arabic-utils";
+import { detectTextDirection } from "@/lib/text-direction";
 
 interface SoalTextProps {
   html: string;
@@ -44,13 +45,15 @@ export default function SoalText({ html, className = "", style }: SoalTextProps)
   }, [html]);
 
   // Determine direction
-  // - Pure Arabic: rtl
-  // - Pure Latin/Indo: ltr
-  // - Mixed: auto (let browser bidi algorithm + our span wrappers handle it)
-  const dir = isMixed ? "auto" : (isArabic ? "rtl" : "ltr");
+  // Using native "auto" fails because processArabicHtml wraps segments in <span dir="...">,
+  // and HTML5 dir="auto" skips text inside isolated elements. 
+  // We must compute it using our own first-strong-character logic on the raw string.
+  const dir = detectTextDirection(html || "");
 
   // Determine alignment
-  const alignClass = isArabic && !isMixed ? "text-right" : "";
+  // We no longer hardcode "text-right" because dir="rtl"/"ltr" naturally aligns to the start 
+  // (right for RTL, left for LTR).
+  const alignClass = "";
 
   // Arabic-specific font styling (only for pure Arabic; mixed content uses inline spans)
   const arabicStyle = isArabic && !isMixed 

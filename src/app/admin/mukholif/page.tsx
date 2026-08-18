@@ -23,7 +23,7 @@ type Laporan = {
   waktuMelanggar: string;
   tempatMelanggar: string;
   perkataanYgDiucapkan: string;
-  fotoBuktiUrl: string | null;
+  detailKejadian: string | null;
   jasusNama: string;
   jasus?: {
     sakan: string | null;
@@ -320,7 +320,7 @@ export default function TabayunMukholifPage() {
                             <div className="space-y-2 mt-4 ml-2">
                               <p className="text-xs text-gray-600 flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-gray-400 shrink-0" /> 
-                                {new Date(laporan.waktuMelanggar).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                                {new Date(laporan.waktuMelanggar).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', hour12: false })}
                               </p>
                               <p className="text-xs text-gray-600 flex items-center gap-2">
                                 <MapPin className="w-4 h-4 text-gray-400 shrink-0" /> {laporan.tempatMelanggar}
@@ -406,7 +406,7 @@ export default function TabayunMukholifPage() {
                         <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1">Waktu Kejadian</p>
                         <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                           <Clock className="w-4 h-4 text-emerald-500" />
-                          {new Date(selectedLaporan.waktuMelanggar).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                          {new Date(selectedLaporan.waktuMelanggar).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', hour12: false })}
                         </p>
                       </div>
                       <div>
@@ -419,22 +419,19 @@ export default function TabayunMukholifPage() {
                     </div>
                  </div>
                  
-                 <div className="md:col-span-4 flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-slate-200 pt-4 md:pt-0 pl-0 md:pl-6">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 w-full text-center md:text-left">Foto Bukti</p>
-                    {selectedLaporan.fotoBuktiUrl ? (
-                      <a href={selectedLaporan.fotoBuktiUrl} target="_blank" rel="noopener noreferrer" className="block relative w-full h-32 bg-white rounded-xl border border-slate-200 overflow-hidden group">
-                        <img src={selectedLaporan.fotoBuktiUrl} alt="Bukti" className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs font-bold gap-1">
-                          <ImageIcon size={20} />
-                          Klik untuk perbesar
-                        </div>
-                      </a>
-                    ) : (
-                      <div className="w-full h-32 bg-slate-100 rounded-xl border border-slate-200 border-dashed flex flex-col items-center justify-center text-gray-400 text-xs font-medium">
-                        <ImageIcon size={24} className="mb-2 opacity-50" />
-                        Tidak ada foto
-                      </div>
-                    )}
+                 <div className="md:col-span-4 flex flex-col items-start justify-start border-t md:border-t-0 md:border-l border-slate-200 pt-4 md:pt-0 pl-0 md:pl-6">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2 w-full text-left">Detail Keterangan Kejadian</p>
+                    <div className="p-3 bg-white rounded-xl border border-slate-100 shadow-sm w-full min-h-[100px]">
+                      {selectedLaporan.detailKejadian ? (
+                        <p className="text-sm font-medium text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {selectedLaporan.detailKejadian}
+                        </p>
+                      ) : (
+                        <p className="text-sm font-medium text-gray-400 italic">
+                          Tidak ada keterangan tambahan.
+                        </p>
+                      )}
+                    </div>
                  </div>
               </div>
 

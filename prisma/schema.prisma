@@ -101,6 +101,7 @@ model SantriInternal {
   laporanJasusList      LaporanMukholif[]  @relation("JasusLaporan")
   pelanggarMukholifList PelanggarMukholif[] @relation("PelanggarMukholif")
   anggotaLajnahList     AnggotaLajnah[]
+  anggotaJasusList      AnggotaJasus[]
 }
 
 model Dufah {
@@ -123,6 +124,7 @@ model Dufah {
   sesiTauziList  SesiTauzi[]
   sesiUjianGlobalList SesiUjianGlobal[]
   anggotaLajnahList AnggotaLajnah[]
+  anggotaJasusList  AnggotaJasus[]
 }
 
 model RiwayatSantri {
@@ -923,8 +925,7 @@ model LaporanMukholif {
   waktuMelanggar       DateTime               
   tempatMelanggar      String                  
   perkataanYgDiucapkan String              
-  fotoBuktiUrl         String?                
-  fotoBuktiPublicId    String?                
+  detailKejadian       String?                
   jasusId              String                 
   jasusNama            String                 
   status               String   @default("MENUNGGU") 
@@ -969,6 +970,18 @@ model PelanggarMukholif {
 }
 
 model AnggotaLajnah {
+  id         String         @id @default(cuid())
+  santriId   String
+  dufahNama  String
+  createdAt  DateTime       @default(now())
+
+  santri     SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  dufah      Dufah          @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+
+  @@unique([santriId, dufahNama])
+}
+
+model AnggotaJasus {
   id         String         @id @default(cuid())
   santriId   String
   dufahNama  String

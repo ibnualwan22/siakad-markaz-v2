@@ -30,7 +30,6 @@ const baseNavItems = [
   { href: "/santri/absensi", label: "Absensi", icon: CalendarCheck },
   { href: "/santri/riwayat", label: "Riwayat", icon: Clock },
   { href: "/santri/perizinan", label: "Perizinan", icon: Shield },
-  { href: "/santri/mukholif", label: "Lapor Mukholif", icon: AlertTriangle },
   { href: "/santri/daftar-ulang", label: "Daftar Ulang", icon: RefreshCw },
   { href: "/santri/checkout", label: "Check Out", icon: DoorOpen },
 ];
@@ -39,12 +38,14 @@ export function SantriSidebar({
   nama,
   isAktif,
   isKetuaKelas,
-  isLajnah
+  isLajnah,
+  isJasus
 }: {
   nama: string;
   isAktif: boolean;
   isKetuaKelas?: boolean;
   isLajnah?: boolean;
+  isJasus?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -53,7 +54,11 @@ export function SantriSidebar({
 
   let navItems = isKetuaKelas 
     ? [...baseNavItems, { href: "/santri/berita-acara", label: "Berita Acara", icon: ClipboardCheck }]
-    : baseNavItems;
+    : [...baseNavItems];
+
+  if (isJasus || isLajnah) {
+    navItems = [...navItems, { href: "/santri/mukholif", label: "Lapor Mukholif", icon: AlertTriangle }];
+  }
 
   if (isLajnah) {
     navItems = [...navItems, { href: "/santri/eksekusi-mukholif", label: "Eksekusi Iqob", icon: Shield }];

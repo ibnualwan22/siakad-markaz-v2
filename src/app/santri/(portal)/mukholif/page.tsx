@@ -28,10 +28,12 @@ export default function MukholifSantriPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
-  const [waktuMelanggar, setWaktuMelanggar] = useState("");
+  const [tanggalKejadian, setTanggalKejadian] = useState("");
+  const [jamKejadian, setJamKejadian] = useState("12");
+  const [menitKejadian, setMenitKejadian] = useState("00");
   const [tempatMelanggar, setTempatMelanggar] = useState("");
   const [perkataan, setPerkataan] = useState("");
-  const [fotoBukti, setFotoBukti] = useState<string | null>(null);
+  const [detailKejadian, setDetailKejadian] = useState("");
   
   // Autocomplete State
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,27 +99,17 @@ export default function MukholifSantriPage() {
     setSearchResults([]);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error("Ukuran foto maksimal 2MB");
-        return;
-      }
-      const reader = newFileReader();
-      reader.onloadend = () => {
-        setFotoBukti(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
-  const newFileReader = () => new FileReader();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedPelanggar.length === 0) {
       toast.error("Pilih minimal 1 nama pelanggar");
+      return;
+    }
+    
+    if (!tanggalKejadian || !jamKejadian || !menitKejadian) {
+      toast.error("Waktu kejadian wajib diisi lengkap");
       return;
     }
     
@@ -127,10 +119,10 @@ export default function MukholifSantriPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          waktuMelanggar: new Date(waktuMelanggar).toISOString(),
+          waktuMelanggar: new Date(`${tanggalKejadian}T${jamKejadian}:${menitKejadian}:00`).toISOString(),
           tempatMelanggar,
           perkataanYgDiucapkan: perkataan,
-          fotoBuktiUrl: fotoBukti,
+          detailKejadian,
           pelanggarIds: selectedPelanggar.map(p => p.id)
         })
       });
@@ -141,10 +133,12 @@ export default function MukholifSantriPage() {
       toast.success("Laporan berhasil dibuat");
       
       // Reset form
-      setWaktuMelanggar("");
+      setTanggalKejadian("");
+      setJamKejadian("12");
+      setMenitKejadian("00");
       setTempatMelanggar("");
       setPerkataan("");
-      setFotoBukti(null);
+      setDetailKejadian("");
       setSelectedPelanggar([]);
       
       fetchLaporan();
@@ -167,7 +161,7 @@ export default function MukholifSantriPage() {
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="neu-button flex items-center gap-2 px-4 py-2 font-bold text-sm bg-[var(--color-primary)] text-white rounded-xl shadow-lg shadow-emerald-500/30 hover:scale-105 active:scale-95 transition-all"
+          className="flex items-center gap-2 px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 hover:scale-105 hover:bg-emerald-700 active:scale-95 transition-all"
         >
           {showForm ? <X size={18} /> : <Plus size={18} />}
           <span className="hidden sm:inline">{showForm ? "Tutup Form" : "Buat Laporan Baru"}</span>
@@ -239,17 +233,41 @@ export default function MukholifSantriPage() {
               {/* Waktu */}
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">Tanggal & Waktu Kejadian *</label>
-                <div className="relative">
+                <div className="flex gap-2 relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Calendar size={18} className="text-gray-400" />
                   </div>
                   <input
-                    type="datetime-local"
+                    type="date"
                     required
-                    value={waktuMelanggar}
-                    onChange={e => setWaktuMelanggar(e.target.value)}
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent outline-none text-sm font-medium text-slate-700"
+                    value={tanggalKejadian}
+                    onChange={e => setTanggalKejadian(e.target.value)}
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none text-sm font-medium text-slate-700"
                   />
+                  
+                  <div className="flex items-center gap-1 shrink-0">
+                    <select
+                      value={jamKejadian}
+                      onChange={e => setJamKejadian(e.target.value)}
+                      className="w-[70px] px-2 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-center appearance-none bg-slate-50 cursor-pointer text-slate-700"
+                      title="Jam"
+                    >
+                      {Array.from({length: 24}).map((_, i) => (
+                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <span className="font-bold text-slate-400">:</span>
+                    <select
+                      value={menitKejadian}
+                      onChange={e => setMenitKejadian(e.target.value)}
+                      className="w-[70px] px-2 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-bold text-center appearance-none bg-slate-50 cursor-pointer text-slate-700"
+                      title="Menit"
+                    >
+                      {Array.from({length: 60}).map((_, i) => (
+                        <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -290,25 +308,22 @@ export default function MukholifSantriPage() {
               </div>
             </div>
 
-            {/* Foto Bukti */}
+            {/* Detail Kejadian */}
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Foto Barang Bukti / Kondisi (Opsional)</label>
-              <label className="flex items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-xl appearance-none cursor-pointer hover:border-gray-400 focus:outline-none">
-                {fotoBukti ? (
-                  <div className="relative w-full h-full flex justify-center items-center">
-                    <img src={fotoBukti} alt="Preview" className="h-full object-contain rounded-lg" />
-                    <div className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-lg shadow-sm backdrop-blur-sm text-xs font-bold text-slate-700">Preview</div>
-                  </div>
-                ) : (
-                  <span className="flex items-center space-x-2">
-                    <Upload className="w-6 h-6 text-gray-400" />
-                    <span className="font-medium text-gray-500 text-sm">
-                      Tap untuk upload foto
-                    </span>
-                  </span>
-                )}
-                <input type="file" name="file_upload" className="hidden" accept="image/*" onChange={handleFileChange} />
-              </label>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Detail Keterangan Kejadian</label>
+              <div className="relative">
+                <div className="absolute top-3.5 left-4 pointer-events-none">
+                  <FileText size={18} className="text-gray-400" />
+                </div>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Ceritakan detail kejadian secara kronologis..."
+                  value={detailKejadian}
+                  onChange={e => setDetailKejadian(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none text-sm placeholder-gray-300 resize-none"
+                />
+              </div>
             </div>
 
             <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
@@ -322,7 +337,7 @@ export default function MukholifSantriPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm bg-[var(--color-primary)] text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />

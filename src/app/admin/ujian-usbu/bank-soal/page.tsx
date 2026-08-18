@@ -61,7 +61,7 @@ const TIPE_SOAL_MAP: Record<string, string> = {
   DRAG_KATEGORI: "Drag & Drop Kategori",
   PARAGRAF_RUMPANG: "Paragraf Rumpang",
   IDENTIFIKASI_KESALAHAN: "Identifikasi Kesalahan",
-  TABEL_TASRIF: "Tabel Tasrif",
+  TABEL_TASRIF: "Tabel Matrix",
   SUSUN_HURUF: "Susun Huruf",
   DRAG_TO_BLANK: "Drag to Blank",
   STABILO_SYNTAX: "Stabilo Syntax / I'rab",
@@ -70,7 +70,7 @@ const TIPE_SOAL_MAP: Record<string, string> = {
 
 function EditorDiv({ value, onChange, dir, className, id }: any) {
   const editorRef = useRef<HTMLDivElement>(null);
-  
+
   useEffect(() => {
     // Only set innerHTML if it's strictly different from external value (prevents cursor jumping)
     if (editorRef.current && editorRef.current.innerHTML !== value) {
@@ -98,12 +98,12 @@ export default function BankSoalPage() {
   const [selectedMapel, setSelectedMapel] = useState("");
   const [selectedUsbu, setSelectedUsbu] = useState("1"); // only used for testing/legacy or defaults? Actually we'll use it for Preview default.
   // const [selectedPaketSoal, setSelectedPaketSoal] = useState("A"); removed
-  
+
   const [jenisSoalList, setJenisSoalList] = useState<any[]>([]);
   const [selectedJenisSoal, setSelectedJenisSoal] = useState("");
   const [isAddJenisModalOpen, setIsAddJenisModalOpen] = useState(false);
   const [addJenisSoalTipe, setAddJenisSoalTipe] = useState("PG");
-  
+
   // Batch Assignment State
   const [selectedSoalIds, setSelectedSoalIds] = useState<string[]>([]);
   const [mapelOptions, setMapelOptions] = useState<any[]>([]);
@@ -130,7 +130,7 @@ export default function BankSoalPage() {
   // Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [manualDir, setManualDir] = useState<'rtl'|'ltr'|'auto'|null>(null);
+  const [manualDir, setManualDir] = useState<'rtl' | 'ltr' | 'auto' | null>(null);
   const [formData, setFormData] = useState<any>({
     id: "",
     tipeSoal: "PG",
@@ -273,7 +273,7 @@ export default function BankSoalPage() {
   const handleCreateNew = () => {
     if (!selectedProgram || !selectedMapel || !selectedJenisSoal) return toast.error("Pilih Program, Mapel, dan Jenis Soal terlebih dahulu");
     const activeJenis = jenisSoalList.find(j => j.id === selectedJenisSoal);
-    const tipeToUse = activeJenis?.nama || "PG"; 
+    const tipeToUse = activeJenis?.nama || "PG";
 
     setFormData({
       id: "",
@@ -431,19 +431,19 @@ export default function BankSoalPage() {
 
   const handleToggleAssignment = async (soalId: string, usbuKe: number, isChecked: boolean) => {
     try {
-      const url = isChecked 
-        ? "/api/admin/ujian-usbu/bank-soal/assign" 
+      const url = isChecked
+        ? "/api/admin/ujian-usbu/bank-soal/assign"
         : "/api/admin/ujian-usbu/bank-soal/assign";
       const method = isChecked ? "POST" : "DELETE";
-      
+
       // Update optimistic state
       setSoalList(prev => prev.map(s => {
         if (s.id === soalId) {
           const newAssigns = [...(s.usbuAssignments || [])];
           if (isChecked) newAssigns.push({ usbuKe });
           else {
-             const idx = newAssigns.findIndex(ua => ua.usbuKe === usbuKe);
-             if (idx > -1) newAssigns.splice(idx, 1);
+            const idx = newAssigns.findIndex(ua => ua.usbuKe === usbuKe);
+            if (idx > -1) newAssigns.splice(idx, 1);
           }
           return { ...s, usbuAssignments: newAssigns };
         }
@@ -457,7 +457,7 @@ export default function BankSoalPage() {
       });
 
       if (!res.ok) throw new Error((await res.json()).error);
-    } catch(err: any) {
+    } catch (err: any) {
       toast.error(err.message || "Gagal mengubah assignment soal");
       fetchSoal(); // rollback on error
     }
@@ -526,7 +526,7 @@ export default function BankSoalPage() {
   const handleResetAssign = async () => {
     if (!selectedProgram || !selectedMapel) return toast.error("Pilih Program dan Mapel dahulu");
     if (!confirm(`Yakin ingin MENGHAPUS SEMUA penugasan soal (dari seluruh Jenis Soal pada Mapel ini) untuk Usbu' ${selectedUsbu}? Soal tidak akan dihapus, hanya checklist-nya saja yang direset.`)) return;
-    
+
     try {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal/reset-assign`, {
         method: "POST",
@@ -540,7 +540,7 @@ export default function BankSoalPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(`Berhasil mereset penugasan soal untuk Usbu' ${selectedUsbu}`);
       fetchSoal();
-    } catch(err: any) {
+    } catch (err: any) {
       toast.error(err.message || "Gagal mereset penugasan");
     }
   };
@@ -616,8 +616,8 @@ export default function BankSoalPage() {
                 <button
                   onClick={() => setSelectedJenisSoal(js.id)}
                   className={`px-5 py-2 rounded-xl font-bold text-sm transition-all border-2 ${selectedJenisSoal === js.id
-                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md'
-                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300'
+                    ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-md'
+                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300'
                     }`}
                 >
                   {TIPE_SOAL_MAP[js.nama] || js.nama}
@@ -655,22 +655,22 @@ export default function BankSoalPage() {
         <div className="flex flex-wrap items-center gap-2">
           {/* Quick Actions Usbu */}
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm mr-1">
-             <label className="text-[10px] font-bold text-gray-500 uppercase">Target Usbu:</label>
-             <select 
-               value={selectedUsbu} 
-               onChange={(e) => setSelectedUsbu(e.target.value)} 
-               className="neu-input py-1 px-2 text-xs font-bold w-16 cursor-pointer"
-             >
-               <option value="1">1</option>
-               <option value="2">2</option>
-               <option value="3">3</option>
-             </select>
-             <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition-colors flex gap-1 items-center shadow-sm disabled:opacity-50" title="Lihat pratinjau seluruh soal yang telah ditugaskan ke Usbu ini (Semua Jenis Soal)">
-               {previewLoading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Pratinjau
-             </button>
-             <button onClick={handleResetAssign} disabled={!selectedProgram} className="font-bold text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 transition-colors flex gap-1 items-center shadow-sm" title="Hapus semua penugasan soal dari mapel ini untuk Usbu yang dipilih">
-               <Trash2 size={12} /> Reset Pilihan
-             </button>
+            <label className="text-[10px] font-bold text-gray-500 uppercase">Target Usbu:</label>
+            <select
+              value={selectedUsbu}
+              onChange={(e) => setSelectedUsbu(e.target.value)}
+              className="neu-input py-1 px-2 text-xs font-bold w-16 cursor-pointer"
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+            </select>
+            <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition-colors flex gap-1 items-center shadow-sm disabled:opacity-50" title="Lihat pratinjau seluruh soal yang telah ditugaskan ke Usbu ini (Semua Jenis Soal)">
+              {previewLoading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Pratinjau
+            </button>
+            <button onClick={handleResetAssign} disabled={!selectedProgram} className="font-bold text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 transition-colors flex gap-1 items-center shadow-sm" title="Hapus semua penugasan soal dari mapel ini untuk Usbu yang dipilih">
+              <Trash2 size={12} /> Reset Pilihan
+            </button>
           </div>
           <button onClick={() => setIsImportModalOpen(true)} disabled={!selectedMapel || !selectedProgram} className="font-bold text-sm px-3 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors flex gap-1 items-center shadow-sm">
             <FileSpreadsheet size={16} /> Import
@@ -858,20 +858,20 @@ export default function BankSoalPage() {
 
                               {soal.tipeSoal === "TABEL_TASRIF" && (
                                 <div className="bg-amber-50 border border-amber-100 rounded-lg p-3">
-                                  <h4 className="text-xs font-bold text-amber-800 mb-2 uppercase tracking-wider block">Matriks Tabel Tasrif:</h4>
+                                  <h4 className="text-xs font-bold text-amber-800 mb-2 uppercase tracking-wider block">Matriks Tabel Matrix:</h4>
                                   <table className="text-xs border-collapse w-full max-w-sm" dir="rtl">
                                     <thead>
                                       <tr>
-                                        {["", ...(soal.dataTambahan.headers || [])].map((h:any, i:number) => (
+                                        {["", ...(soal.dataTambahan.headers || [])].map((h: any, i: number) => (
                                           <th key={i} className="border border-amber-200 p-1 bg-amber-100">{h}</th>
                                         ))}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {(soal.dataTambahan.rows || []).map((r:any, i:number) => (
+                                      {(soal.dataTambahan.rows || []).map((r: any, i: number) => (
                                         <tr key={i}>
                                           <td className="border border-amber-200 p-1 bg-amber-100 font-bold">{r.label}</td>
-                                          {(r.cells || []).map((c:any, j:number) => (
+                                          {(r.cells || []).map((c: any, j: number) => (
                                             <td key={j} className={`border border-amber-200 p-1 font-serif text-center ${c.isBlank ? 'bg-amber-100 text-rose-500 line-through' : 'bg-white'}`}>{c.value}</td>
                                           ))}
                                         </tr>
@@ -885,7 +885,7 @@ export default function BankSoalPage() {
                                 <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3">
                                   <h4 className="text-xs font-bold text-indigo-800 mb-2 uppercase tracking-wider block">Potongan Huruf:</h4>
                                   <div className="flex flex-wrap gap-2 justify-center" dir="rtl">
-                                    {(soal.dataTambahan.hurufAcak || []).map((h:any, i:number) => (
+                                    {(soal.dataTambahan.hurufAcak || []).map((h: any, i: number) => (
                                       <span key={i} className="px-3 py-2 bg-white border border-indigo-200 rounded-lg text-lg font-serif shadow-sm text-indigo-900">{h}</span>
                                     ))}
                                   </div>
@@ -908,7 +908,7 @@ export default function BankSoalPage() {
                                   </div>
                                   <div className="border-t border-cyan-200/50 pt-2 flex flex-wrap justify-center gap-1" dir="rtl">
                                     {(soal.dataTambahan.wordBank || []).map((w: string, i: number) => (
-                                       <span key={i} className="px-2 py-0.5 bg-cyan-100 border border-cyan-300 rounded text-xs text-cyan-800 font-serif">{w}</span>
+                                      <span key={i} className="px-2 py-0.5 bg-cyan-100 border border-cyan-300 rounded text-xs text-cyan-800 font-serif">{w}</span>
                                     ))}
                                   </div>
                                 </div>
@@ -926,7 +926,7 @@ export default function BankSoalPage() {
                                   </div>
                                   <div className="border-t border-fuchsia-200/50 pt-3 flex flex-wrap gap-1 leading-loose" dir="rtl">
                                     {(soal.dataTambahan.words || []).map((w: any, i: number) => {
-                                      const cat = (soal.dataTambahan.categories || []).find((c:any) => c.name === w.category);
+                                      const cat = (soal.dataTambahan.categories || []).find((c: any) => c.name === w.category);
                                       return (
                                         <span key={i} className={`px-2 py-1 rounded text-sm font-serif ${cat ? 'text-white font-bold shadow-sm' : 'bg-white text-gray-800 border border-gray-200'}`} style={{ backgroundColor: cat ? cat.color : undefined }}>
                                           {w.text}
@@ -941,18 +941,18 @@ export default function BankSoalPage() {
                                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
                                   <h4 className="text-xs font-bold text-orange-800 mb-2 uppercase tracking-wider block">Jaring Relasi (1 to Many):</h4>
                                   <div className="grid grid-cols-2 gap-4 text-xs">
-                                     <div className="space-y-1">
-                                       <div className="font-bold text-gray-500 mb-1 border-b pb-1">Kiri</div>
-                                       {(soal.dataTambahan.leftItems || []).map((l: string, i: number) => (
-                                          <div key={i} className="bg-white p-1 rounded border border-orange-200" dir="auto">{l}</div>
-                                       ))}
-                                     </div>
-                                     <div className="space-y-1">
-                                       <div className="font-bold text-gray-500 mb-1 border-b pb-1">Kanan</div>
-                                       {(soal.dataTambahan.rightItems || []).map((r: string, i: number) => (
-                                          <div key={i} className="bg-white p-1 rounded border border-orange-200" dir="auto">{r}</div>
-                                       ))}
-                                     </div>
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-gray-500 mb-1 border-b pb-1">Kiri</div>
+                                      {(soal.dataTambahan.leftItems || []).map((l: string, i: number) => (
+                                        <div key={i} className="bg-white p-1 rounded border border-orange-200" dir="auto">{l}</div>
+                                      ))}
+                                    </div>
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-gray-500 mb-1 border-b pb-1">Kanan</div>
+                                      {(soal.dataTambahan.rightItems || []).map((r: string, i: number) => (
+                                        <div key={i} className="bg-white p-1 rounded border border-orange-200" dir="auto">{r}</div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -998,8 +998,8 @@ export default function BankSoalPage() {
                           const isAssigned = soal.usbuAssignments?.some((ua: any) => ua.usbuKe === u);
                           return (
                             <label key={u} className={`flex items-center gap-2 cursor-pointer text-sm font-bold transition-all ${isAssigned ? 'text-green-600' : 'text-gray-500 hover:text-gray-800'}`}>
-                              <input 
-                                type="checkbox" 
+                              <input
+                                type="checkbox"
                                 className="w-4 h-4 text-green-500 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
                                 checked={isAssigned || false}
                                 onChange={(e) => handleToggleAssignment(soal.id, u, e.target.checked)}
@@ -1114,7 +1114,7 @@ export default function BankSoalPage() {
                     <EditorDiv
                       id="pertanyaan-editor"
                       value={formData.pertanyaan}
-                      onChange={(html: string) => setFormData((f:any) => ({...f, pertanyaan: html}))}
+                      onChange={(html: string) => setFormData((f: any) => ({ ...f, pertanyaan: html }))}
                       dir={resolvedDir}
                       className={`neu-input w-full p-4 text-base focus:border-[var(--color-primary)] focus:bg-white resize-y bg-white border border-gray-200 rounded-xl outline-none min-h-[100px] whitespace-pre-wrap ${resolvedDir === 'rtl' ? 'font-serif text-right text-xl' : 'text-left'}`}
                     />
@@ -1627,7 +1627,7 @@ export default function BankSoalPage() {
 
                     return (
                       <div className="space-y-4 overflow-x-auto pb-4">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Matriks Tabel Tasrif</label>
+                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Matriks Tabel Matrix</label>
                         <p className="text-xs text-purple-600 mb-4 font-medium">Bentuk tabel kolom dan baris. Gunakan centang di tiap sel untuk membuat sel tersebut kosong/rumpang saat dikerjakan murid. Isian teks adalah kunci jawaban (bisa multi jawaban dipisan pipe |).</p>
 
                         <div className="min-w-fit border border-purple-200 rounded-xl bg-white p-4 inline-block shadow-sm">
@@ -1639,21 +1639,21 @@ export default function BankSoalPage() {
                                   <th key={cIdx} className="font-bold relative group">
                                     <input type="text" value={h} dir="rtl" onChange={e => {
                                       const nh = [...headers]; nh[cIdx] = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, headers: nh }});
+                                      setFormData({ ...formData, dataTambahan: { ...dt, headers: nh } });
                                     }} className="text-center font-bold text-gray-700 bg-purple-50 p-2 rounded w-32 md:w-40 xl:w-48 focus:ring-2 outline-none border border-transparent focus:border-purple-300" />
                                     {headers.length > 1 && (
-                                       <button type="button" onClick={() => {
-                                         const nh = headers.filter((_, i) => i !== cIdx);
-                                         const nr = rows.map(r => ({ ...r, cells: r.cells.filter((_, i) => i !== cIdx) }));
-                                         setFormData({ ...formData, dataTambahan: { ...dt, headers: nh, rows: nr }});
-                                       }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12}/></button>
+                                      <button type="button" onClick={() => {
+                                        const nh = headers.filter((_, i) => i !== cIdx);
+                                        const nr = rows.map(r => ({ ...r, cells: r.cells.filter((_, i) => i !== cIdx) }));
+                                        setFormData({ ...formData, dataTambahan: { ...dt, headers: nh, rows: nr } });
+                                      }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12} /></button>
                                     )}
                                   </th>
                                 ))}
                                 <th>
                                   <button type="button" onClick={() => {
-                                    setFormData({ ...formData, dataTambahan: { ...dt, headers: [...headers, "Baru"], rows: rows.map(r => ({ ...r, cells: [...r.cells, { value: "", isBlank: false }] })) }});
-                                  }} className="bg-purple-100 hover:bg-purple-200 text-purple-600 rounded p-2 text-xs font-bold leading-none w-10 flex items-center justify-center"><Plus size={16}/></button>
+                                    setFormData({ ...formData, dataTambahan: { ...dt, headers: [...headers, "Baru"], rows: rows.map(r => ({ ...r, cells: [...r.cells, { value: "", isBlank: false }] })) } });
+                                  }} className="bg-purple-100 hover:bg-purple-200 text-purple-600 rounded p-2 text-xs font-bold leading-none w-10 flex items-center justify-center"><Plus size={16} /></button>
                                 </th>
                               </tr>
                             </thead>
@@ -1663,13 +1663,13 @@ export default function BankSoalPage() {
                                   <td className="relative group p-1 align-top pt-3">
                                     <input type="text" value={row.label} dir="rtl" onChange={e => {
                                       const nr = [...rows]; nr[rIdx].label = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, rows: nr }});
+                                      setFormData({ ...formData, dataTambahan: { ...dt, rows: nr } });
                                     }} className="bg-gray-100 w-24 p-2 rounded font-bold text-gray-700 text-center outline-none focus:ring-2 border border-transparent focus:border-gray-300" placeholder="Kiri" />
                                     {rows.length > 1 && (
-                                       <button type="button" onClick={() => {
-                                         const nr = rows.filter((_, i) => i !== rIdx);
-                                         setFormData({ ...formData, dataTambahan: { ...dt, rows: nr }});
-                                       }} className="absolute 0 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12}/></button>
+                                      <button type="button" onClick={() => {
+                                        const nr = rows.filter((_, i) => i !== rIdx);
+                                        setFormData({ ...formData, dataTambahan: { ...dt, rows: nr } });
+                                      }} className="absolute 0 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12} /></button>
                                     )}
                                   </td>
                                   {row.cells.map((cell, cIdx) => (
@@ -1677,12 +1677,12 @@ export default function BankSoalPage() {
                                       <div className={`p-1 border-2 rounded ${cell.isBlank ? 'border-amber-400 bg-amber-50 shadow-inner' : 'border-gray-200 bg-white'} focus-within:border-blue-400 relative transition-colors`}>
                                         <input type="text" value={cell.value} dir="rtl" onChange={e => {
                                           const nr = [...rows]; nr[rIdx].cells[cIdx].value = e.target.value;
-                                          setFormData({ ...formData, dataTambahan: { ...dt, rows: nr }});
+                                          setFormData({ ...formData, dataTambahan: { ...dt, rows: nr } });
                                         }} className="w-full bg-transparent text-center font-serif text-xl p-2 outline-none" placeholder="..." />
                                         <label className="absolute -top-2 -right-2 cursor-pointer bg-white border border-gray-200 shadow-sm p-1 rounded hover:scale-110 transition-transform flex items-center" title="Jadikan Rumpang (Blank)">
                                           <input type="checkbox" checked={cell.isBlank} onChange={e => {
                                             const nr = [...rows]; nr[rIdx].cells[cIdx].isBlank = e.target.checked;
-                                            setFormData({ ...formData, dataTambahan: { ...dt, rows: nr }});
+                                            setFormData({ ...formData, dataTambahan: { ...dt, rows: nr } });
                                           }} className="accent-amber-500 w-4 h-4" />
                                         </label>
                                       </div>
@@ -1692,9 +1692,9 @@ export default function BankSoalPage() {
                               ))}
                               <tr>
                                 <td colSpan={headers.length + 2} className="pt-4 text-right">
-                                   <button type="button" onClick={() => {
-                                     setFormData({ ...formData, dataTambahan: { ...dt, rows: [...rows, { label: "Baru", cells: headers.map(() => ({ value: "", isBlank: false })) }] }});
-                                   }} className="bg-gray-100 font-bold hover:bg-gray-200 text-gray-600 border border-gray-200 shadow-sm rounded-lg px-4 py-2 text-sm inline-flex items-center gap-2"><Plus size={16}/> Baris Baru</button>
+                                  <button type="button" onClick={() => {
+                                    setFormData({ ...formData, dataTambahan: { ...dt, rows: [...rows, { label: "Baru", cells: headers.map(() => ({ value: "", isBlank: false })) }] } });
+                                  }} className="bg-gray-100 font-bold hover:bg-gray-200 text-gray-600 border border-gray-200 shadow-sm rounded-lg px-4 py-2 text-sm inline-flex items-center gap-2"><Plus size={16} /> Baris Baru</button>
                                 </td>
                               </tr>
                             </tbody>
@@ -1714,12 +1714,12 @@ export default function BankSoalPage() {
                       <div className="space-y-4">
                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Konfigurasi Susun Huruf</label>
                         <p className="text-xs text-purple-600 mb-2 font-medium">Santri akan menekan/memilih potongan chip satu per satu secara berurutan hingga merangkai string yang utuh berdasar Kunci Kata di bawah.</p>
-                        
+
                         <div className="bg-white p-4 md:p-6 rounded-xl border border-purple-100 shadow-sm space-y-6">
                           <div>
                             <label className="text-xs font-bold text-gray-500 block mb-2">Kata/Kalimat Utuh (Kunci Jawaban)</label>
                             <input type="text" dir="auto" value={jawaban} onChange={e => {
-                              setFormData({ ...formData, dataTambahan: { ...dt, jawaban: e.target.value }});
+                              setFormData({ ...formData, dataTambahan: { ...dt, jawaban: e.target.value } });
                             }} className="w-full font-serif text-2xl p-4 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-400 outline-none text-right transition-all" placeholder="..." />
                           </div>
 
@@ -1731,20 +1731,20 @@ export default function BankSoalPage() {
                                   if (!jawaban) return;
                                   const chars = jawaban.split(' ').filter(c => c.trim() !== "");
                                   for (let i = chars.length - 1; i > 0; i--) {
-                                      const j = Math.floor(Math.random() * (i + 1));
-                                      [chars[i], chars[j]] = [chars[j], chars[i]];
+                                    const j = Math.floor(Math.random() * (i + 1));
+                                    [chars[i], chars[j]] = [chars[j], chars[i]];
                                   }
-                                  setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: chars }});
+                                  setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: chars } });
                                 }} className="text-[10px] bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded font-bold hover:bg-emerald-200 transition-colors shadow-sm">Atur per Kata</button>
 
                                 <button type="button" onClick={() => {
                                   if (!jawaban) return;
                                   const chars = Array.from(jawaban).filter(c => c.trim() !== "");
                                   for (let i = chars.length - 1; i > 0; i--) {
-                                      const j = Math.floor(Math.random() * (i + 1));
-                                      [chars[i], chars[j]] = [chars[j], chars[i]];
+                                    const j = Math.floor(Math.random() * (i + 1));
+                                    [chars[i], chars[j]] = [chars[j], chars[i]];
                                   }
-                                  setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: chars }});
+                                  setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: chars } });
                                 }} className="text-[10px] bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors shadow-sm">✨ Auto-Pecah & Acak</button>
                               </div>
                             </div>
@@ -1754,12 +1754,12 @@ export default function BankSoalPage() {
                                 <div key={i} className="flex flex-col relative group">
                                   <input type="text" dir="auto" value={h} onChange={e => {
                                     const nh = [...hurufAcak]; nh[i] = e.target.value;
-                                    setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: nh }});
+                                    setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: nh } });
                                   }} className="w-16 h-16 md:w-20 md:h-20 font-serif text-2xl md:text-3xl text-center border-2 border-indigo-200 rounded-xl bg-white shadow-sm focus:border-indigo-400 outline-none" />
                                   <button type="button" onClick={() => {
                                     const nh = hurufAcak.filter((_, idx) => idx !== i);
-                                    setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: nh }});
-                                  }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-6 h-6 items-center justify-center shadow z-10"><X size={14}/></button>
+                                    setFormData({ ...formData, dataTambahan: { ...dt, hurufAcak: nh } });
+                                  }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-6 h-6 items-center justify-center shadow z-10"><X size={14} /></button>
                                 </div>
                               ))}
                               <button type="button" onClick={() => {
@@ -1784,7 +1784,7 @@ export default function BankSoalPage() {
                     const detectBlanks = (text: string) => {
                       const matches = text.match(/{{(\d+)}}/g);
                       if (!matches) return [];
-                      const indices = matches.map(m => parseInt(m.replace(/\D/g, ''))).sort((a,b)=>a-b);
+                      const indices = matches.map(m => parseInt(m.replace(/\D/g, ''))).sort((a, b) => a - b);
                       return [...new Set(indices)]; // unique
                     };
 
@@ -1794,7 +1794,7 @@ export default function BankSoalPage() {
                         const exist = blanks.find(b => b.index === idx);
                         return exist ? exist : { index: idx, jawaban: "" };
                       });
-                      setFormData({ ...formData, dataTambahan: { ...dt, paragraf: newParagraf, blanks: newBlanks }});
+                      setFormData({ ...formData, dataTambahan: { ...dt, paragraf: newParagraf, blanks: newBlanks } });
                     };
 
                     return (
@@ -1821,7 +1821,7 @@ export default function BankSoalPage() {
                                     <span className="font-bold text-emerald-600 bg-emerald-100 px-3 py-1.5 rounded-lg text-center shadow-sm">{b.index}</span>
                                     <input type="text" dir="auto" value={b.jawaban} onChange={e => {
                                       const nb = [...blanks]; nb[i].jawaban = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, blanks: nb }});
+                                      setFormData({ ...formData, dataTambahan: { ...dt, blanks: nb } });
                                     }} className="flex-1 font-serif text-xl p-2 rounded-lg border-emerald-200 focus:ring-emerald-400 outline-none shadow-sm" placeholder="Kunci jawaban..." />
                                   </div>
                                 ))}
@@ -1840,25 +1840,25 @@ export default function BankSoalPage() {
                             </div>
 
                             <div className="flex flex-wrap gap-2" dir="rtl">
-                                {wordBank.map((w, i) => (
-                                  <div key={i} className="flex flex-col relative group">
-                                    <input type="text" dir="auto" value={w} onChange={e => {
-                                      const nw = [...wordBank]; nw[i] = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, wordBank: nw }});
-                                    }} className="w-24 md:w-32 font-serif text-xl border border-cyan-200 rounded-xl p-3 bg-white shadow-sm focus:border-cyan-400 outline-none text-center" />
-                                    <button type="button" onClick={() => {
-                                      const nw = wordBank.filter((_, idx) => idx !== i);
-                                      setFormData({ ...formData, dataTambahan: { ...dt, wordBank: nw }});
-                                    }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12}/></button>
-                                  </div>
-                                ))}
-                                <button type="button" onClick={() => {
-                                  setFormData({ ...formData, dataTambahan: { ...dt, wordBank: [...wordBank, ""] } });
-                                }} className="w-24 md:w-32 flex justify-center items-center rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 hover:bg-cyan-100 text-cyan-500 transition-colors">
-                                  <Plus size={20} />
-                                </button>
-                              </div>
-                              <p className="text-[10px] text-gray-400 mt-3 font-semibold">💡 Tips: Silakan edit manual bank kata untuk menambahkan "pengecoh" (*distractor*) agar lebih menantang bagi santri.</p>
+                              {wordBank.map((w, i) => (
+                                <div key={i} className="flex flex-col relative group">
+                                  <input type="text" dir="auto" value={w} onChange={e => {
+                                    const nw = [...wordBank]; nw[i] = e.target.value;
+                                    setFormData({ ...formData, dataTambahan: { ...dt, wordBank: nw } });
+                                  }} className="w-24 md:w-32 font-serif text-xl border border-cyan-200 rounded-xl p-3 bg-white shadow-sm focus:border-cyan-400 outline-none text-center" />
+                                  <button type="button" onClick={() => {
+                                    const nw = wordBank.filter((_, idx) => idx !== i);
+                                    setFormData({ ...formData, dataTambahan: { ...dt, wordBank: nw } });
+                                  }} className="absolute -top-2 -right-2 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12} /></button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                setFormData({ ...formData, dataTambahan: { ...dt, wordBank: [...wordBank, ""] } });
+                              }} className="w-24 md:w-32 flex justify-center items-center rounded-xl border-2 border-dashed border-cyan-300 bg-cyan-50/50 hover:bg-cyan-100 text-cyan-500 transition-colors">
+                                <Plus size={20} />
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-3 font-semibold">💡 Tips: Silakan edit manual bank kata untuk menambahkan "pengecoh" (*distractor*) agar lebih menantang bagi santri.</p>
                           </div>
                         </div>
                       </div>
@@ -1881,7 +1881,7 @@ export default function BankSoalPage() {
                         <p className="text-xs text-purple-600 mb-2 font-medium">Buat beberapa kategori warna, lalu potong wacana menjadi kata-per-kata dan beri label kunci jawaban pada masing-masing kata tersebut.</p>
 
                         <div className="bg-white p-4 rounded-xl border border-purple-100 shadow-sm space-y-6">
-                          
+
                           {/* Categories Builder */}
                           <div className="bg-fuchsia-50/50 border border-fuchsia-100 rounded-xl p-4">
                             <h4 className="text-xs font-bold text-fuchsia-800 mb-3">Definisi Kategori & Warna:</h4>
@@ -1890,73 +1890,74 @@ export default function BankSoalPage() {
                                 <div key={i} className="flex gap-2 items-center bg-white p-2 rounded-lg border border-fuchsia-100 shadow-sm transition-colors focus-within:ring-2 focus-within:ring-fuchsia-200">
                                   <input type="color" value={c.color} onChange={e => {
                                     const nc = [...categories]; nc[i].color = e.target.value;
-                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc }});
+                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc } });
                                   }} className="w-8 h-8 rounded cursor-pointer border-0 p-0" />
                                   <input type="text" value={c.name} onChange={e => {
                                     const nc = [...categories]; nc[i].name = e.target.value;
-                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc }});
+                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc } });
                                   }} className="w-1/3 flex-1 text-sm md:text-base font-bold p-1.5 border border-transparent focus:border-gray-200 rounded outline-none focus:bg-gray-50 text-gray-700" placeholder="ID / Singkatan" />
                                   <input type="text" value={c.label} onChange={e => {
                                     const nc = [...categories]; nc[i].label = e.target.value;
-                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc }});
+                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc } });
                                   }} className="w-1/3 flex-1 text-sm md:text-base p-1.5 border border-transparent focus:border-gray-200 rounded outline-none focus:bg-gray-50 text-gray-600" placeholder="Label UI (opsional)" />
                                   <button type="button" onClick={() => {
                                     const nc = categories.filter((_, idx) => idx !== i);
-                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc }});
-                                  }} className="p-2 text-gray-300 hover:text-rose-500 rounded hover:bg-rose-50 transition-colors"><X size={16}/></button>
+                                    setFormData({ ...formData, dataTambahan: { ...dt, categories: nc } });
+                                  }} className="p-2 text-gray-300 hover:text-rose-500 rounded hover:bg-rose-50 transition-colors"><X size={16} /></button>
                                 </div>
                               ))}
                               <button type="button" onClick={() => {
                                 const newColor = defaultColors[categories.length % defaultColors.length];
-                                setFormData({ ...formData, dataTambahan: { ...dt, categories: [...categories, { name: `Kategori ${categories.length+1}`, color: newColor, label: `Kategori Baru` }] }});
-                              }} className="mt-4 text-[10px] bg-white border border-fuchsia-200 shadow-sm text-fuchsia-700 px-4 py-2 rounded-lg font-bold hover:bg-fuchsia-50 transition-colors inline-flex items-center gap-2"><Plus size={14}/> Tambah Kategori Warna</button>
+                                setFormData({ ...formData, dataTambahan: { ...dt, categories: [...categories, { name: `Kategori ${categories.length + 1}`, color: newColor, label: `Kategori Baru` }] } });
+                              }} className="mt-4 text-[10px] bg-white border border-fuchsia-200 shadow-sm text-fuchsia-700 px-4 py-2 rounded-lg font-bold hover:bg-fuchsia-50 transition-colors inline-flex items-center gap-2"><Plus size={14} /> Tambah Kategori Warna</button>
                             </div>
                           </div>
 
                           {/* Words Builder */}
                           <div className="pt-2 border-t border-gray-100">
-                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
-                                <label className="text-xs font-bold text-gray-500 block">Potongan Kata (Wacana) & Kunci Jawaban</label>
-                                <button type="button" onClick={() => {
-                                   const inputText = prompt("Masukkan kalimat utuh untuk dipecah otomatis ke dalam balok-balok (pisahkan antar kata dengan spasi):");
-                                   if (inputText) {
-                                      const newWords = inputText.trim().split(/\s+/).filter(Boolean).map(w => ({ text: w, category: "" }));
-                                      setFormData({ ...formData, dataTambahan: { ...dt, words: [...words, ...newWords] }});
-                                   }
-                                }} className="text-[10px] bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors shadow-sm inline-flex items-center gap-1">✨ Auto-Pecah Spasi kalimat</button>
-                             </div>
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+                              <label className="text-xs font-bold text-gray-500 block">Potongan Kata (Wacana) & Kunci Jawaban</label>
+                              <button type="button" onClick={() => {
+                                const inputText = prompt("Masukkan kalimat utuh untuk dipecah otomatis ke dalam balok-balok (pisahkan antar kata dengan spasi):");
+                                if (inputText) {
+                                  const newWords = inputText.trim().split(/\s+/).filter(Boolean).map(w => ({ text: w, category: "" }));
+                                  setFormData({ ...formData, dataTambahan: { ...dt, words: [...words, ...newWords] } });
+                                }
+                              }} className="text-[10px] bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold hover:bg-indigo-200 transition-colors shadow-sm inline-flex items-center gap-1">✨ Auto-Pecah Spasi kalimat</button>
+                            </div>
 
-                             <div className="flex flex-wrap gap-2" dir="rtl">
-                               {words.map((w, i) => {
-                                 const cat = categories.find(c => c.name === w.category);
-                                 return (
-                                 <div key={i} className="flex flex-col relative group gap-1 border border-transparent hover:border-gray-200 p-2 rounded-xl transition-colors bg-gray-50/50 hover:bg-white" style={{ borderBottomColor: cat ? cat.color : undefined, borderBottomWidth: cat ? '4px' : undefined }}>
-                                   <input type="text" dir="auto" value={w.text} onChange={e => {
-                                     const nw = [...words]; nw[i].text = e.target.value;
-                                     setFormData({ ...formData, dataTambahan: { ...dt, words: nw }});
-                                   }} className="w-24 md:w-32 font-serif text-2xl pt-2 border-none bg-transparent outline-none text-center rounded focus:bg-white" placeholder="Kata..." />
-                                   
-                                   <select value={w.category} onChange={e => {
-                                     const nw = [...words]; nw[i].category = e.target.value;
-                                     setFormData({ ...formData, dataTambahan: { ...dt, words: nw }});
-                                   }} className="w-full text-xs p-1.5 border border-gray-200 rounded font-bold outline-none mt-2 shadow-sm appearance-none text-center cursor-pointer" dir="ltr" style={{ backgroundColor: cat ? cat.color : '#fff', color: cat ? '#fff' : '#6b7280' }}>
-                                     <option value="" className="bg-white text-gray-500">- Netral -</option>
-                                     {categories.map(c => <option key={c.name} value={c.name} className="bg-white text-gray-700">{c.name}</option>)}
-                                   </select>
+                            <div className="flex flex-wrap gap-2" dir="rtl">
+                              {words.map((w, i) => {
+                                const cat = categories.find(c => c.name === w.category);
+                                return (
+                                  <div key={i} className="flex flex-col relative group gap-1 border border-transparent hover:border-gray-200 p-2 rounded-xl transition-colors bg-gray-50/50 hover:bg-white" style={{ borderBottomColor: cat ? cat.color : undefined, borderBottomWidth: cat ? '4px' : undefined }}>
+                                    <input type="text" dir="auto" value={w.text} onChange={e => {
+                                      const nw = [...words]; nw[i].text = e.target.value;
+                                      setFormData({ ...formData, dataTambahan: { ...dt, words: nw } });
+                                    }} className="w-24 md:w-32 font-serif text-2xl pt-2 border-none bg-transparent outline-none text-center rounded focus:bg-white" placeholder="Kata..." />
 
-                                   <button type="button" onClick={() => {
-                                     const nw = words.filter((_, idx) => idx !== i);
-                                     setFormData({ ...formData, dataTambahan: { ...dt, words: nw }});
-                                   }} className="absolute -top-1 -right-1 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12}/></button>
-                                 </div>
-                               )})}
-                               <button type="button" onClick={() => {
-                                 setFormData({ ...formData, dataTambahan: { ...dt, words: [...words, { text: "", category: "" }] } });
-                               }} className="w-24 md:w-32 h-[5.5rem] mt-2 flex justify-center items-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-400 transition-colors shadow-inner">
-                                 <Plus size={20} />
-                               </button>
-                             </div>
-                             <p className="text-[10px] text-gray-400 mt-4 leading-relaxed max-w-lg">Saran: Biarkan kategori "- Netral -" pada kata-kata yang tidak memiliki nilai (tidak masuk ke kunci jawaban) agar murid tertantang membedakan mana yang merupakan target (misal: fi'il) dan yang bukan.</p>
+                                    <select value={w.category} onChange={e => {
+                                      const nw = [...words]; nw[i].category = e.target.value;
+                                      setFormData({ ...formData, dataTambahan: { ...dt, words: nw } });
+                                    }} className="w-full text-xs p-1.5 border border-gray-200 rounded font-bold outline-none mt-2 shadow-sm appearance-none text-center cursor-pointer" dir="ltr" style={{ backgroundColor: cat ? cat.color : '#fff', color: cat ? '#fff' : '#6b7280' }}>
+                                      <option value="" className="bg-white text-gray-500">- Netral -</option>
+                                      {categories.map(c => <option key={c.name} value={c.name} className="bg-white text-gray-700">{c.name}</option>)}
+                                    </select>
+
+                                    <button type="button" onClick={() => {
+                                      const nw = words.filter((_, idx) => idx !== i);
+                                      setFormData({ ...formData, dataTambahan: { ...dt, words: nw } });
+                                    }} className="absolute -top-1 -right-1 hidden group-hover:flex bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center shadow z-10"><X size={12} /></button>
+                                  </div>
+                                )
+                              })}
+                              <button type="button" onClick={() => {
+                                setFormData({ ...formData, dataTambahan: { ...dt, words: [...words, { text: "", category: "" }] } });
+                              }} className="w-24 md:w-32 h-[5.5rem] mt-2 flex justify-center items-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-400 transition-colors shadow-inner">
+                                <Plus size={20} />
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-gray-400 mt-4 leading-relaxed max-w-lg">Saran: Biarkan kategori "- Netral -" pada kata-kata yang tidak memiliki nilai (tidak masuk ke kunci jawaban) agar murid tertantang membedakan mana yang merupakan target (misal: fi'il) dan yang bukan.</p>
                           </div>
                         </div>
                       </div>
@@ -1971,18 +1972,18 @@ export default function BankSoalPage() {
                     const connections: { left: number, right: number[] }[] = dt.connections || [];
 
                     const toggleConnection = (leftIdx: number, rightIdx: number) => {
-                       const currentConnections = [...connections];
-                       const conn = currentConnections.find(c => c.left === leftIdx);
-                       if (conn) {
-                          if (conn.right.includes(rightIdx)) {
-                             conn.right = conn.right.filter(r => r !== rightIdx);
-                          } else {
-                             conn.right.push(rightIdx);
-                          }
-                       } else {
-                          currentConnections.push({ left: leftIdx, right: [rightIdx] });
-                       }
-                       setFormData({ ...formData, dataTambahan: { ...dt, connections: currentConnections }});
+                      const currentConnections = [...connections];
+                      const conn = currentConnections.find(c => c.left === leftIdx);
+                      if (conn) {
+                        if (conn.right.includes(rightIdx)) {
+                          conn.right = conn.right.filter(r => r !== rightIdx);
+                        } else {
+                          conn.right.push(rightIdx);
+                        }
+                      } else {
+                        currentConnections.push({ left: leftIdx, right: [rightIdx] });
+                      }
+                      setFormData({ ...formData, dataTambahan: { ...dt, connections: currentConnections } });
                     };
 
                     return (
@@ -1991,51 +1992,51 @@ export default function BankSoalPage() {
                         <p className="text-xs text-purple-600 mb-2 font-medium">Buat item di Kolom Kiri dan Kolom Kanan. Lalu centang relasi kunci jawabannya di bawah (1 item Kiri bisa berelasi ke banyak Kanan).</p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {/* Kolom Kiri */}
-                           <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm">
-                             <h4 className="text-sm font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Item Kolom Kiri (Asal)</h4>
-                             <div className="space-y-2">
-                               {leftItems.map((l, i) => (
-                                 <div key={i} className="flex gap-2 transition-transform hover:scale-[1.02]">
-                                    <input type="text" dir="auto" value={l} onChange={e => {
-                                      const nl = [...leftItems]; nl[i] = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, leftItems: nl }});
-                                    }} className="flex-1 font-serif text-lg p-2 border border-orange-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-right shadow-sm" placeholder={`Kiri ${i+1}`} />
-                                    <button type="button" onClick={() => {
-                                      const nl = leftItems.filter((_, idx) => idx !== i);
-                                      const nc = connections.filter(c => c.left !== i).map(c => ({...c, left: c.left > i ? c.left - 1 : c.left}));
-                                      setFormData({ ...formData, dataTambahan: { ...dt, leftItems: nl, connections: nc }});
-                                    }} className="p-2 bg-gray-50 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-gray-200"><X size={16}/></button>
-                                 </div>
-                               ))}
-                               <button type="button" onClick={() => {
-                                 setFormData({ ...formData, dataTambahan: { ...dt, leftItems: [...leftItems, ""] } });
-                               }} className="w-full py-2.5 mt-2 bg-orange-50 text-orange-600 font-bold text-xs rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 border-dashed shadow-sm"><Plus size={14} className="inline mr-1"/> Tambah Item Kiri</button>
-                             </div>
-                           </div>
+                          {/* Kolom Kiri */}
+                          <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Item Kolom Kiri (Asal)</h4>
+                            <div className="space-y-2">
+                              {leftItems.map((l, i) => (
+                                <div key={i} className="flex gap-2 transition-transform hover:scale-[1.02]">
+                                  <input type="text" dir="auto" value={l} onChange={e => {
+                                    const nl = [...leftItems]; nl[i] = e.target.value;
+                                    setFormData({ ...formData, dataTambahan: { ...dt, leftItems: nl } });
+                                  }} className="flex-1 font-serif text-lg p-2 border border-orange-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-right shadow-sm" placeholder={`Kiri ${i + 1}`} />
+                                  <button type="button" onClick={() => {
+                                    const nl = leftItems.filter((_, idx) => idx !== i);
+                                    const nc = connections.filter(c => c.left !== i).map(c => ({ ...c, left: c.left > i ? c.left - 1 : c.left }));
+                                    setFormData({ ...formData, dataTambahan: { ...dt, leftItems: nl, connections: nc } });
+                                  }} className="p-2 bg-gray-50 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-gray-200"><X size={16} /></button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                setFormData({ ...formData, dataTambahan: { ...dt, leftItems: [...leftItems, ""] } });
+                              }} className="w-full py-2.5 mt-2 bg-orange-50 text-orange-600 font-bold text-xs rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 border-dashed shadow-sm"><Plus size={14} className="inline mr-1" /> Tambah Item Kiri</button>
+                            </div>
+                          </div>
 
-                           {/* Kolom Kanan */}
-                           <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm">
-                             <h4 className="text-sm font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Item Kolom Kanan (Tujuan)</h4>
-                             <div className="space-y-2">
-                               {rightItems.map((r, i) => (
-                                 <div key={i} className="flex gap-2 transition-transform hover:scale-[1.02]">
-                                    <input type="text" dir="auto" value={r} onChange={e => {
-                                      const nr = [...rightItems]; nr[i] = e.target.value;
-                                      setFormData({ ...formData, dataTambahan: { ...dt, rightItems: nr }});
-                                    }} className="flex-1 font-serif text-lg p-2 border border-orange-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-right shadow-sm" placeholder={`Kanan ${i+1}`} />
-                                    <button type="button" onClick={() => {
-                                      const nr = rightItems.filter((_, idx) => idx !== i);
-                                      const nc = connections.map(c => ({...c, right: c.right.filter(x => x !== i).map(x => x > i ? x - 1 : x)})).filter(c => c.right.length > 0);
-                                      setFormData({ ...formData, dataTambahan: { ...dt, rightItems: nr, connections: nc }});
-                                    }} className="p-2 bg-gray-50 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-gray-200"><X size={16}/></button>
-                                 </div>
-                               ))}
-                               <button type="button" onClick={() => {
-                                 setFormData({ ...formData, dataTambahan: { ...dt, rightItems: [...rightItems, ""] } });
-                               }} className="w-full py-2.5 mt-2 bg-orange-50 text-orange-600 font-bold text-xs rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 border-dashed shadow-sm"><Plus size={14} className="inline mr-1"/> Tambah Item Kanan</button>
-                             </div>
-                           </div>
+                          {/* Kolom Kanan */}
+                          <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 border-b border-gray-100 pb-2">Item Kolom Kanan (Tujuan)</h4>
+                            <div className="space-y-2">
+                              {rightItems.map((r, i) => (
+                                <div key={i} className="flex gap-2 transition-transform hover:scale-[1.02]">
+                                  <input type="text" dir="auto" value={r} onChange={e => {
+                                    const nr = [...rightItems]; nr[i] = e.target.value;
+                                    setFormData({ ...formData, dataTambahan: { ...dt, rightItems: nr } });
+                                  }} className="flex-1 font-serif text-lg p-2 border border-orange-200 rounded-lg outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 text-right shadow-sm" placeholder={`Kanan ${i + 1}`} />
+                                  <button type="button" onClick={() => {
+                                    const nr = rightItems.filter((_, idx) => idx !== i);
+                                    const nc = connections.map(c => ({ ...c, right: c.right.filter(x => x !== i).map(x => x > i ? x - 1 : x) })).filter(c => c.right.length > 0);
+                                    setFormData({ ...formData, dataTambahan: { ...dt, rightItems: nr, connections: nc } });
+                                  }} className="p-2 bg-gray-50 text-gray-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors border border-gray-200"><X size={16} /></button>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                setFormData({ ...formData, dataTambahan: { ...dt, rightItems: [...rightItems, ""] } });
+                              }} className="w-full py-2.5 mt-2 bg-orange-50 text-orange-600 font-bold text-xs rounded-lg hover:bg-orange-100 transition-colors border border-orange-200 border-dashed shadow-sm"><Plus size={14} className="inline mr-1" /> Tambah Item Kanan</button>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Kunci Jawaban Relasi */}
@@ -2049,8 +2050,8 @@ export default function BankSoalPage() {
                                 return (
                                   <div key={i} className="bg-white p-4 rounded-xl border border-orange-100 shadow-sm transition-shadow hover:shadow-md">
                                     <div className="font-bold font-serif text-xl md:text-2xl text-orange-700 right-0 text-right mb-3 pb-3 border-b border-orange-100/70 flex flex-col items-end gap-1">
-                                        {l || `[Kiri ${i+1} Kosong]`} 
-                                        <span className="text-[10px] bg-orange-100 text-orange-600 px-2 rounded-full font-sans tracking-wide uppercase">Berelasi Ke</span>
+                                      {l || `[Kiri ${i + 1} Kosong]`}
+                                      <span className="text-[10px] bg-orange-100 text-orange-600 px-2 rounded-full font-sans tracking-wide uppercase">Berelasi Ke</span>
                                     </div>
                                     <div className="flex flex-wrap gap-2 justify-end mt-2" dir="rtl">
                                       {rightItems.map((r, j) => {
@@ -2063,7 +2064,7 @@ export default function BankSoalPage() {
                                             className={`px-4 py-2 text-base md:text-lg font-serif rounded-lg transition-all border outline-none active:scale-95 shadow-sm
                                                 ${isConnected ? 'bg-orange-500 text-white border-orange-600 shadow-[0_4px_0_#c2410c] -translate-y-1' : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'}`}
                                           >
-                                            {r || `[Kanan ${j+1}]`}
+                                            {r || `[Kanan ${j + 1}]`}
                                           </button>
                                         );
                                       })}
@@ -2227,7 +2228,7 @@ export default function BankSoalPage() {
                         return (
                           <button key={s.soalId} onClick={() => { setPreviewIdx(idx); setShowCheck(false); setShowPreviewNav(false); }}
                             className={`h-10 md:h-12 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 shadow-sm 
-                              ${active ? 'border-purple-600 ring-2 ring-purple-200 bg-purple-600 text-white' : 
+                              ${active ? 'border-purple-600 ring-2 ring-purple-200 bg-purple-600 text-white' :
                                 isAnswered ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                           >{idx + 1}</button>
                         );

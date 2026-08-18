@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   try {
     const data = await request.json();
-    const { waktuMelanggar, tempatMelanggar, perkataanYgDiucapkan, fotoBuktiUrl, fotoBuktiPublicId, pelanggarIds } = data;
+    const { waktuMelanggar, tempatMelanggar, perkataanYgDiucapkan, detailKejadian, pelanggarIds } = data;
 
     if (!waktuMelanggar || !tempatMelanggar || !perkataanYgDiucapkan || !pelanggarIds || !Array.isArray(pelanggarIds) || pelanggarIds.length === 0) {
       return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
@@ -73,27 +73,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Pelanggar tidak ditemukan" }, { status: 404 });
     }
 
-    const { uploadBuktiMukholif } = await import("@/lib/cloudinary-mukholif");
-    
-    let uploadedFotoUrl = fotoBuktiUrl;
-    let uploadedPublicId = fotoBuktiPublicId;
-
-    // Jika base64 dan butuh upload (di handle di frontend atau backend, di sini kita buat di frontend saja atau backend)
-    // Di perizinan sepertinya uploadBase64 itu via API tersendiri atau saat request.
-    // Jika fotoBuktiUrl adalah string base64, kita upload:
-    if (fotoBuktiUrl && fotoBuktiUrl.startsWith("data:image")) {
-      const uploadResult = await uploadBuktiMukholif(fotoBuktiUrl);
-      uploadedFotoUrl = uploadResult.url;
-      uploadedPublicId = uploadResult.publicId;
-    }
-
     const newLaporan = await prisma.laporanMukholif.create({
       data: {
         waktuMelanggar: new Date(waktuMelanggar),
         tempatMelanggar,
         perkataanYgDiucapkan,
-        fotoBuktiUrl: uploadedFotoUrl,
-        fotoBuktiPublicId: uploadedPublicId,
+        detailKejadian: detailKejadian || null,
         jasusId: session.santriId,
         jasusNama: session.nama,
         pelanggarList: {

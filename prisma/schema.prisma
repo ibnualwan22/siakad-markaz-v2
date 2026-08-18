@@ -100,6 +100,7 @@ model SantriInternal {
   absenTabirotList      AbsenTabirot[]
   laporanJasusList      LaporanMukholif[]  @relation("JasusLaporan")
   pelanggarMukholifList PelanggarMukholif[] @relation("PelanggarMukholif")
+  anggotaLajnahList     AnggotaLajnah[]
 }
 
 model Dufah {
@@ -121,6 +122,7 @@ model Dufah {
   riwayatRecords RiwayatSantri[]
   sesiTauziList  SesiTauzi[]
   sesiUjianGlobalList SesiUjianGlobal[]
+  anggotaLajnahList AnggotaLajnah[]
 }
 
 model RiwayatSantri {
@@ -947,10 +949,33 @@ model PelanggarMukholif {
   iqobJawal         Boolean  @default(false)
   iqobPenyetoran    Boolean  @default(false)
   
+  // Eksekusi oleh Lajnah
+  iqobSoundingDone      Boolean  @default(false)
+  iqobJawalDone         Boolean  @default(false)
+  iqobPenyetoranDone    Boolean  @default(false)
+  eksekusiAt           DateTime?
+  eksekusiOleh         String?   // ID santri yang tergabung di Lajnah
+  
+  // Verifikasi oleh Admin
+  verifikasiAt         DateTime?
+  verifikasiOleh       String?   // Nama / Session Admin
+  
   tabayunAt         DateTime?              
   
   laporan           LaporanMukholif @relation(fields: [laporanId], references: [id], onDelete: Cascade)
   santri            SantriInternal  @relation("PelanggarMukholif", fields: [santriId], references: [id], onDelete: Cascade)
   
   @@unique([laporanId, santriId])
+}
+
+model AnggotaLajnah {
+  id         String         @id @default(cuid())
+  santriId   String
+  dufahNama  String
+  createdAt  DateTime       @default(now())
+
+  santri     SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  dufah      Dufah          @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+
+  @@unique([santriId, dufahNama])
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode } from "lucide-react";
+import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, Shield, ClipboardCheck } from "lucide-react";
 import { useState, useEffect } from "react";
 import { SyncSantriButton } from "./sync-santri-button";
 
@@ -105,6 +105,8 @@ const navigationGroups = [
     title: "Divisi Kebahasaan",
     items: [
       { href: "/admin/mukholif", label: "Tabayun Mukholif", icon: AlertTriangle, permissionId: "mukholif_lughoh" },
+      { href: "/admin/lajnah", label: "Lajnah", icon: Shield, permissionId: "lajnah_manage" },
+      { href: "/admin/monitoring-mukholif", label: "Monitoring Mukholif", icon: ClipboardCheck, permissionId: "monitoring_mukholif" },
     ]
   }
 ];

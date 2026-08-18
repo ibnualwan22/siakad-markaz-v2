@@ -39,20 +39,25 @@ export function SantriSidebar({
   nama,
   isAktif,
   isKetuaKelas,
+  isLajnah
 }: {
   nama: string;
   isAktif: boolean;
   isKetuaKelas?: boolean;
+  isLajnah?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Add Berita Acara conditionally if they are a class leader
-  const navItems = isKetuaKelas 
+  let navItems = isKetuaKelas 
     ? [...baseNavItems, { href: "/santri/berita-acara", label: "Berita Acara", icon: ClipboardCheck }]
     : baseNavItems;
+
+  if (isLajnah) {
+    navItems = [...navItems, { href: "/santri/eksekusi-mukholif", label: "Eksekusi Iqob", icon: Shield }];
+  }
 
   const handleLogout = async () => {
     await fetch("/api/santri/auth/logout", { method: "POST" });

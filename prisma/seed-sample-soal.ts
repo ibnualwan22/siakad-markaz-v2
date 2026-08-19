@@ -48,6 +48,24 @@ function buildSoalData(tipe: string, nomor: number): {
             { teks: "كَاتِبٌ", isCorrect: false },
           ],
         },
+        {
+          pertanyaan: "مَا مُفْرَدُ كَلِمَةِ \"أَقْلَامٌ\"؟",
+          opsiList: [
+            { teks: "قَلَمٌ", isCorrect: true },
+            { teks: "قَلَّامٌ", isCorrect: false },
+            { teks: "مِقْلَمَةٌ", isCorrect: false },
+            { teks: "قَلَائِمُ", isCorrect: false },
+          ],
+        },
+        {
+          pertanyaan: "أَيُّ هَذِهِ الْكَلِمَاتِ تَعْنِي \"مُعَلِّمٌ\"؟",
+          opsiList: [
+            { teks: "Teacher", isCorrect: true },
+            { teks: "Student", isCorrect: false },
+            { teks: "Doctor", isCorrect: false },
+            { teks: "Farmer", isCorrect: false },
+          ],
+        },
       ][nomor];
 
     // ── PG_MULTI (Pilihan Ganda Multi) ──────────────────
@@ -106,6 +124,20 @@ function buildSoalData(tipe: string, nomor: number): {
             { teks: "خطأ", isCorrect: false },
           ],
         },
+        {
+          pertanyaan: "كلمة \"مَدْرَسَةٌ\" هي اسم مذكر.",
+          opsiList: [
+            { teks: "صحيح", isCorrect: false },
+            { teks: "خطأ", isCorrect: true },
+          ],
+        },
+        {
+          pertanyaan: "تكتب التاء المربوطة في نهاية الاسم المؤنث عادة.",
+          opsiList: [
+            { teks: "صحيح", isCorrect: true },
+            { teks: "خطأ", isCorrect: false },
+          ],
+        },
       ][nomor];
 
     // ── ISIAN_SAMPING (Opsi Samping) ────────────────────
@@ -133,6 +165,22 @@ function buildSoalData(tipe: string, nomor: number): {
             { teks: "يُدَرِّسُ", isCorrect: true },
             { teks: "دَرَّسَ", isCorrect: false },
             { teks: "دَرْسٌ", isCorrect: false },
+          ],
+        },
+        {
+          pertanyaan: "هَلْ ___ كِتَابَكَ أَمْسِ؟",
+          opsiList: [
+            { teks: "قَرَأْتَ", isCorrect: true },
+            { teks: "يَقْرَأُ", isCorrect: false },
+            { teks: "قَرَأْتُ", isCorrect: false },
+          ],
+        },
+        {
+          pertanyaan: "هَذِهِ ___ جَدِيدَةٌ",
+          opsiList: [
+            { teks: "سَيَّارَةٌ", isCorrect: true },
+            { teks: "قَلَمٌ", isCorrect: false },
+            { teks: "بَيْتٌ", isCorrect: false },
           ],
         },
       ][nomor];
@@ -213,6 +261,14 @@ function buildSoalData(tipe: string, nomor: number): {
           pertanyaan: "ما اسم الفاعل من \"عَلِمَ\"؟",
           kunciJawaban: "عَالِمٌ",
         },
+        {
+          pertanyaan: "ما مفرد كلمة \"كُتُبٌ\"؟",
+          kunciJawaban: "كِتَابٌ",
+        },
+        {
+          pertanyaan: "ما ضد كلمة \"كَبِيرٌ\"؟",
+          kunciJawaban: "صَغِيرٌ",
+        },
       ][nomor];
 
     // ── ESSAY_PANJANG (AI Grading) ──────────────────────
@@ -229,6 +285,14 @@ function buildSoalData(tipe: string, nomor: number): {
         {
           pertanyaan: "تَكَلَّمْ عَنْ هِوَايَتِكَ الْمُفَضَّلَةِ.",
           kunciJawaban: "هِوَايَتِي الْمُفَضَّلَةُ هِيَ الْقِرَاءَةُ. أَقْرَأُ الْكُتُبَ الْعَرَبِيَّةَ كُلَّ يَوْمٍ. الْقِرَاءَةُ تُوَسِّعُ الْمَعْرِفَةَ وَتُقَوِّي اللُّغَةَ.",
+        },
+        {
+          pertanyaan: "صِفْ صَدِيقَكَ الْمُفَضَّلَ لَنَا.",
+          kunciJawaban: "صَدِيقِي الْمُفَضَّلُ اسْمُهُ عُمَر. هُوَ طَالِبٌ مُجْتَهِدٌ وَذَكِيٌّ كَثِيرًا. نَحْنُ نَلْعَبُ كُرَةَ الْقَدَمِ مَعًا فِي الْمَلْعَبِ. هُوَ يُحِبُّ مُسَاعَدَةَ الْآخَرِينَ.",
+        },
+        {
+          pertanyaan: "تَكَلَّمْ عَنْ طُمُوحِكَ فِي الْمُسْتَقْبَلِ.",
+          kunciJawaban: "أَتَمَنَّى أَنْ أُصْبِحَ مُعَلِّمًا لِلُّغَةِ الْعَرَبِيَّةِ. أُرِيدُ أَنْ أُعَلِّمَ النَّاسَ هَذِهِ اللُّغَةَ الْجَمِيلَةَ. ذَلِكَ لِأَنَّهَا لُغَةُ الْقُرْآنِ الْكَرِيمِ. سَأَدْرُسُ بِجِدٍّ لِتَحْقِيقِ هَذَا الْهَدَفِ.",
         },
       ][nomor];
 
@@ -254,6 +318,20 @@ function buildSoalData(tipe: string, nomor: number): {
           dataTambahan: {
             lefts: ["أَنَا", "أَنْتَ", "هُوَ", "نَحْنُ"],
             rights: ["أَكْتُبُ", "تَكْتُبُ", "يَكْتُبُ", "نَكْتُبُ"],
+          },
+        },
+        {
+          pertanyaan: "صِلْ بَيْنَ الْكَلِمَةِ وَعَكْسِهَا (مضادها):",
+          dataTambahan: {
+            lefts: ["كَبِيرٌ", "طَوِيلٌ", "جَدِيدٌ", "غَنِيٌّ"],
+            rights: ["صَغِيرٌ", "قَصِيرٌ", "قَدِيمٌ", "فَقِيرٌ"],
+          },
+        },
+        {
+          pertanyaan: "صِلْ بَيْنَ الدَّوْلَةِ وَعَاصِمَتِهَا:",
+          dataTambahan: {
+            lefts: ["إِنْدُونِيسِيَا", "مِصْر", "السُّعُودِيَّة", "مَالِيزِيَا"],
+            rights: ["جَاكَرْتَا", "الْقَاهِرَة", "الرِّيَاض", "كُوَالَالُمْبُور"],
           },
         },
       ][nomor];
@@ -406,43 +484,61 @@ function buildSoalData(tipe: string, nomor: number): {
         {
           pertanyaan: "أَكْمِلْ تَصْرِيفَ الْفِعْلِ \"كَتَبَ - يَكْتُبُ\":",
           dataTambahan: {
-            columns: ["الضمير", "الماضي", "المضارع"],
+            headers: ["الماضي", "المضارع"],
             rows: [
-              ["هُوَ", "كَتَبَ", "يَكْتُبُ"],
-              ["هِيَ", "", "تَكْتُبُ"],
-              ["أَنَا", "كَتَبْتُ", ""],
-              ["نَحْنُ", "", "نَكْتُبُ"],
-            ],
-            blanks: [[1, 1], [2, 2], [3, 1]], // [row, col] pairs that are blank
-            answers: { "1-1": "كَتَبَتْ", "2-2": "أَكْتُبُ", "3-1": "كَتَبْنَا" },
+              { label: "هُوَ", cells: [{ value: "كَتَبَ", isBlank: false }, { value: "يَكْتُبُ", isBlank: false }] },
+              { label: "هِيَ", cells: [{ value: "كَتَبَتْ", isBlank: true }, { value: "تَكْتُبُ", isBlank: false }] },
+              { label: "أَنَا", cells: [{ value: "كَتَبْتُ", isBlank: false }, { value: "أَكْتُبُ", isBlank: true }] },
+              { label: "نَحْنُ", cells: [{ value: "كَتَبْنَا", isBlank: true }, { value: "نَكْتُبُ", isBlank: false }] },
+            ]
           },
         },
         {
           pertanyaan: "أَكْمِلْ تَصْرِيفَ الْفِعْلِ \"جَلَسَ - يَجْلِسُ\":",
           dataTambahan: {
-            columns: ["الضمير", "الماضي", "المضارع"],
+            headers: ["الماضي", "المضارع"],
             rows: [
-              ["هُوَ", "جَلَسَ", "يَجْلِسُ"],
-              ["هُمْ", "", "يَجْلِسُونَ"],
-              ["أَنْتَ", "جَلَسْتَ", ""],
-              ["أَنْتُمْ", "", "تَجْلِسُونَ"],
-            ],
-            blanks: [[1, 1], [2, 2], [3, 1]],
-            answers: { "1-1": "جَلَسُوا", "2-2": "تَجْلِسُ", "3-1": "جَلَسْتُمْ" },
+              { label: "هُوَ", cells: [{ value: "جَلَسَ", isBlank: false }, { value: "يَجْلِسُ", isBlank: false }] },
+              { label: "هُمْ", cells: [{ value: "جَلَسُوا", isBlank: true }, { value: "يَجْلِسُونَ", isBlank: false }] },
+              { label: "أَنْتَ", cells: [{ value: "جَلَسْتَ", isBlank: false }, { value: "تَجْلِسُ", isBlank: true }] },
+              { label: "أَنْتُمْ", cells: [{ value: "جَلَسْتُمْ", isBlank: true }, { value: "تَجْلِسُونَ", isBlank: false }] },
+            ]
           },
         },
         {
           pertanyaan: "أَكْمِلْ تَصْرِيفَ الْفِعْلِ \"فَتَحَ - يَفْتَحُ\":",
           dataTambahan: {
-            columns: ["الضمير", "الماضي", "المضارع"],
+            headers: ["الماضي", "المضارع"],
             rows: [
-              ["هُوَ", "فَتَحَ", "يَفْتَحُ"],
-              ["هِيَ", "فَتَحَتْ", ""],
-              ["أَنَا", "", "أَفْتَحُ"],
-              ["هُمْ", "فَتَحُوا", ""],
-            ],
-            blanks: [[1, 2], [2, 1], [3, 2]],
-            answers: { "1-2": "تَفْتَحُ", "2-1": "فَتَحْتُ", "3-2": "يَفْتَحُونَ" },
+              { label: "هُوَ", cells: [{ value: "فَتَحَ", isBlank: false }, { value: "يَفْتَحُ", isBlank: false }] },
+              { label: "هِيَ", cells: [{ value: "فَتَحَتْ", isBlank: false }, { value: "تَفْتَحُ", isBlank: true }] },
+              { label: "أَنَا", cells: [{ value: "فَتَحْتُ", isBlank: true }, { value: "أَفْتَحُ", isBlank: false }] },
+              { label: "هُمْ", cells: [{ value: "فَتَحُوا", isBlank: false }, { value: "يَفْتَحُونَ", isBlank: true }] },
+            ]
+          },
+        },
+        {
+          pertanyaan: "أَكْمِلْ تَصْرِيفَ الْفِعْلِ \"عَلِمَ - يَعْلَمُ\":",
+          dataTambahan: {
+            headers: ["الماضي", "المضارع"],
+            rows: [
+              { label: "هُوَ", cells: [{ value: "عَلِمَ", isBlank: false }, { value: "يَعْلَمُ", isBlank: true }] },
+              { label: "هِيَ", cells: [{ value: "عَلِمَتْ", isBlank: true }, { value: "تَعْلَمُ", isBlank: false }] },
+              { label: "أَنْتِ", cells: [{ value: "عَلِمْتِ", isBlank: false }, { value: "تَعْلَمِينَ", isBlank: true }] },
+              { label: "نَحْنُ", cells: [{ value: "عَلِمْنَا", isBlank: true }, { value: "نَعْلَمُ", isBlank: false }] },
+            ]
+          },
+        },
+        {
+          pertanyaan: "أَكْمِلْ تَصْرِيفَ الْفِعْلِ \"قَرَأَ - يَقْرَأُ\":",
+          dataTambahan: {
+            headers: ["الماضي", "المضارع"],
+            rows: [
+              { label: "هُوَ", cells: [{ value: "قَرَأَ", isBlank: true }, { value: "يَقْرَأُ", isBlank: false }] },
+              { label: "هُمَا", cells: [{ value: "قَرَأَا", isBlank: false }, { value: "يَقْرَءَانِ", isBlank: true }] },
+              { label: "أَنَا", cells: [{ value: "قَرَأْتُ", isBlank: true }, { value: "أَقْرَأُ", isBlank: false }] },
+              { label: "هُمْ", cells: [{ value: "قَرَءُوا|قرأوا", isBlank: false }, { value: "يَقْرَءُونَ|يقرأون", isBlank: true }] },
+            ]
           },
         },
       ][nomor];
@@ -451,25 +547,39 @@ function buildSoalData(tipe: string, nomor: number): {
     case "SUSUN_HURUF":
       return [
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة:",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (كِتَاب):",
           dataTambahan: {
             hurufAcak: ["ب", "ا", "ت", "ك"],
           },
           kunciJawaban: "كِتَاب",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة:",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (مَدْرَسَة):",
           dataTambahan: {
             hurufAcak: ["س", "ر", "د", "م", "ة"],
           },
           kunciJawaban: "مَدْرَسَة",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة:",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (مُعَلِّم):",
           dataTambahan: {
             hurufAcak: ["ع", "ل", "م", "م"],
           },
           kunciJawaban: "مُعَلِّم",
+        },
+        {
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (قَلَم):",
+          dataTambahan: {
+            hurufAcak: ["م", "ل", "ق"],
+          },
+          kunciJawaban: "قَلَم",
+        },
+        {
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (تِلْمِيذ):",
+          dataTambahan: {
+            hurufAcak: ["م", "ي", "ذ", "ل", "ت"],
+          },
+          kunciJawaban: "تِلْمِيذ",
         },
       ][nomor];
 
@@ -477,24 +587,63 @@ function buildSoalData(tipe: string, nomor: number): {
     case "DRAG_TO_BLANK":
       return [
         {
-          pertanyaan: "أَكْمِلِ الْفَرَاغَاتِ بِالْكَلِمَاتِ الْمُنَاسِبَةِ:\nذَهَبَ {{1}} إِلَى {{2}} لِيَدْرُسَ {{3}}.",
+          pertanyaan: "أَكْمِلِ الْفَرَاغَاتِ الطَّالِبُ إِلَى الْمَدْرَسَةِ...",
           dataTambahan: {
-            bankKata: ["الطَّالِبُ", "الْمَدْرَسَةِ", "الْعُلُومَ", "الْبَيْتِ"],
-            answers: { "1": "الطَّالِبُ", "2": "الْمَدْرَسَةِ", "3": "الْعُلُومَ" },
+            paragraf: "ذَهَبَ {{1}} إِلَى {{2}} لِيَدْرُسَ {{3}}.",
+            wordBank: ["الطَّالِبُ", "الْمَدْرَسَةِ", "الْعُلُومَ", "الْبَيْتِ"],
+            blanks: [
+              { index: "1", jawaban: "الطَّالِبُ" },
+              { index: "2", jawaban: "الْمَدْرَسَةِ" },
+              { index: "3", jawaban: "الْعُلُومَ" }
+            ],
           },
         },
         {
-          pertanyaan: "{{1}} يَقْرَأُ {{2}} فِي {{3}}.",
+          pertanyaan: "أحْمَدُ يَقْرَأُ الْقُرْآنَ...",
           dataTambahan: {
-            bankKata: ["أَحْمَدُ", "الْقُرْآنَ", "الْمَسْجِدِ", "الْمَطْبَخِ"],
-            answers: { "1": "أَحْمَدُ", "2": "الْقُرْآنَ", "3": "الْمَسْجِدِ" },
+            paragraf: "{{1}} يَقْرَأُ {{2}} فِي {{3}}.",
+            wordBank: ["أَحْمَدُ", "الْقُرْآنَ", "الْمَسْجِدِ", "الْمَطْبَخِ"],
+            blanks: [
+              { index: "1", jawaban: "أَحْمَدُ" },
+              { index: "2", jawaban: "الْقُرْآنَ" },
+              { index: "3", jawaban: "الْمَسْجِدِ" }
+            ],
           },
         },
         {
-          pertanyaan: "{{1}} تَطْبُخُ {{2}} فِي {{3}}.",
+          pertanyaan: "الْأُمُّ تَطْبُخُ الطَّعَامَ...",
           dataTambahan: {
-            bankKata: ["الْأُمُّ", "الطَّعَامَ", "الْمَطْبَخِ", "الْحَدِيقَةِ"],
-            answers: { "1": "الْأُمُّ", "2": "الطَّعَامَ", "3": "الْمَطْبَخِ" },
+            paragraf: "{{1}} تَطْبُخُ {{2}} فِي {{3}}.",
+            wordBank: ["الْأُمُّ", "الطَّعَامَ", "الْمَطْبَخِ", "الْحَدِيقَةِ"],
+            blanks: [
+              { index: "1", jawaban: "الْأُمُّ" },
+              { index: "2", jawaban: "الطَّعَامَ" },
+              { index: "3", jawaban: "الْمَطْبَخِ" }
+            ],
+          },
+        },
+        {
+          pertanyaan: "الْمُعَلِّمُ يَشْرَحُ الدَّرْسَ...",
+          dataTambahan: {
+            paragraf: "{{1}} يَشْرَحُ {{2}} أَمَامَ {{3}}.",
+            wordBank: ["الْمُعَلِّمُ", "الدَّرْسَ", "الطُّلَّابِ", "الْمَلْعَبِ"],
+            blanks: [
+              { index: "1", jawaban: "الْمُعَلِّمُ" },
+              { index: "2", jawaban: "الدَّرْسَ" },
+              { index: "3", jawaban: "الطُّلَّابِ" }
+            ],
+          },
+        },
+        {
+          pertanyaan: "خَرَجَ الْأَبُ إِلَى السُّوقِ...",
+          dataTambahan: {
+            paragraf: "خَرَجَ {{1}} إِلَى {{2}} لِيَشْتَرِيَ {{3}}.",
+            wordBank: ["الْأَبُ", "السُّوقِ", "الْفَوَاكِهَ", "النَّوْمِ"],
+            blanks: [
+              { index: "1", jawaban: "الْأَبُ" },
+              { index: "2", jawaban: "السُّوقِ" },
+              { index: "3", jawaban: "الْفَوَاكِهَ" }
+            ],
           },
         },
       ][nomor];
@@ -673,7 +822,7 @@ async function main() {
       },
     });
 
-    // Cek apakah sudah ada soal di jenis ini (skip jika sudah)
+    // Cek apakah sudah ada soal di jenis ini
     const existingCount = await prisma.bankSoalUsbu.count({
       where: {
         jenisSoalId: jenisSoal.id,
@@ -682,17 +831,25 @@ async function main() {
       },
     });
 
-    if (existingCount >= 3) {
-      console.log(`⏭️  ${tipe}: sudah ada ${existingCount} soal, skip.`);
-      continue;
+    if (existingCount > 0) {
+       // Delete old seeded questions so we can inject the perfect 5 new questions
+       await prisma.bankSoalUsbu.deleteMany({
+          where: {
+            jenisSoalId: jenisSoal.id,
+            programId: program.id,
+            mapelId: mapel.id,
+          }
+       });
+       console.log(`♻️  ${tipe}: menghapus soal lama untuk di-seed ulang.`);
     }
 
-    // Buat 3 soal per tipe
-    for (let n = 0; n < 3; n++) {
+    // Buat soal dinamis selama data dari fungsi masih ada
+    let n = 0;
+    while (true) {
       const data = buildSoalData(tipe, n);
       if (!data) {
-        console.warn(`⚠️  ${tipe} soal #${n + 1}: data kosong, skip.`);
-        continue;
+        if (n === 0) console.warn(`⚠️  ${tipe}: data kosong, tidak ada soal ditambahkan.`);
+        break; // Habis
       }
 
       const isPilihanGanda = ["PG", "PG_MULTI", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH"].includes(tipe);
@@ -719,9 +876,10 @@ async function main() {
         },
       });
       totalSoal++;
+      n++;
     }
 
-    console.log(`✅ ${tipe}: 3 soal berhasil ditambahkan`);
+    console.log(`✅ ${tipe}: ${n} soal berhasil ditambahkan`);
   }
 
   console.log(`\n🎉 Selesai! Total ${totalSoal} soal ditambahkan ke Program "${program.nama_indo}", Mapel "${mapel.nama_indo}".`);

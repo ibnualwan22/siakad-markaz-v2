@@ -14,7 +14,15 @@ export default function EssayReviewPage() {
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editScore, setEditScore] = useState<number>(0);
-  const [isAiGrading, setIsAiGrading] = useState(false);
+  
+  // -- QUEUE STATE --
+  const [queueState, setQueueState] = useState({
+     isActive: false,
+     total: 0,
+     processed: 0,
+     errors: 0
+  });
+  const queueRef = React.useRef<string[]>([]);
 
   const mutate = useCallback(async () => {
     setIsLoading(true);
@@ -59,25 +67,51 @@ export default function EssayReviewPage() {
     }
   };
 
-  const triggerAIGrade = async (ids: string[]) => {
-    if (ids.length === 0) return toast.error("Tidak ada data untuk dinilai AI");
-    setIsAiGrading(true);
-    toast.loading("AI sedang menilai...", { id: "ai-grade" });
+  const processQueue = async () => {
+    if (queueRef.current.length === 0) {
+      setQueueState(prev => ({ ...prev, isActive: false }));
+      toast.success("Selesai memproses seluruh antrean AI!", { id: "ai-grade" });
+      return;
+    }
+
+    // Ambil 5 ID untuk dibatch
+    const batch = queueRef.current.splice(0, 5);
+    
     try {
       const res = await fetch("/api/admin/ujian-usbu/ai-grade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jawabanIds: ids })
+        body: JSON.stringify({ jawabanIds: batch })
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Gagal");
-      toast.success(`Berhasil menilai ${json.processed} jawaban`, { id: "ai-grade" });
-      mutate();
+      if (!res.ok) throw new Error("Gagal menghubungi server");
+      
+      setQueueState(prev => ({ ...prev, processed: prev.processed + batch.length }));
+      mutate(); // Reload tabel untuk menampilkan nilai baru seketika
     } catch (e: any) {
-       toast.error(e.message || "Gagal menghubungi Agnes AI", { id: "ai-grade" });
-    } finally {
-       setIsAiGrading(false);
+      setQueueState(prev => ({ ...prev, processed: prev.processed + batch.length, errors: prev.errors + batch.length }));
+      toast.error(`Terjadi masalah pada sebuah batch, dilanjutkan...`, { id: "ai-err" });
     }
+
+    if (queueRef.current.length > 0) {
+       // DELAY THROTTLE (2.5 Detik per batch)
+       // Menjamin kita tidak over-limit (150 RPM Free Tier Google Gemini)
+       // Dan juga tidak terkena timeout Vercel karena berjalan secara mikro di-client.
+       await new Promise(resolve => setTimeout(resolve, 2500));
+       processQueue(); // REKURSIF
+    } else {
+       setQueueState(prev => ({ ...prev, isActive: false }));
+       toast.success("Operasi antrean AI selesai sempurna!", { id: "ai-grade" });
+    }
+  };
+
+  const triggerAIGrade = (ids: string[]) => {
+    if (ids.length === 0) return toast.error("Tidak ada data untuk dinilai AI");
+    if (queueState.isActive) return toast.error("Antrean sedang berjalan!");
+
+    queueRef.current = [...ids];
+    setQueueState({ isActive: true, total: ids.length, processed: 0, errors: 0 });
+    toast.loading("Memulai proses antrean AI bertahap...", { id: "ai-grade" });
+    processQueue();
   };
 
   const gradeAllPendingAI = () => {
@@ -111,14 +145,49 @@ export default function EssayReviewPage() {
              </select>
              <button 
                 onClick={gradeAllPendingAI}
-                disabled={isAiGrading}
+                disabled={queueState.isActive}
                 className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50"
              >
-                <Brain size={18} className={isAiGrading ? "animate-pulse" : ""} /> 
-                {isAiGrading ? "Memproses AI..." : "Grade All with AI"}
+                <Brain size={18} className={queueState.isActive ? "animate-pulse" : ""} /> 
+                {queueState.isActive ? "Dalam Antrean..." : "Grade All with AI"}
              </button>
           </div>
         </div>
+
+        {/* PROGRESS BAR WIDGET */}
+        {queueState.isActive && (
+          <div className="mb-6 p-4 md:p-6 bg-gradient-to-br from-indigo-900 to-purple-900 text-white rounded-2xl shadow-lg relative overflow-hidden">
+             <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold font-display flex items-center gap-2">
+                     <Brain className="animate-pulse text-purple-300" />
+                     Memproses Penilaian Otomatis...
+                  </h3>
+                  <p className="text-purple-200 text-sm mt-1">Memecah {queueState.total} jawaban ke dalam antrean (Batch Processing) untuk menghindari batas batas RPM server AI.</p>
+                </div>
+                <div className="text-center md:text-right w-full md:w-auto shrink-0 flex items-center gap-4 justify-between md:justify-end">
+                  <div className="text-left text-xs uppercase tracking-widest text-purple-300/80 font-bold hidden md:block">
+                     Progres saat ini<br/>
+                     <span className={queueState.errors > 0 ? "text-amber-400" : ""}>{queueState.errors} errors</span>
+                  </div>
+                  <div>
+                    <div className="text-3xl font-black font-display tracking-tight text-white mb-1">
+                       {queueState.processed} <span className="text-lg text-purple-300 font-bold">/ {queueState.total}</span>
+                    </div>
+                    <div className="text-xs text-purple-900 bg-purple-300 font-black uppercase tracking-wider py-1 px-3 rounded-full inline-block">
+                       {Math.round((queueState.processed / queueState.total) * 100)}% Selesai
+                    </div>
+                  </div>
+                </div>
+             </div>
+             <div className="w-full bg-purple-950/50 rounded-full h-3 mt-5 relative z-10 overflow-hidden shadow-inner">
+               <div 
+                  className="bg-gradient-to-r from-cyan-400 to-purple-400 h-3 rounded-full transition-all duration-[2500ms] ease-linear"
+                  style={{ width: `${Math.round((queueState.processed / queueState.total) * 100)}%` }}
+               />
+             </div>
+          </div>
+        )}
 
         {error && <div className="p-4 bg-red-50 text-red-600 rounded-xl">Error memuat data</div>}
         {isLoading && <div className="p-8 text-center text-gray-500">Memuat data...</div>}
@@ -232,8 +301,8 @@ export default function EssayReviewPage() {
                         {j.soal.tipeSoal === "ESSAY_PANJANG" && (
                           <button 
                              onClick={() => triggerAIGrade([j.id])}
-                             disabled={isAiGrading}
-                             className="w-full py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 font-bold rounded-lg text-sm flex items-center justify-center gap-1 transition disabled:opacity-50"
+                             disabled={queueState.isActive || j.aiGraded}
+                             className={`w-full py-2 font-bold rounded-lg text-sm flex items-center justify-center gap-1 transition ${j.aiGraded ? 'bg-purple-50 text-purple-300' : 'bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50'}`}
                           >
                              <Brain size={14}/> Nilai dengan AI
                           </button>

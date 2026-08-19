@@ -31,6 +31,42 @@ export async function GET(req: Request) {
       };
     }
 
+    const lite = searchParams.get("lite") === "1";
+
+    if (lite) {
+      // Lightweight mode: exclude dataTambahan, truncate pertanyaan
+      const soal = await prisma.bankSoalUsbu.findMany({
+        where,
+        select: {
+          id: true,
+          mapelId: true,
+          programId: true,
+          jenisSoalId: true,
+          tipeSoal: true,
+          pertanyaan: true,
+          gambarUrl: true,
+          bobot: true,
+          grupSoalId: true,
+          perintah: true,
+          kunciJawaban: true,
+          createdAt: true,
+          updatedAt: true,
+          opsiList: {
+            orderBy: { urutan: 'asc' },
+            select: { id: true, teks: true, gambarUrl: true, isCorrect: true, urutan: true }
+          },
+          mapel: { select: { nama_indo: true } },
+          program: { select: { nama_indo: true } },
+          jenisSoal: { select: { nama: true } },
+          usbuAssignments: true
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      // Return without truncating HTML to prevent broken tags
+      return NextResponse.json(soal);
+    }
+
+    // Full mode: includes dataTambahan and full pertanyaan (for editing)
     const soal = await prisma.bankSoalUsbu.findMany({
       where,
       include: {

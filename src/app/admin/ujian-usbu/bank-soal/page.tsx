@@ -10,6 +10,25 @@ import { CSS } from "@dnd-kit/utilities";
 import { detectTextDirection } from "@/lib/text-direction";
 import QuestionRenderer from "@/components/ujian/QuestionRenderer";
 
+// Lightweight text renderer for the list view to prevent browser hangs caused by heavy regex processing
+function LiteSoalText({ html, className = "", style }: { html: string, className?: string, style?: any }) {
+  if (!html) return null;
+  // Fast regex to check if there is any Arabic character in the content
+  const isArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(html);
+  
+  return (
+    <div 
+      dir="auto" 
+      className={`${className} ${isArabic ? "font-serif" : ""}`} 
+      style={{
+        ...(isArabic ? { fontFamily: "'Amiri', 'Traditional Arabic', 'Noto Naskh Arabic', serif", lineHeight: '2.2' } : {}),
+        ...style
+      }}
+      dangerouslySetInnerHTML={{ __html: html }} 
+    />
+  );
+}
+
 // Sortable Row Component for Drag and Drop options or questions
 function SortableItem({ id, children, className }: any) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -108,6 +127,8 @@ export default function BankSoalPage() {
   // Batch Assignment Statee
   const [selectedSoalIds, setSelectedSoalIds] = useState<string[]>([]);
   const [mapelOptions, setMapelOptions] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 20;
 
   const insertBlankAtCursor = (textareaId: string, currentText: string, onChangeCb: (newText: string) => void) => {
     const textarea = document.getElementById(textareaId) as HTMLTextAreaElement;
@@ -247,6 +268,7 @@ export default function BankSoalPage() {
 
   const fetchSoal = async () => {
     setLoadingSoal(true);
+    setCurrentPage(0);
     try {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal?programId=${selectedProgram}&mapelId=${selectedMapel}&jenisSoalId=${selectedJenisSoal}`);
       if (res.ok) setSoalList(await res.json());
@@ -342,23 +364,62 @@ export default function BankSoalPage() {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (soal: any) => {
-    setFormData({
-      id: soal.id,
-      tipeSoal: soal.tipeSoal,
-      jenisSoalId: selectedJenisSoal,
-      pertanyaan: soal.pertanyaan,
-      gambarUrl: soal.gambarUrl || "",
-      grupSoalId: soal.grupSoalId || "",
-      bobot: soal.bobot,
-      perintah: soal.perintah || "",
-      kunciJawaban: soal.kunciJawaban || "",
-      dataTambahan: soal.dataTambahan || {},
-      // pad with empty answers if less than 4, map existing IDs for drag and drop
-      jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
-        j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
-      )
-    });
+  const handleEdit = async (soal: any) => {
+    // Fetch full data (including dataTambahan) for this specific soal
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/bank-soal/${soal.id}`);
+      if (res.ok) {
+        const fullSoal = await res.json();
+        setFormData({
+          id: fullSoal.id,
+          tipeSoal: fullSoal.tipeSoal,
+          jenisSoalId: selectedJenisSoal,
+          pertanyaan: fullSoal.pertanyaan,
+          gambarUrl: fullSoal.gambarUrl || "",
+          grupSoalId: fullSoal.grupSoalId || "",
+          bobot: fullSoal.bobot,
+          perintah: fullSoal.perintah || "",
+          kunciJawaban: fullSoal.kunciJawaban || "",
+          dataTambahan: fullSoal.dataTambahan || {},
+          jawabanList: [...(fullSoal.opsiList || []), ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+            j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
+          )
+        });
+      } else {
+        // Fallback to lite data if fetch fails
+        setFormData({
+          id: soal.id,
+          tipeSoal: soal.tipeSoal,
+          jenisSoalId: selectedJenisSoal,
+          pertanyaan: soal.pertanyaan,
+          gambarUrl: soal.gambarUrl || "",
+          grupSoalId: soal.grupSoalId || "",
+          bobot: soal.bobot,
+          perintah: soal.perintah || "",
+          kunciJawaban: soal.kunciJawaban || "",
+          dataTambahan: soal.dataTambahan || {},
+          jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+            j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
+          )
+        });
+      }
+    } catch {
+      setFormData({
+        id: soal.id,
+        tipeSoal: soal.tipeSoal,
+        jenisSoalId: selectedJenisSoal,
+        pertanyaan: soal.pertanyaan,
+        gambarUrl: soal.gambarUrl || "",
+        grupSoalId: soal.grupSoalId || "",
+        bobot: soal.bobot,
+        perintah: soal.perintah || "",
+        kunciJawaban: soal.kunciJawaban || "",
+        dataTambahan: soal.dataTambahan || {},
+        jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+          j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
+        )
+      });
+    }
     setManualDir(null);
     setIsEditing(true);
     setIsModalOpen(true);
@@ -764,13 +825,32 @@ export default function BankSoalPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {Object.entries(
-            soalList.reduce((acc: any, soal: any) => {
+          {(() => {
+            const totalSoal = soalList.length;
+            const totalPages = Math.ceil(totalSoal / PAGE_SIZE);
+            const pagedSoal = soalList.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+            const grouped = pagedSoal.reduce((acc: any, soal: any) => {
               if (!acc[soal.tipeSoal]) acc[soal.tipeSoal] = [];
               acc[soal.tipeSoal].push(soal);
               return acc;
-            }, {})
-          ).map(([tipe, groupSoals]: [string, any]) => (
+            }, {});
+
+            return (
+              <>
+                {/* Page Info */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between bg-white rounded-xl p-3 border shadow-sm">
+                    <span className="text-xs font-bold text-gray-500">Menampilkan {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, totalSoal)} dari {totalSoal} soal</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={currentPage === 0} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 transition">← Prev</button>
+                      <span className="px-3 py-1.5 text-xs font-bold text-gray-600 bg-gray-50 rounded-lg">{currentPage + 1} / {totalPages}</span>
+                      <button onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={currentPage >= totalPages - 1} className="px-3 py-1.5 text-xs font-bold rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-30 transition">Next →</button>
+                    </div>
+                  </div>
+                )}
+
+                {Object.entries(grouped).map(([tipe, groupSoals]: [string, any]) => (
             <div key={tipe} className="space-y-4">
               <div className="border-b pb-2 mb-4">
                 <div className="flex items-center gap-2 mb-1">
@@ -796,13 +876,12 @@ export default function BankSoalPage() {
                     <div className="p-6">
                       <div className="flex gap-4 items-start">
                         <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white bg-[var(--color-primary)]">
-                          {index + 1}
+                          {currentPage * PAGE_SIZE + index + 1}
                         </div>
                         <div className="flex-1 pr-20">
                           <div className="flex gap-3 mb-3 items-center flex-wrap">
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">ID: {soal.id.substring(soal.id.length - 5)}</span>
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {Number.isInteger(soal.bobot) ? soal.bobot : soal.bobot.toFixed(2)} Poin</span>
-                            {/* Indikator Grup Qiro'ah */}
                             {soal.grupSoalId ? (
                               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-600 flex gap-1 items-center" title="Pertanyaan turunan dari bacaan lain">
                                 <Activity size={12} /> Anak Qiro&apos;ah
@@ -824,7 +903,7 @@ export default function BankSoalPage() {
                               <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full h-auto max-h-32 object-contain rounded-lg border shadow-sm" />
                             </div>
                           )}
-                          <SoalText html={soal.pertanyaan} className="font-semibold text-base leading-relaxed mb-4 whitespace-pre-wrap text-gray-800 block" />
+                          <LiteSoalText html={soal.pertanyaan} className="font-semibold text-base leading-relaxed mb-4 whitespace-pre-wrap text-gray-800 block" />
 
                           {soal.kunciJawaban && (
                             <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
@@ -833,9 +912,11 @@ export default function BankSoalPage() {
                             </div>
                           )}
 
-                          {/* Visualisasi Data Tambahan */}
+                          {/* Visualisasi Data Tambahan - COLLAPSED by default */}
                           {soal.dataTambahan && Object.keys(soal.dataTambahan).length > 0 && (
-                            <div className="mb-4">
+                            <details className="mb-4">
+                              <summary className="text-xs font-bold text-purple-600 cursor-pointer hover:text-purple-800 transition-colors">Lihat Data Tambahan ▾</summary>
+                              <div className="mt-2">
                               {soal.tipeSoal === "MENJODOHKAN" && (
                                 <div className="bg-orange-50 border border-orange-100 rounded-lg p-3">
                                   <h4 className="text-xs font-bold text-orange-800 mb-2 uppercase tracking-wider block">Pasangan Menjodohkan:</h4>
@@ -1029,7 +1110,8 @@ export default function BankSoalPage() {
                                   <pre className="text-gray-600 font-mono">{JSON.stringify(soal.dataTambahan, null, 2)}</pre>
                                 </div>
                               )}
-                            </div>
+                              </div>
+                            </details>
                           )}
 
                           <div className="space-y-2.5">
@@ -1039,7 +1121,7 @@ export default function BankSoalPage() {
                                   {String.fromCharCode(65 + i)}
                                 </div>
                                 <div className="flex-1 overflow-hidden">
-                                  <SoalText html={j.teks} className="font-medium text-gray-700 block" style={{ color: j.isCorrect ? '#166534' : '' }} />
+                                  <LiteSoalText html={j.teks} className="font-medium text-gray-700 block" style={{ color: j.isCorrect ? '#166534' : '' }} />
                                   {j.gambarUrl && (
                                     <div className="mt-2">
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1080,6 +1162,18 @@ export default function BankSoalPage() {
               </div>
             </div>
           ))}
+
+                {/* Bottom Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 py-4">
+                    <button onClick={() => { setCurrentPage(p => Math.max(0, p - 1)); window.scrollTo(0, 0); }} disabled={currentPage === 0} className="px-4 py-2 text-sm font-bold rounded-xl bg-white border hover:bg-gray-50 disabled:opacity-30 transition shadow-sm">← Sebelumnya</button>
+                    <span className="text-sm font-bold text-gray-500">Hal {currentPage + 1} / {totalPages}</span>
+                    <button onClick={() => { setCurrentPage(p => Math.min(totalPages - 1, p + 1)); window.scrollTo(0, 0); }} disabled={currentPage >= totalPages - 1} className="px-4 py-2 text-sm font-bold rounded-xl bg-white border hover:bg-gray-50 disabled:opacity-30 transition shadow-sm">Berikutnya →</button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 

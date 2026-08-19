@@ -810,6 +810,9 @@ model BankSoalUsbu {
   // Self-relation: grup qiro'ah
   grupInduk     BankSoalUsbu?  @relation("GrupSoal", fields: [grupSoalId], references: [id], onDelete: SetNull)
   anakGrup      BankSoalUsbu[] @relation("GrupSoal")
+
+  @@index([programId, mapelId, jenisSoalId])
+  @@index([mapelId])
 }
 
 model OpsiSoalUsbu {

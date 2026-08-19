@@ -20,10 +20,12 @@ export default function ClientMengerjakanUjian() {
   const [showSummary, setShowSummary] = useState(false);
   const [secureMode, setSecureMode] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Anti-cheat refs
   const hasSubmitted = useRef(false);
   const isSaving = useRef(false);
+  const wakeLockRef = useRef<any>(null);
 
   useEffect(() => {
     if (!sesiId) return router.replace("/santri/ujian");
@@ -72,6 +74,40 @@ export default function ClientMengerjakanUjian() {
     if (hasStarted) {
       const timer = setTimeout(() => setSecureMode(true), 2500);
       return () => clearTimeout(timer);
+    }
+  }, [hasStarted]);
+
+  // Wake Lock API to prevent screen from sleeping during the exam
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator && !hasSubmitted.current) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+      }
+    } catch (err: any) {
+      console.warn(`Wake Lock request failed: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
+    if (hasStarted && !hasSubmitted.current) {
+      requestWakeLock();
+      
+      // Re-request if visibility changes back to visible (though our anti-cheat usually handles tab switches)
+      const handleVisChange = () => {
+        if (document.visibilityState === 'visible') {
+          requestWakeLock();
+        }
+      };
+      
+      document.addEventListener("visibilitychange", handleVisChange);
+      
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisChange);
+        if (wakeLockRef.current) {
+          wakeLockRef.current.release().catch(() => {});
+          wakeLockRef.current = null;
+        }
+      };
     }
   }, [hasStarted]);
 
@@ -211,6 +247,14 @@ export default function ClientMengerjakanUjian() {
     const interval = setInterval(pullStatus, 15000);
     return () => clearInterval(interval);
   }, [hasStarted, sesiId, router]);
+
+  // Track Fullscreen status for fallback UI
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   const enterFullscreen = () => {
     const elem = document.documentElement;
     if (elem.requestFullscreen) {
@@ -545,6 +589,16 @@ export default function ClientMengerjakanUjian() {
            </div>
            
            <div className="flex items-center gap-2">
+             {/* Fullscreen Fallback Toggle */}
+             {!isFullscreen && hasStarted && !hasSubmitted.current && (
+               <button 
+                 onClick={enterFullscreen}
+                 className="px-3 py-1.5 md:py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition font-bold text-xs"
+               >
+                 Abaikan ini dan Kembali ke Fullscreen
+               </button>
+             )}
+             
              {/* Mobile Nav Toggle */}
              <button 
                onClick={() => setShowMobileNav(!showMobileNav)}

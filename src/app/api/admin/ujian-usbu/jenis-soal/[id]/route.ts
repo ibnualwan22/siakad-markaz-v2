@@ -4,17 +4,14 @@ import prisma from "@/lib/prisma";
 export async function PUT(req: Request, { params }: any) {
   try {
     const { id } = await params;
-    const { nama, urutan } = await req.json();
-
-    if (!nama) {
-      return NextResponse.json({ error: "Nama diperlukan" }, { status: 400 });
-    }
+    const { nama, urutan, instruksi } = await req.json();
 
     const updated = await prisma.jenisSoal.update({
       where: { id },
       data: { 
-        nama,
-        ...(urutan !== undefined && { urutan })
+        ...(nama !== undefined && { nama }),
+        ...(urutan !== undefined && { urutan }),
+        ...(instruksi !== undefined && { instruksi })
       },
     });
 

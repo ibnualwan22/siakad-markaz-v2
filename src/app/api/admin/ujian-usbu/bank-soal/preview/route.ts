@@ -44,7 +44,8 @@ export async function GET(req: Request) {
           orderBy: { urutan: 'asc' },
           select: { id: true, teks: true, gambarUrl: true, urutan: true, isCorrect: true }
         },
-        mapel: { select: { nama_indo: true } }
+        mapel: { select: { nama_indo: true } },
+        jenisSoal: { select: { instruksi: true } }
       },
       orderBy: { createdAt: 'asc' }
     });
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
         grupSoalId: s.grupSoalId,
         tipeSoal: s.tipeSoal,
         bobot: s.bobot,
-        perintah: s.perintah,
+        perintah: s.jenisSoal?.instruksi || s.perintah,
         kunciJawaban: s.kunciJawaban,
         dataTambahan: s.dataTambahan,
         opsiList: s.opsiList.map(o => ({

@@ -31,7 +31,8 @@ export async function POST(req: Request) {
           include: {
             soal: {
               include: {
-                opsiList: true
+                opsiList: true,
+                jenisSoal: { select: { instruksi: true } }
               }
             }
           }
@@ -116,7 +117,7 @@ export async function POST(req: Request) {
         gambarUrl: sp.soal.gambarUrl,
         grupSoalId: sp.soal.grupSoalId,
         tipeSoal: sp.soal.tipeSoal,
-        perintah: sp.soal.perintah,
+        perintah: sp.soal.jenisSoal?.instruksi || sp.soal.perintah,
         dataTambahan: extractedData,
         bobot: sp.soal.bobot,
         opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(safeOpsi) : safeOpsi,

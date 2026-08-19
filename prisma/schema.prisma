@@ -762,6 +762,7 @@ model JenisSoal {
   id        String   @id @default(cuid())
   mapelId   String
   nama      String
+  instruksi String?
   urutan    Int      @default(0)
   createdAt DateTime @default(now())
 

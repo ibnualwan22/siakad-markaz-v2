@@ -20,10 +20,6 @@ export async function PUT(
     const { id } = await params;
     const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
-    if (!pertanyaan && !gambarUrl) {
-      return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
-    }
-
     // Update soal and re-create opsi
     const updatedSoal = await prisma.bankSoalUsbu.update({
       where: { id },

@@ -64,8 +64,8 @@ export async function POST(req: Request) {
 
     const { mapelId, programId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
-    if (!mapelId || !programId || (!pertanyaan && !gambarUrl)) {
-      return NextResponse.json({ error: "Pertanyaan atau gambar tidak boleh kosong" }, { status: 400 });
+    if (!mapelId || !programId) {
+      return NextResponse.json({ error: "Mapel atau Program tidak boleh kosong" }, { status: 400 });
     }
 
     const newSoal = await prisma.bankSoalUsbu.create({

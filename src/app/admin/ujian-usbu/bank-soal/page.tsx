@@ -98,13 +98,14 @@ export default function BankSoalPage() {
   const [selectedMapel, setSelectedMapel] = useState("");
   const [selectedUsbu, setSelectedUsbu] = useState("1"); // only used for testing/legacy or defaults? Actually we'll use it for Preview default.
   // const [selectedPaketSoal, setSelectedPaketSoal] = useState("A"); removed
-
   const [jenisSoalList, setJenisSoalList] = useState<any[]>([]);
   const [selectedJenisSoal, setSelectedJenisSoal] = useState("");
   const [isAddJenisModalOpen, setIsAddJenisModalOpen] = useState(false);
   const [addJenisSoalTipe, setAddJenisSoalTipe] = useState("PG");
-
-  // Batch Assignment State
+  const [instruksiText, setInstruksiText] = useState("");
+  const [savingInstruksi, setSavingInstruksi] = useState(false);
+  
+  // Batch Assignment Statee
   const [selectedSoalIds, setSelectedSoalIds] = useState<string[]>([]);
   const [mapelOptions, setMapelOptions] = useState<any[]>([]);
 
@@ -182,6 +183,8 @@ export default function BankSoalPage() {
 
   useEffect(() => {
     if (selectedMapel && selectedProgram && selectedJenisSoal) {
+      const active = jenisSoalList.find(j => j.id === selectedJenisSoal);
+      setInstruksiText(active?.instruksi || "");
       fetchSoal();
     } else {
       setSoalList([]);
@@ -253,6 +256,25 @@ export default function BankSoalPage() {
       fetchJenisSoal();
     } catch (err: any) {
       toast.error(err.message || "Gagal menambah jenis soal");
+    }
+  };
+
+  const handleUpdateInstruksi = async () => {
+    if (!selectedJenisSoal) return;
+    setSavingInstruksi(true);
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/jenis-soal/${selectedJenisSoal}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruksi: instruksiText })
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success("Instruksi berhasil disimpan");
+      fetchJenisSoal();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menyinmpan instruksi");
+    } finally {
+      setSavingInstruksi(false);
     }
   };
 
@@ -637,6 +659,28 @@ export default function BankSoalPage() {
               <div className="text-sm font-medium text-gray-400 italic py-2">Belum ada jenis soal. Klik &apos;Tambah Jenis Soal&apos;.</div>
             )}
           </div>
+          
+          {selectedJenisSoal && (
+            <div className="mt-4 p-4 border border-blue-100 bg-blue-50/30 rounded-xl flex flex-col md:flex-row gap-3 md:items-end">
+               <div className="flex-1">
+                 <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Instruksi Global (Opsional, Ditampilkan pada setiap soal di Ujian Santri)</label>
+                 <input 
+                   type="text" 
+                   value={instruksiText}
+                   onChange={(e) => setInstruksiText(e.target.value)}
+                   placeholder="Contoh: Pilihlah jawaban yang paling benar!"
+                   className="neu-input w-full p-2.5 text-sm outline-none border border-gray-200 focus:border-blue-400 focus:bg-white"
+                 />
+               </div>
+               <button 
+                 onClick={handleUpdateInstruksi}
+                 disabled={savingInstruksi}
+                 className="px-5 py-2.5 bg-blue-100 text-blue-700 font-bold text-sm rounded-lg hover:bg-blue-200 transition-colors shrink-0 disabled:opacity-50"
+               >
+                 {savingInstruksi ? "Menyimpan..." : "Simpan Instruksi"}
+               </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1121,32 +1165,6 @@ export default function BankSoalPage() {
                   );
                 })()}
               </div>
-
-              {(() => {
-                const isFirstOfType = !soalList.some((s: any) => s.tipeSoal === formData.tipeSoal && s.id !== formData.id);
-                if (isFirstOfType) {
-                  return (
-                    <div className="mt-2 text-left">
-                      <label className="text-sm font-bold text-gray-700 block mb-2">Instruksi / Perintah Khusus Tipe Soal (Opsional)</label>
-                      <input
-                        type="text"
-                        value={formData.perintah || ""}
-                        onChange={e => setFormData({ ...formData, perintah: e.target.value })}
-                        placeholder="Contoh: Jawablah dengan singkat dan jelas!"
-                        className="neu-input w-full p-3 text-sm focus:border-[var(--color-primary)]"
-                      />
-                      <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Ini adalah soal pertama dari tipe <strong>{formData.tipeSoal.replace(/_/g, ' ')}</strong>. Instruksi ini akan berlaku sebagai panduan untuk semua soal tipe ini.</p>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="mt-2 text-left p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center gap-2 text-sm text-gray-500">
-                      <Activity size={16} className="text-gray-400" />
-                      <span>Instruksi tipe soal ini sudah diatur pada soal sebelumnya. (Cukup isi di soal pertama).</span>
-                    </div>
-                  );
-                }
-              })()}
 
               {/* ESSAY KEY */}
               {["ESSAY_SINGKAT", "ESSAY_PANJANG", "KITABAH"].includes(formData.tipeSoal) && (

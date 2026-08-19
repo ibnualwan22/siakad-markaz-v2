@@ -109,6 +109,27 @@ export default function BankSoalPage() {
   const [selectedSoalIds, setSelectedSoalIds] = useState<string[]>([]);
   const [mapelOptions, setMapelOptions] = useState<any[]>([]);
 
+  const insertBlankAtCursor = (textareaId: string, currentText: string, onChangeCb: (newText: string) => void) => {
+    const textarea = document.getElementById(textareaId) as HTMLTextAreaElement;
+    const matches = currentText.match(/\{\{(\d+)\}\}/g) || [];
+    const indices = matches.map(m => parseInt(m.replace(/\D/g, '')));
+    const nextIdx = indices.length > 0 ? Math.max(...indices) + 1 : 1;
+    const injection = `{{${nextIdx}}}`;
+
+    if (textarea) {
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      const newText = currentText.substring(0, startPos) + injection + currentText.substring(endPos);
+      onChangeCb(newText);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(startPos + injection.length, startPos + injection.length);
+      }, 0);
+    } else {
+      onChangeCb(currentText + ` ${injection}`);
+    }
+  };
+
   const [soalList, setSoalList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSoal, setLoadingSoal] = useState(false);
@@ -1554,12 +1575,24 @@ export default function BankSoalPage() {
                     return (
                       <div className="space-y-4">
                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Wacana Arab / Paragraf Rumpang</label>
-                        <p className="text-xs text-purple-600 mb-2 font-medium">Gunakan tag <code className="bg-white font-mono px-1 rounded">{"{{1}}"}</code>, <code className="bg-white font-mono px-1 rounded">{"{{2}}"}</code>, dst untuk merepresentasikan titik-titik rumpang.</p>
+                        <p className="text-xs text-purple-600 mb-2 font-medium">Klik tombol sisipkan atau ketik manual <code className="bg-white font-mono px-1 rounded">{"{{1}}"}</code>, <code className="bg-white font-mono px-1 rounded">{"{{2}}"}</code>, dst untuk merepresentasikan titik-titik rumpang.</p>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => insertBlankAtCursor("pr-textarea", paragraf, (val) => setFormData({ ...formData, dataTambahan: { ...dt, paragraf: val } }))}
+                            className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-bold rounded-lg flex items-center gap-1 transition"
+                          >
+                            ➕ Sisipkan Ruang Kosong (Blank)
+                          </button>
+                        </div>
+
                         <textarea
+                          id="pr-textarea"
                           value={paragraf}
                           dir="auto"
                           onChange={e => setFormData({ ...formData, dataTambahan: { ...dt, paragraf: e.target.value } })}
-                          className={`w-full p-4 border border-purple-200 rounded-xl bg-white focus:ring-2 focus:outline-none min-h-[120px] font-serif`}
+                          className={`w-full p-4 border border-purple-200 rounded-xl bg-gray-50 focus:bg-white focus:border-purple-400 focus:ring-2 focus:ring-purple-200 outline-none min-h-[120px] font-serif transition-colors`}
                           placeholder="Contoh: Rukun iman berjumlah {{1}} perkara, sedangkan sholat masuk dalam rukun {{2}}."
                         />
 
@@ -1818,10 +1851,20 @@ export default function BankSoalPage() {
                     return (
                       <div className="space-y-4">
                         <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">Wacana Teks Rumpang & Word Bank</label>
-                        <p className="text-xs text-purple-600 mb-2 font-medium">Beri tanda {'{{1}}'}, {'{{2}}'}, dst pada teks untuk membuat kolom rumpang. Santri akan menarik chip dari Bank Kata ke dalam lubang-lubang tersebut.</p>
+                        <p className="text-xs text-purple-600 mb-2 font-medium">Klik tombol sisipkan untuk membuat kolom rumpang (blank). Santri akan menarik chip dari Bank Kata ke dalam lubang-lubang tersebut.</p>
 
                         <div className="bg-white p-4 rounded-xl border border-purple-100 shadow-sm">
+                          <div className="flex gap-2 mb-3">
+                            <button
+                              type="button"
+                              onClick={() => insertBlankAtCursor("dtb-textarea", wg, handlePargrafChange)}
+                              className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 text-xs font-bold rounded-lg flex items-center gap-1 transition shadow-sm"
+                            >
+                              ➕ Sisipkan Ruang Kosong (Blank)
+                            </button>
+                          </div>
                           <textarea
+                            id="dtb-textarea"
                             dir="auto"
                             rows={4}
                             value={wg}

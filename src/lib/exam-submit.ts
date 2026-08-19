@@ -336,54 +336,56 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
       nilai: nilaiAkhir
     });
 
-    // Update nilai di tabel `Nilai`
-    let fieldToUpdate = "";
-    if (paket.sesiGlobal.usbuKe === 3 || mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
-      // Jika ujian ini adalah ujian ke-3, atau mapel ini cuma 1 tes (langsung final), atau modenya 1 kolom
-      fieldToUpdate = "nilaiNihai";
-    } else if (paket.sesiGlobal.usbuKe === 1) {
-      fieldToUpdate = "nilaiUsbu1";
-    } else if (paket.sesiGlobal.usbuKe === 2) {
-      fieldToUpdate = "nilaiUsbu2";
-    }
-
-    // Ambil nilai lama
-    let recordNilai = await prisma.nilai.findUnique({
-      where: { riwayatId_mapelId: { riwayatId, mapelId } }
-    });
-
-    if (!recordNilai) {
-      recordNilai = await prisma.nilai.create({
-        data: { riwayatId, mapelId, [fieldToUpdate]: nilaiAkhir }
-      });
-    } else {
-      recordNilai = await prisma.nilai.update({
-        where: { id: recordNilai.id },
-        data: { [fieldToUpdate]: nilaiAkhir }
-      });
-    }
-
-    // Recalculate Final Score 'nilaiAkhir' for this mapel if possible
-    let finalA = null;
-    if (mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
-      finalA = recordNilai.nilaiNihai;
-    } else if (effectiveUsbuainMode === 2 && mapel.jumlah_tes === 3) {
-      if (recordNilai.nilaiUsbu1 !== null && recordNilai.nilaiUsbu2 !== null) {
-         finalA = calcMapelNilaiAkhirUsbuain2({ u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2 });
+    if (!paket.sesiGlobal.isSimulasi) {
+      // Update nilai di tabel `Nilai`
+      let fieldToUpdate = "";
+      if (paket.sesiGlobal.usbuKe === 3 || mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
+        // Jika ujian ini adalah ujian ke-3, atau mapel ini cuma 1 tes (langsung final), atau modenya 1 kolom
+        fieldToUpdate = "nilaiNihai";
+      } else if (paket.sesiGlobal.usbuKe === 1) {
+        fieldToUpdate = "nilaiUsbu1";
+      } else if (paket.sesiGlobal.usbuKe === 2) {
+        fieldToUpdate = "nilaiUsbu2";
       }
-    } else {
-      // Normal 3 kolom atau sesuai rules akbarnas
-      finalA = calcMapelNilaiAkhir(
-        { u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2, n: recordNilai.nilaiNihai },
-        isAkbarnas
-      );
-    }
 
-    if (finalA !== null) {
-      await prisma.nilai.update({
-        where: { id: recordNilai.id },
-        data: { nilaiAkhir: finalA }
+      // Ambil nilai lama
+      let recordNilai = await prisma.nilai.findUnique({
+        where: { riwayatId_mapelId: { riwayatId, mapelId } }
       });
+
+      if (!recordNilai) {
+        recordNilai = await prisma.nilai.create({
+          data: { riwayatId, mapelId, [fieldToUpdate]: nilaiAkhir }
+        });
+      } else {
+        recordNilai = await prisma.nilai.update({
+          where: { id: recordNilai.id },
+          data: { [fieldToUpdate]: nilaiAkhir }
+        });
+      }
+
+      // Recalculate Final Score 'nilaiAkhir' for this mapel if possible
+      let finalA = null;
+      if (mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
+        finalA = recordNilai.nilaiNihai;
+      } else if (effectiveUsbuainMode === 2 && mapel.jumlah_tes === 3) {
+        if (recordNilai.nilaiUsbu1 !== null && recordNilai.nilaiUsbu2 !== null) {
+           finalA = calcMapelNilaiAkhirUsbuain2({ u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2 });
+        }
+      } else {
+        // Normal 3 kolom atau sesuai rules akbarnas
+        finalA = calcMapelNilaiAkhir(
+          { u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2, n: recordNilai.nilaiNihai },
+          isAkbarnas
+        );
+      }
+
+      if (finalA !== null) {
+        await prisma.nilai.update({
+          where: { id: recordNilai.id },
+          data: { nilaiAkhir: finalA }
+        });
+      }
     }
   }
 

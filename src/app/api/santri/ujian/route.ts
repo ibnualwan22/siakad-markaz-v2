@@ -35,10 +35,13 @@ export async function GET() {
       return NextResponse.json({ error: "Santri belum memiliki program/kelas" }, { status: 400 });
     }
 
-    // Cari paket ujian yang tersedia untuk program kelas ini
+    // Cari paket ujian yang tersedia untuk program kelas ini ATAU paket yang merupakan simulasi global
     const paketTersedia = await prisma.paketUjian.findMany({
       where: {
-        programId: programIdForExam
+        OR: [
+          { programId: programIdForExam },
+          { sesiGlobal: { isSimulasi: true } }
+        ]
       },
       include: {
         sesiList: {

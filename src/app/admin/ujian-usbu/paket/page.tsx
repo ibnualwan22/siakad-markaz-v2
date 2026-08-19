@@ -18,6 +18,7 @@ export default function SesiUjianPage() {
   const [durasiMenit, setDurasiMenit] = useState("120");
   const [acakSoal, setAcakSoal] = useState(true);
   const [acakOpsi, setAcakOpsi] = useState(true);
+  const [isSimulasi, setIsSimulasi] = useState(false);
   
   // Program Selection
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
@@ -67,6 +68,7 @@ export default function SesiUjianPage() {
   const handleCreateNew = () => {
     setUsbuKe("1");
     setDurasiMenit("120");
+    setIsSimulasi(false);
     setSelectedPrograms(programList.map(p => p.id));
     setIsModalOpen(true);
   };
@@ -89,6 +91,7 @@ export default function SesiUjianPage() {
       durasiMenit: Number(durasiMenit),
       acakSoal,
       acakOpsi,
+      isSimulasi,
       programIds: selectedPrograms
     };
 
@@ -206,7 +209,10 @@ export default function SesiUjianPage() {
              <div key={sesi.id} className={`rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border-2 ${sesi.isActive ? 'border-green-400 shadow-green-100/50 transform -translate-y-1' : 'border-gray-200 bg-white hover:shadow-gray-200/50'}`}>
                <div className={`p-5 flex gap-4 items-center justify-between border-b ${sesi.isActive ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white border-green-500' : 'bg-gray-50 text-gray-800 border-gray-100'}`}>
                  <div>
-                   <div className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 ${sesi.isActive ? 'text-green-100' : 'text-gray-500'}`}>Sesi Global</div>
+                   <div className={`text-[10px] uppercase font-bold tracking-widest mb-1.5 flex items-center gap-2 ${sesi.isActive ? 'text-green-100' : 'text-gray-500'}`}>
+                     Sesi Global
+                     {sesi.isSimulasi && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md text-[9px]">SIMULASI UMUM</span>}
+                   </div>
                    <h3 className="font-black text-xl leading-tight">{sesi.nama}</h3>
                  </div>
                  <div className={`shrink-0 w-16 h-16 rounded-2xl font-display font-black text-2xl flex items-center justify-center shadow-inner border-2 ${sesi.isActive ? 'bg-white text-green-600 border-green-200' : 'bg-white text-gray-400 border-gray-100'}`}>
@@ -334,6 +340,13 @@ export default function SesiUjianPage() {
                   <label className="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" checked={acakOpsi} onChange={e => setAcakOpsi(e.target.checked)} className="w-5 h-5 rounded border-gray-300 accent-blue-600" />
                     <span className="text-sm font-bold text-gray-700 group-hover:text-blue-600 transition-colors">Acak Pilihan (A,B,C,D)</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer group pt-4 border-t border-gray-100">
+                    <input type="checkbox" checked={isSimulasi} onChange={e => setIsSimulasi(e.target.checked)} className="w-5 h-5 rounded border-gray-300 accent-purple-600" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-700 group-hover:text-purple-600 transition-colors">Jadikan Simulasi Universal</span>
+                      <span className="text-[10px] text-gray-400 font-medium leading-tight mt-1">Akan muncul di dashboard SATUAN SELURUH PROGRAM. Nilai uji tidak akan merusak rapot.</span>
+                    </div>
                   </label>
                 </div>
               </div>

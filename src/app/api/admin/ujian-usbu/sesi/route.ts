@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programIds, programPaketMap } = await req.json();
+    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programIds, programPaketMap, isSimulasi } = await req.json();
 
     const selectedPrograms = programIds || (programPaketMap ? Object.keys(programPaketMap) : []);
 
@@ -72,6 +72,7 @@ export async function POST(req: Request) {
           acakSoal: acakSoal ?? true,
           acakOpsi: acakOpsi ?? true,
           isActive: false, 
+          isSimulasi: isSimulasi ?? false,
         }
       });
 

@@ -1,12 +1,32 @@
 "use client";
 
+function seededRandom(seed: number) {
+  const x = Math.sin(seed++) * 10000;
+  return x - Math.floor(x);
+}
+
+function stableShuffle(array: any[], seedStr: string) {
+  let seed = 0;
+  for (let i = 0; i < seedStr.length; i++) seed += seedStr.charCodeAt(i);
+  let currentIndex = array.length, randomIndex;
+  const result = [...array];
+  while (currentIndex !== 0) {
+    randomIndex = Math.floor(seededRandom(seed++) * currentIndex);
+    currentIndex--;
+    [result[currentIndex], result[randomIndex]] = [result[randomIndex], result[currentIndex]];
+  }
+  return result;
+}
+
 import React, { useState, useEffect } from "react";
+import { Grid3X3 } from "lucide-react";
 import SoalText from "@/components/soal-text";
 import {
   DndContext,
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -48,10 +68,9 @@ function SortableItem({ id, item, isHorizontal, isMatch, index }: { id: string, 
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
-      className={`bg-white border-2 border-gray-200 rounded-xl cursor-grab active:cursor-grabbing shadow-sm transition-colors z-10 relative 
-        ${isHorizontal ? 'p-1 flex items-center justify-center font-serif text-3xl w-14 h-14 md:w-16 md:h-16 shrink-0 text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100' : 'p-3 md:p-4 w-full text-left flex items-center gap-3 hover:border-blue-300'}`
+      {...(isHorizontal ? { ...attributes, ...listeners } : {})}
+      className={`bg-white border-2 border-gray-200 rounded-xl ${isHorizontal ? 'cursor-grab active:cursor-grabbing' : ''} shadow-sm transition-colors z-10 relative flex items-center gap-3
+        ${isHorizontal ? 'p-1 justify-center font-serif text-3xl w-14 h-14 md:w-16 md:h-16 shrink-0 text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100' : 'p-3 md:p-4 w-full text-left hover:border-blue-300'}`
       }
     >
       {!isHorizontal && !isMatch && index !== undefined && (
@@ -59,7 +78,15 @@ function SortableItem({ id, item, isHorizontal, isMatch, index }: { id: string, 
             {index + 1}
          </div>
       )}
-      {!isHorizontal && <div className="text-gray-300 hover:text-gray-500 transition-colors">☰</div>}
+      {!isHorizontal && (
+         <div 
+           className="text-gray-300 hover:text-gray-500 transition-colors cursor-grab active:cursor-grabbing p-1 md:p-2 -ml-2 select-none touch-none"
+           {...attributes}
+           {...listeners}
+         >
+           ☰
+         </div>
+      )}
       <div className={isHorizontal ? "select-none" : "flex-1 overflow-hidden"}>{item}</div>
     </div>
   );
@@ -87,7 +114,12 @@ function OrderingComponent({
   }, [value, initialItems]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -137,7 +169,7 @@ function OrderingComponent({
                    </div>
                  );
                })()}
-               <div className={fixedLefts ? "flex-1 relative z-10 overflow-hidden" : "w-full"}>
+               <div className={fixedLefts ? "flex-1 relative z-10 min-w-0" : "w-full"}>
                  <SortableItem 
                     id={item} 
                     item={<SoalText html={item} className={`pointer-events-none prose break-words ${isHorizontal ? '' : 'text-sm md:text-base'}`} />} 
@@ -966,27 +998,145 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
     );
   }
 
+function TapAndConnectComponent({ 
+  lefts, 
+  rights, 
+  value, 
+  onChange 
+}: { 
+  lefts: string[], 
+  rights: string[], 
+  value: { left: string, right: string }[], 
+  onChange: (pairs: { left: string, right: string }[]) => void 
+}) {
+  const [activeLeft, setActiveLeft] = useState<number | null>(null);
+
+  // Initialize first empty slot automatically if none is active
+  useEffect(() => {
+    if (activeLeft === null && value.length < lefts.length) {
+      const firstEmpty = lefts.findIndex(l => !value.some(p => p.left === l));
+      if (firstEmpty !== -1) setActiveLeft(firstEmpty);
+    }
+  }, [activeLeft, value, lefts]);
+
+  const handleLeftClick = (index: number) => {
+    const leftItem = lefts[index];
+    const hasPair = value.some(p => p.left === leftItem);
+    
+    if (hasPair) {
+      // Clear pair and make active
+      onChange(value.filter(p => p.left !== leftItem));
+      setActiveLeft(index);
+    } else {
+      setActiveLeft(activeLeft === index ? null : index);
+    }
+  };
+
+  const handleRightClick = (rightItem: string) => {
+    let focusIndex = activeLeft;
+    if (focusIndex === null) {
+      const emptyIndex = lefts.findIndex(l => !value.some(p => p.left === l));
+      if (emptyIndex !== -1) focusIndex = emptyIndex;
+      else return; // All full
+    }
+    
+    const leftItem = lefts[focusIndex];
+    // Remove if rightItem is linked elsewhere, or leftItem is already linked
+    const newPairs = value.filter(p => p.left !== leftItem && p.right !== rightItem);
+    newPairs.push({ left: leftItem, right: rightItem });
+    onChange(newPairs);
+    
+    // Auto advance to next empty slot
+    const nextEmpty = lefts.findIndex(l => l !== leftItem && !newPairs.some(p => p.left === l));
+    setActiveLeft(nextEmpty !== -1 ? nextEmpty : null);
+  };
+
+  return (
+    <div className="flex flex-col gap-5 mt-4 w-full max-w-2xl">
+      <div className="grid gap-3 w-full">
+         {lefts.map((l, idx) => {
+            const pairedRight = value.find(p => p.left === l)?.right;
+            const color = matchColors[idx % matchColors.length];
+            const isActive = activeLeft === idx;
+            return (
+              <div 
+                key={idx} 
+                onClick={() => handleLeftClick(idx)}
+                className={`flex flex-col md:flex-row items-stretch border-2 rounded-2xl cursor-pointer transition-all ${isActive ? 'ring-4 ring-indigo-300 border-indigo-400 scale-[1.02] shadow-md relative z-10' : 'border-gray-200 hover:border-indigo-200 bg-white shadow-sm'}`}
+              >
+                 <div className="flex-1 p-3 md:p-4 flex items-center justify-center border-b-2 md:border-b-0 md:border-r-2" style={{ borderColor: color }}>
+                    <SoalText html={l} className="text-sm md:text-base font-medium prose break-words" />
+                 </div>
+                 <div className={`flex-1 p-3 md:p-4 flex items-center justify-center transition-colors ${pairedRight ? 'bg-indigo-50/50' : (isActive ? 'bg-indigo-50 animate-pulse' : 'bg-gray-50')}`}>
+                    {pairedRight ? (
+                      <SoalText html={pairedRight} className="text-base font-bold text-indigo-900 prose break-words" />
+                    ) : (
+                      <span className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-indigo-500' : 'text-gray-400'}`}>
+                        {isActive ? '↓ Pilih jawaban di bawah ↓' : 'Ketuk untuk mengisi...'}
+                      </span>
+                    )}
+                 </div>
+              </div>
+            );
+         })}
+      </div>
+      
+      {/* Option Bank */}
+      <div className="mt-4 border-t-2 border-dashed border-gray-200 pt-6">
+        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Grid3X3 size={16} /> Bank Opsi Jawaban:
+        </h4>
+        <div className="flex flex-wrap gap-3 justify-center" dir="rtl">
+           {rights.map((r, idx) => {
+              const isUsed = value.some(p => p.right === r);
+              if (isUsed) return null; // Hide used options
+              return (
+                 <button 
+                   key={idx} 
+                   onClick={() => handleRightClick(r)} 
+                   disabled={activeLeft === null && value.length === lefts.length}
+                   className={`p-3 px-5 bg-white border-2 border-indigo-200 text-indigo-900 rounded-xl shadow-sm transition-all transform hover:-translate-y-1 hover:shadow-md active:scale-95 ${activeLeft === null && value.length === lefts.length ? 'opacity-50 cursor-not-allowed' : ''}`}
+                 >
+                    <SoalText html={r} className="text-base font-medium pointer-events-none" />
+                 </button>
+              );
+           })}
+           {rights.every(r => value.some(p => p.right === r)) && (
+             <div className="w-full text-center p-4 rounded-xl bg-green-50 border border-green-200 text-green-700 font-bold text-sm">
+               Semua pasangan sudah terisi! ✅
+             </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================= ORIGINAL QUESTION RENDERER =================
+
   if (tipeSoal === "MENJODOHKAN") {
     const lefts = dataTambahan?.lefts || [];
-    const rights = dataTambahan?.rights || [];
+    let rights = dataTambahan?.rights || [];
     const currentPairs = jawabanData?.pairs || [];
     
-    // Map currentPairs to ordered rights list
+    // Map currentPairs to ordered rights list, or shuffle deterministically if pristine
     let orderedRights = [...rights];
     if (currentPairs.length === lefts.length) {
        orderedRights = currentPairs.map((p: any) => p.right);
+    } else {
+       orderedRights = stableShuffle(rights, soal.soalId);
     }
 
     return (
       <div className="mt-4">
-        <p className="text-sm text-gray-500 mb-4 items-center gap-2 flex"><span className="bg-blue-100 text-blue-600 p-1 px-2 rounded font-bold text-xs">INFO</span> Geser item di sebelah <strong className="text-gray-700">kanan</strong> ke atas/bawah agar sejajar dengan pasangan yang tepat di sebelah <strong className="text-gray-700">kiri</strong>.</p>
+        <p className="text-sm text-gray-500 mb-4 items-center gap-2 flex"><span className="bg-blue-100 text-blue-600 p-1 px-2 rounded font-bold text-xs">INFO</span> Untuk memindahkan dari HP, <strong className="text-pink-600 px-1">Sentuh dan Tahan ikon ( ☰ )</strong> di sebelah kanan kemudian geser ke atas/bawah agar sejajar dengan pasangan yang tepat di sebelah kiri.</p>
         <div className="flex font-bold text-gray-400 text-xs tracking-wider mb-2 max-w-2xl px-2 uppercase">
            <div className="flex-1">Kolom A (Tetap)</div>
            <div className="px-5"></div>
            <div className="flex-1">Kolom B (Geser)</div>
         </div>
         <OrderingComponent 
-          initialItems={rights} 
+          initialItems={orderedRights} 
           value={orderedRights} 
           onChange={(newItems) => {
              const newPairs = lefts.map((l: string, idx: number) => ({ left: l, right: newItems[idx] }));

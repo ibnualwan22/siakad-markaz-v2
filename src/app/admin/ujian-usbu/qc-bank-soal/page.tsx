@@ -11,6 +11,7 @@ export default function QCBankSoalPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [selectedProgram, setSelectedProgram] = useState<string>("ALL");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [orphanSoals, setOrphanSoals] = useState<any[]>([]);
 
   useEffect(() => {
     fetch("/api/admin/program")
@@ -29,7 +30,8 @@ export default function QCBankSoalPage() {
       const res = await fetch(`/api/admin/ujian-usbu/qc-bank-soal?programId=${selectedProgram}`);
       if (!res.ok) throw new Error("Gagal mengambil data QC");
       const json = await res.json();
-      setData(Array.isArray(json) ? json : []);
+      setData(Array.isArray(json.aggregates) ? json.aggregates : (Array.isArray(json) ? json : []));
+      setOrphanSoals(Array.isArray(json.orphanSoals) ? json.orphanSoals : []);
     } catch (err: any) {
       toast.error(err.message || "Terjadi kesalahan");
     } finally {
@@ -44,6 +46,23 @@ export default function QCBankSoalPage() {
       else newSet.add(id);
       return newSet;
     });
+  };
+
+  const handleCleanup = async (mode: 'all' | 'single', soalId?: string) => {
+    if (mode === 'all' && !confirm(`Yakin hapus SEMUA ${orphanSoals.length} soal anomali permanen?`)) return;
+    if (mode === 'single' && !confirm("Hapus soal anomali ini?")) return;
+
+    try {
+      const qs = mode === 'all' ? `?mode=all&programId=${selectedProgram}` : `?mode=single&soalId=${soalId}`;
+      const res = await fetch(`/api/admin/ujian-usbu/qc-bank-soal/cleanup${qs}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const resJson = await res.json();
+      
+      toast.success(`Berhasil menghapus ${resJson.deletedSoalCount} soal anomali`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal menghapus soal anomali");
+    }
   };
 
   // Hitung agregat health
@@ -82,6 +101,51 @@ export default function QCBankSoalPage() {
           </select>
         </div>
       </div>
+
+      {/* ORPHAN ALERTS */}
+      {!loading && orphanSoals.length > 0 && (
+         <div className="bg-red-50 border-2 border-red-200 rounded-xl overflow-hidden shadow-sm mb-6">
+            <div className="p-4 bg-red-100 flex items-center justify-between border-b border-red-200">
+               <div className="flex items-center gap-2">
+                 <AlertTriangle size={24} className="text-red-600" />
+                 <h2 className="font-bold text-red-800 text-lg">Soal Anomali Terdeteksi ({orphanSoals.length})</h2>
+               </div>
+               <button 
+                  onClick={() => handleCleanup('all')}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm"
+               >
+                 Sapu Bersih Semua
+               </button>
+            </div>
+            <div className="p-4">
+               <p className="text-sm text-red-700 mb-4 font-semibold">Terdapat soal-soal usbu' (ter-assign) yang tidak lagi memiliki "Jenis Soal" induk karena terhapus di masa lalu. Soal-soal ini masih akan muncul di ujian santri secara acak.</p>
+               <div className="max-h-[300px] overflow-y-auto">
+                 <table className="w-full text-left text-sm whitespace-nowrap bg-white rounded-lg overflow-hidden border border-red-100">
+                   <thead className="bg-red-50 text-red-700 font-bold text-xs uppercase">
+                     <tr>
+                       <th className="px-4 py-3">Mapel</th>
+                       <th className="px-4 py-3 min-w-[200px]">Potongan Pertanyaan</th>
+                       <th className="px-4 py-3">Usbu</th>
+                       <th className="px-4 py-3 text-right">Aksi</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-red-50">
+                     {orphanSoals.map(s => (
+                       <tr key={s.id}>
+                         <td className="px-4 py-3 font-semibold text-gray-700">{s.mapelNama}</td>
+                         <td className="px-4 py-3 text-gray-600" dir="auto">{s.pertanyaan}</td>
+                         <td className="px-4 py-3 font-mono font-bold text-xs">U{s.usbuAssignments.join(', ')}</td>
+                         <td className="px-4 py-3 text-right">
+                           <button onClick={() => handleCleanup('single', s.id)} className="text-red-500 hover:text-red-700 bg-red-50 py-1 px-3 rounded-md font-bold text-xs transition-colors">Hapus</button>
+                         </td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+            </div>
+         </div>
+      )}
 
       {/* HEALTH CHECK ALERTS */}
       {!loading && data.length > 0 && (

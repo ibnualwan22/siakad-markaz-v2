@@ -90,10 +90,31 @@ export async function GET(req: Request) {
        return { ...agg, totalBobot, status };
     });
     
-    // Sort by name
-    result.sort((a, b) => a.mapelNama.localeCompare(b.mapelNama));
+    const orphanSoalsRaw = await prisma.bankSoalUsbu.findMany({
+       where: { jenisSoalId: null },
+       include: {
+          mapel: { select: { nama_indo: true, nama_arab: true } },
+          usbuAssignments: true
+       }
+    });
     
-    return NextResponse.json(result);
+    // Filter orphans based on programId if not ALL
+    const filteredOrphans = filterProgramId !== "ALL" 
+       ? orphanSoalsRaw.filter(s => s.programId === filterProgramId) 
+       : orphanSoalsRaw;
+
+    const orphanSoals = filteredOrphans.map(s => ({
+       id: (s as any).id,
+       pertanyaan: ((s as any).pertanyaan || "").substring(0, 80) + ((s as any).pertanyaan?.length > 80 ? "..." : ""),
+       mapelNama: (s as any).mapel?.nama_indo || (s as any).mapel?.nama_arab || "Unknown",
+       tipeSoal: (s as any).tipeSoal,
+       usbuAssignments: (s as any).usbuAssignments?.map((u: any) => u.usbuKe) || []
+    }));
+
+    return NextResponse.json({
+       aggregates: result,
+       orphanSoals
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -322,14 +322,29 @@ export default function BankSoalPage() {
   };
 
   const handleDeleteJenisSoal = async (id: string) => {
-    if (!confirm("Hapus jenis soal ini? Semua soal di dalamnya akan ikut lenyap (atau tidak tampil).")) return;
+    const js = jenisSoalList.find(j => j.id === id);
+    const namaJS = js?.nama || "ini";
+    
     try {
+      // Fetch latest count first
+      const cekRes = await fetch(`/api/admin/ujian-usbu/jenis-soal/${id}`);
+      if (!cekRes.ok) throw new Error("Gagal mengambil info jenis soal");
+      const info = await cekRes.json();
+      
+      const soalCount = info?._count?.soalList || 0;
+      
+      const warnMsg = `Hapus Jenis Soal '${namaJS}'?\n\nPERHATIAN: Terdapat ${soalCount} soal di bawah jenis soal ini. Jika dihapus, semua soal tersebut beserta status tugas (Usbu') akan dihapus permanen!\n\nYakin ingin melanjutkan?`;
+      if (!confirm(warnMsg)) return;
+
       const res = await fetch(`/api/admin/ujian-usbu/jenis-soal/${id}`, {
         method: "DELETE"
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success("Berhasil menghapus jenis soal");
+      const resJson = await res.json();
+      
+      toast.success(`Berhasil menghapus jenis soal dan ${resJson.deletedSoalCount || 0} soal`);
       fetchJenisSoal();
+      if (selectedJenisSoal === id) setSelectedJenisSoal("");
     } catch (err: any) {
       toast.error(err.message || "Gagal menghapus jenis soal");
     }
@@ -770,7 +785,7 @@ export default function BankSoalPage() {
         <div className="flex gap-4 items-center">
           <h2 className="font-bold text-lg" style={{ color: "var(--color-text)" }}>Daftar Soal ({soalList.length})</h2>
           <div className="hidden md:flex items-center gap-2 bg-[var(--color-primary-50)] text-[var(--color-primary)] px-3 py-1 rounded-xl text-xs font-bold">
-            <Activity size={14} /> Total Poin: {Number(soalList.reduce((sum, s) => sum + s.bobot, 0).toFixed(2))}
+            <Activity size={14} /> Total Poin (Usbu {selectedUsbu}): {Number(soalList.filter(s => s.usbuAssignments?.some((ua: any) => ua.usbuKe === parseInt(selectedUsbu))).reduce((sum, s) => sum + s.bobot, 0).toFixed(2))}
           </div>
           {soalList.length > 0 && (
             <button onClick={handleAutoBobot} className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200 shadow-sm">

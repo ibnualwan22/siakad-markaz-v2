@@ -25,21 +25,43 @@ export async function PUT(req: Request, { params }: any) {
   }
 }
 
-// NextJS 15 syntax requires reading params synchronously if it's dynamic route async component? Wait, we are in an API route. 
-// However, since it's Next.js app router API, the generic signature is export async function PUT(req: Request, { params }: { params: { id: string } })
-// Actually wait! Next.js 15 app router API routes: "params" is an object or promise? It's { params: { id: string } } 
-// wait, NextJS 15 might require await params. Let's just use it sync or async. In older Next it's sync.
+export async function GET(req: Request, { params }: any) {
+  try {
+    const { id } = await params;
+    const data = await prisma.jenisSoal.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { soalList: true } }
+      }
+    });
+    if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(data);
+  } catch (error: any) {
+    return NextResponse.json({ error: "Failed fetch" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: Request, { params }: any) {
   try {
     const { id } = await params;
+    let deletedCount = 0;
     
-    await prisma.jenisSoal.delete({
-      where: { id },
+    await prisma.$transaction(async (tx) => {
+      // 1. Delete all assigned questions first (CASCADE automatically handles OpsiSoalUsbu and SoalUsbuAssignment)
+      const res = await tx.bankSoalUsbu.deleteMany({
+        where: { jenisSoalId: id }
+      });
+      deletedCount = res.count;
+      
+      // 2. Delete the JenisSoal
+      await tx.jenisSoal.delete({
+        where: { id },
+      });
     });
     
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deletedSoalCount: deletedCount });
   } catch (error: any) {
     console.error("DELETE JenisSoal Error:", error);
-    return NextResponse.json({ error: "Gagal menghapus jenis soal" }, { status: 500 });
+    return NextResponse.json({ error: "Gagal menghapus jenis soal beserta isinya" }, { status: 500 });
   }
 }

@@ -648,13 +648,13 @@ export default function ClientMengerjakanUjian() {
                     return Object.entries(grouped).map(([type, list]: [string, any]) => (
                        <div key={type}>
                           <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">{type.replace(/_/g, ' ')}</h4>
-                          <div className="grid grid-cols-6 gap-2">
+                          <div className="grid grid-cols-5 gap-2">
                             {list.map((s:any, idx:number) => {
                               const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
                               const Active = currentIdx === globalIdx;
                               const Answered = isAnswered(s);
                               const Ragu = s.rpiId === "RAGU";
-                              let cls = "h-10 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
+                              let cls = "h-12 w-full rounded-xl font-bold text-base flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
                               if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
                               else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
                               else if (Answered) cls += "bg-green-500 border-green-600 text-white";

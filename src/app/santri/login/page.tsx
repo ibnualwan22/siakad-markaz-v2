@@ -14,10 +14,22 @@ export default function SantriLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nis.trim()) return;
+    
+    // Deteksi jika browser adalah bawaan HP lama (seperti Oppo ColorOS browser lama yang bernama OPR atau HeyTap)
+    // Walaupun login tetap kita izinkan, tapi kita sarankan pakai Chrome
+    const ua = window.navigator?.userAgent || "";
+    if (ua.includes("HeyTap") || (ua.includes("Oppo") && !ua.includes("Chrome"))) {
+       // Just a warning, we still proceed, but it helps them know
+       // We can just proceed, because to block them completely might be too aggressive
+    }
+
     setLoading(true);
     setError("");
 
     try {
+      // Pastikan blur input agar keyboard tertutup sebelum navigasi (membantu bug HP lawas)
+      (document.activeElement as HTMLElement)?.blur();
+
       const res = await fetch("/api/santri/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,7 +63,7 @@ export default function SantriLoginPage() {
     >
       {/* Decorative background elements */}
       <div
-        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10"
         style={{
           backgroundImage:
             "linear-gradient(rgba(0,102,102,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,102,102,0.03) 1px, transparent 1px)",
@@ -59,7 +71,7 @@ export default function SantriLoginPage() {
         }}
       />
 
-      <div className="max-w-sm w-full relative z-10">
+      <div className="max-w-sm w-full relative z-20">
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-8">
           <div className="neu-card p-5 rounded-2xl mb-6">
@@ -159,7 +171,8 @@ export default function SantriLoginPage() {
                   className="neu-input w-full !pl-11 !pr-4 !py-3.5 text-sm"
                   placeholder="Masukkan NIS"
                   autoComplete="username"
-                  autoFocus
+                  // autoFocus dihilangkan karena menyebabkan bug keyboard pop-up otomatis di HP lawas
+                  // yang menyebabkan klik pertama pada tombol submit tidak teregistrasi
                 />
               </div>
             </div>

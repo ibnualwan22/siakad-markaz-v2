@@ -857,52 +857,61 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
     const answers: Record<string, string> = jawabanData?.cells || {};
 
     return (
-      <div className="mt-6 flex flex-col items-center">
-        <p className="text-sm text-gray-500 mb-4 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
-        <div className="w-full overflow-x-auto pb-4">
-          <table className="w-full text-center border-collapse text-sm md:text-base border border-amber-200 shadow-sm rounded-xl overflow-hidden" dir="rtl">
-            <thead className="bg-amber-100/80 text-amber-900 border-b border-amber-200">
-              <tr>
-                <th className="p-3"></th>
-                {headers.map((h, i) => (
-                  <th key={i} className="p-3 font-bold border-r border-amber-200/50 min-w-[80px]">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, rIdx) => (
-                <tr key={rIdx} className="border-b border-amber-100 last:border-none bg-white hover:bg-amber-50/30 transition-colors">
-                  <td className="p-3 font-bold text-amber-900 border-l border-amber-200/50 bg-amber-50/20">{row.label}</td>
-                  {row.cells.map((cell: any, cIdx: number) => {
-                    const key = `${rIdx}-${cIdx}`;
-                    return (
-                      <td key={cIdx} className="p-2 border-r border-amber-100 align-middle min-w-[100px]">
-                        {cell.isBlank ? (
-                          <input
-                            type="text"
-                            dir="auto"
-                            value={answers[key] || ""}
-                            onChange={(e) => {
-                               onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: e.target.value } } });
-                            }}
-                            onFocus={(e) => {
-                               // Bug 3: Auto-scroll matrix inputs on focus so mobile keyboard doesn't overlap
-                               setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-                            }}
-                            className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner"
-                          />
-                        ) : (
-                          <span className="font-serif text-xl md:text-2xl text-gray-800 py-2 inline-block">{cell.value.split('|')[0].trim()}</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TabelMatrixWrapper>
+        {(zoom: number) => (
+          <>
+            <p className="text-sm text-gray-500 mb-2 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
+            <p className="text-xs text-amber-600 mb-4 self-start flex items-center gap-1 font-semibold md:hidden">👆 Gunakan tombol zoom (+/−). Geser tabel ke kiri/kanan ↔ jika tidak muat di layar.</p>
+            <div className="w-full overflow-x-auto overflow-y-visible pb-[40vh] scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="min-w-[600px]" style={{ transform: `scale(${zoom})`, transformOrigin: 'top right' }}>
+                <table className="w-full text-center border-collapse text-sm md:text-base border border-amber-200 shadow-sm rounded-xl overflow-hidden" dir="rtl">
+                  <thead className="bg-amber-100/80 text-amber-900 border-b border-amber-200">
+                    <tr>
+                      <th className="p-3"></th>
+                      {headers.map((h, i) => (
+                        <th key={i} className="p-3 font-bold border-r border-amber-200/50 min-w-[80px]">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, rIdx) => (
+                      <tr key={rIdx} className="border-b border-amber-100 last:border-none bg-white hover:bg-amber-50/30 transition-colors">
+                        <td className="p-3 font-bold text-amber-900 border-l border-amber-200/50 bg-amber-50/20">{row.label}</td>
+                        {row.cells.map((cell: any, cIdx: number) => {
+                          const key = `${rIdx}-${cIdx}`;
+                          return (
+                            <td key={cIdx} className="p-2 border-r border-amber-100 align-middle min-w-[100px]">
+                              {cell.isBlank ? (
+                                <input
+                                  type="text"
+                                  dir="auto"
+                                  value={answers[key] || ""}
+                                  onChange={(e) => {
+                                     onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: e.target.value } } });
+                                  }}
+                                  onFocus={(e) => {
+                                     // Scroll into view with extra delay for keyboard animation
+                                     setTimeout(() => {
+                                       e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                     }, 400);
+                                  }}
+                                  className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner"
+                                />
+                              ) : (
+                                <span className="font-serif text-xl md:text-2xl text-gray-800 py-2 inline-block">{cell.value.split('|')[0].trim()}</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </TabelMatrixWrapper>
     );
   }
 
@@ -989,12 +998,23 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
 
   if (tipeSoal === "MENGURUTKAN") {
     const items = dataTambahan?.items || [];
+    const currentItems = jawabanData?.items || [];
+    
+    // Map currentItems to ordered list, or shuffle deterministically if pristine
+    let orderedItems = [...items];
+    if (currentItems.length === items.length) {
+       orderedItems = currentItems;
+    } else {
+       orderedItems = stableShuffle(items, soal.soalId);
+    }
+
     return (
       <div className="mt-4">
         <p className="text-sm text-gray-500 mb-3 items-center gap-2 flex"><span className="bg-blue-100 text-blue-600 p-1 px-2 rounded font-bold text-xs">INFO</span> Tahan dan geser kotak di bawah ini untuk mengurutkan posisi sesuai jawaban yang benar.</p>
         <OrderingComponent 
-          initialItems={items} 
-          value={jawabanData?.items} 
+          key={soal.soalId}
+          initialItems={orderedItems} 
+          value={currentItems} 
           onChange={(newItems) => onAnswer({ jawabanData: { items: newItems } })}
         />
       </div>
@@ -1132,13 +1152,19 @@ function TapAndConnectComponent({
 
     return (
       <div className="mt-4">
-        <p className="text-sm text-gray-500 mb-4 items-center gap-2 flex"><span className="bg-blue-100 text-blue-600 p-1 px-2 rounded font-bold text-xs">INFO</span> Untuk memindahkan dari HP, <strong className="text-pink-600 px-1">Sentuh dan Tahan ikon ( ☰ )</strong> di sebelah kanan kemudian geser ke atas/bawah agar sejajar dengan pasangan yang tepat di sebelah kiri.</p>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 shadow-sm">
+          <p className="text-sm text-blue-800 items-start gap-2 flex">
+            <span className="bg-blue-200 text-blue-700 p-1 px-2 rounded font-bold text-xs shrink-0 mt-0.5">INFO</span> 
+            <span>Untuk memindahkan blok jawaban pada HP, <strong>sentuh dan tahan</strong> pada <strong>ikon garis tiga ( ☰ )</strong> di pojok kanan blok, lalu geser ke atas/bawah agar sejajar dengan pertanyaan yang tepat.</span>
+          </p>
+        </div>
         <div className="flex font-bold text-gray-400 text-xs tracking-wider mb-2 max-w-2xl px-2 uppercase">
            <div className="flex-1">Kolom A (Tetap)</div>
            <div className="px-5"></div>
            <div className="flex-1">Kolom B (Geser)</div>
         </div>
         <OrderingComponent 
+          key={soal.soalId}
           initialItems={orderedRights} 
           value={orderedRights} 
           onChange={(newItems) => {
@@ -1270,3 +1296,23 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
     />
   );
 };
+
+function TabelMatrixWrapper({ children }: { children: (zoom: number) => React.ReactNode }) {
+  const [zoom, setZoom] = React.useState(1);
+
+  const zoomIn = () => setZoom(prev => Math.min(prev + 0.15, 1.8));
+  const zoomOut = () => setZoom(prev => Math.max(prev - 0.15, 0.5));
+  const zoomReset = () => setZoom(1);
+
+  return (
+    <div className="mt-6 flex flex-col items-center relative">
+      {/* Zoom Controls */}
+      <div className="sticky top-2 z-10 self-end flex items-center gap-1 bg-white/90 backdrop-blur-sm border border-amber-200 rounded-full px-2 py-1 shadow-lg mb-3">
+        <button onClick={zoomOut} className="w-8 h-8 flex items-center justify-center text-amber-700 hover:bg-amber-100 rounded-full font-bold text-base transition-colors" title="Perkecil">−</button>
+        <button onClick={zoomReset} className="px-2 h-8 flex items-center justify-center text-amber-700 hover:bg-amber-100 rounded-full font-bold text-xs transition-colors" title="Reset zoom">{Math.round(zoom * 100)}%</button>
+        <button onClick={zoomIn} className="w-8 h-8 flex items-center justify-center text-amber-700 hover:bg-amber-100 rounded-full font-bold text-base transition-colors" title="Perbesar">+</button>
+      </div>
+      {children(zoom)}
+    </div>
+  );
+}

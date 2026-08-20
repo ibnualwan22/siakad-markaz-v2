@@ -645,11 +645,10 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
   if (["ESSAY_SINGKAT", "ESSAY_ARAB", "ISIAN_SAMPING", "ISIAN_BAWAH"].includes(tipeSoal)) {
     return (
       <div className="mt-4">
-        <input 
-          type="text"
-          value={jawabanTeks || ""}
-          dir="auto"
-          onChange={(e) => onAnswer({ jawabanTeks: e.target.value })}
+        <DebouncedTextInput
+          key={soal.soalId}
+          initialValue={jawabanTeks || ""}
+          onSave={(val: string) => onAnswer({ jawabanTeks: val })}
           placeholder="Ketik jawaban Anda di sini..."
           className="w-full p-4 border-2 border-gray-200 rounded-xl text-lg font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
         />
@@ -660,12 +659,12 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
   if (["ESSAY_PANJANG", "ESSAY_GAMBAR"].includes(tipeSoal)) {
     return (
       <div className="mt-4">
-        <textarea 
-          value={jawabanTeks || ""}
-          dir="auto"
-          onChange={(e) => onAnswer({ jawabanTeks: e.target.value })}
+        <DebouncedTextInput
+          key={soal.soalId}
+          isTextarea={true}
+          initialValue={jawabanTeks || ""}
+          onSave={(val: string) => onAnswer({ jawabanTeks: val })}
           placeholder="Ketik jawaban essay panjang Anda di sini..."
-          rows={6}
           className="w-full p-4 border-2 border-gray-200 rounded-xl text-lg font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition resize-y"
         />
         <div className="text-right mt-1 text-xs text-gray-400 font-medium">
@@ -885,6 +884,10 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                             value={answers[key] || ""}
                             onChange={(e) => {
                                onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: e.target.value } } });
+                            }}
+                            onFocus={(e) => {
+                               // Bug 3: Auto-scroll matrix inputs on focus so mobile keyboard doesn't overlap
+                               setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
                             }}
                             className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner"
                           />
@@ -1212,3 +1215,58 @@ function TapAndConnectComponent({
     </div>
   );
 }
+
+function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTextarea = false }: any) {
+  const [val, setVal] = React.useState(initialValue || "");
+  const saveTimeout = React.useRef<NodeJS.Timeout | null>(null);
+
+  React.useEffect(() => {
+    // Only update internal state if the new prop diffs the stored payload
+    // and they aren't actively typing.
+    if (initialValue !== val && document.activeElement !== document.getElementById("debounced-input")) {
+      setVal(initialValue || "");
+    }
+  }, [initialValue]);
+
+  const handleChange = (e: any) => {
+    const newVal = e.target.value;
+    setVal(newVal);
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(() => {
+      onSave(newVal);
+    }, 500);
+  };
+
+  const handleBlur = (e: any) => {
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    onSave(e.target.value);
+  };
+
+  if (isTextarea) {
+    return (
+      <textarea
+        id="debounced-input"
+        value={val}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        className={className}
+        dir="auto"
+        rows={6}
+      />
+    );
+  }
+
+  return (
+    <input
+      id="debounced-input"
+      type="text"
+      value={val}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      className={className}
+      dir="auto"
+    />
+  );
+};

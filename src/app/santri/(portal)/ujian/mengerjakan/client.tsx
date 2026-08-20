@@ -151,11 +151,21 @@ export default function ClientMengerjakanUjian() {
     // Uses a 3-second grace period so brief notification bar pulls don't trigger auto-submit
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const isVirtualKeyboardOpen = () => {
+      // If viewport shrinks by more than 150px relative to window height, keyboard is probably open
+      if (window.visualViewport) {
+        return window.innerHeight - window.visualViewport.height > 150;
+      }
+      return false;
+    };
+
     const handleBlur = () => {
       if (hasSubmitted.current) return;
+      if (isVirtualKeyboardOpen()) return; // SAFE: Bug 1 - Oppo keyboard steals focus
+
       // Start grace period — if focus isn't regained within 3s, auto-submit
       blurTimer = setTimeout(() => {
-        if (!document.hasFocus() && !hasSubmitted.current) {
+        if (!document.hasFocus() && !hasSubmitted.current && !isVirtualKeyboardOpen()) {
           handleAutoSubmit("FLOATING_APP");
         }
       }, 3000);
@@ -172,6 +182,7 @@ export default function ClientMengerjakanUjian() {
     // 6. Periodic Focus Check — backup for devices where blur doesn't fire
     const focusCheckInterval = setInterval(() => {
       if (!document.hasFocus() && !document.hidden && !hasSubmitted.current) {
+        if (isVirtualKeyboardOpen()) return; // SAFE: Bug 1 - Oppo keyboard bypass
         // Browser lost focus but tab is still visible = floating/overlay app!
         handleAutoSubmit("FOCUS_LOST");
       }

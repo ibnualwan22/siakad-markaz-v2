@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { gradeEssayWithAI } from "@/lib/ai-grader";
+import { recalculateSesiNilai } from "@/lib/recalculate-sesi-nilai";
 
 const removeHtmlTags = (str: string) => (str || "").replace(/<[^>]*>?/gm, '');
 
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
 
     const feedbacks = [];
     const errors = [];
+    const uniqueSesiIds = new Set<string>();
     
     for (const jawId of jawabanIds) {
       const jaw: any = await prisma.jawabanUjianSantri.findUnique({
@@ -31,6 +33,9 @@ export async function POST(req: Request) {
       });
 
       if (!jaw || !jaw.jawabanTeks) continue;
+      if (jaw.sesiId) {
+        uniqueSesiIds.add(jaw.sesiId);
+      }
 
       const soal: any = await prisma.bankSoalUsbu.findUnique({
         where: { id: jaw.soalId }
@@ -72,6 +77,13 @@ export async function POST(req: Request) {
         errors.push({ id: jawId, error: (res as any).error });
       } else {
          errors.push({ id: jawId, error: "Failed to grade without explicit error from AI" });
+      }
+    }
+
+    // Recalculate unique sesiIds
+    if (uniqueSesiIds.size > 0) {
+      for (const sId of uniqueSesiIds) {
+        await recalculateSesiNilai(sId).catch(console.error);
       }
     }
 

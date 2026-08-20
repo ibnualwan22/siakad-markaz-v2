@@ -1,7 +1,7 @@
 import prisma from "@/lib/prisma";
 import { calcMapelNilaiAkhir, calcMapelNilaiAkhirUsbuain2 } from "@/lib/grade-calculator";
 
-export async function submitSesiUjianSantri(sesiId: string, reason: string) {
+export async function recalculateSesiNilai(sesiId: string) {
   const sesi = await prisma.sesiUjianSantri.findUnique({
     where: { id: sesiId },
     include: {
@@ -29,7 +29,6 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
   });
 
   if (!sesi) throw new Error("Sesi tidak ditemukan");
-  if (sesi.status !== "MENGERJAKAN") throw new Error("Ujian ini sudah ditutup/disubmit sebelumnya");
 
   const paket = sesi.paket;
   const isAkbarnas = paket.program.nama_indo.toLowerCase().includes('akbarnas');
@@ -57,12 +56,6 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
   }
 
   let totalSkorSeluruh = 0;
-  const recordsMapel = [];
-  const jawabanUpdates: any[] = [];
-
-  const timeCompleted = new Date();
-  const isCheat = !["MANUAL", "TIME_UP", "FORCE_SUBMIT"].includes(reason);
-  const statusSubmit = (isCheat || reason === "TIME_UP" || reason === "FORCE_SUBMIT") ? "AUTO_SUBMIT" : "SELESAI";
 
   // Hitung per mapel dan masukkan ke tabel Nilai
   for (const [mapelId, listSoal] of soalPerMapel.entries()) {
@@ -77,6 +70,12 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
       if (!jaw) continue;
 
       let skorSoal = 0;
+      
+      if (jaw.nilaiManual !== null) {
+        sumSkorBenar += jaw.nilaiManual;
+        continue;
+      }
+
       const dt = soal.dataTambahan ? (typeof soal.dataTambahan === 'string' ? JSON.parse(soal.dataTambahan) : JSON.parse(JSON.stringify(soal.dataTambahan))) : {};
 
       switch (soal.tipeSoal) {
@@ -126,20 +125,17 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
               if (item === dt.items[i]) benar++;
             });
             skorSoal = (benar / Math.max(1, dt.items.length)) * soal.bobot;
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
 
         case "KITABAH": {
-          // DB stores kunci di kunciJawaban atau dt.jawaban
           const kitabahKunci = soal.kunciJawaban || dt.jawaban || null;
           if (jaw.teks && kitabahKunci) {
             const possibleKitabah = kitabahKunci.split('|').map((k: string) => k.trim().toLowerCase());
             if (possibleKitabah.includes(jaw.teks.trim().toLowerCase())) {
               skorSoal = soal.bobot;
             }
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
@@ -160,33 +156,34 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
         case "DRAG_TO_BLANK":
         case "PARAGRAF_RUMPANG": {
           if (jaw.data && jaw.data.answers && Array.isArray(dt.blanks)) {
-            let benar = 0;
-            const answers = jaw.data.answers;
-            dt.blanks.forEach((b: any) => {
-              const studentAns = (answers[b.index] || "").trim().toLowerCase();
-              const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => k.trim().toLowerCase());
-              if (possibleAnswers.includes(studentAns)) {
-                benar++;
-              }
-            });
-            skorSoal = (benar / Math.max(1, dt.blanks.length)) * soal.bobot;
-            // Push ke nilaiManual karena ini sudah fix (tidak perlu AI).
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
+            if (jaw.nilaiManual !== null) {
+              skorSoal = jaw.nilaiManual;
+            } else {
+              let benar = 0;
+              const answers = jaw.data.answers;
+              dt.blanks.forEach((b: any) => {
+                const studentAns = (answers[b.index] || "").trim().toLowerCase();
+                const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => k.trim().toLowerCase());
+                if (possibleAnswers.includes(studentAns)) {
+                  benar++;
+                }
+              });
+              skorSoal = (benar / Math.max(1, dt.blanks.length)) * soal.bobot;
+            }
           }
           break;
         }
 
         case "IDENTIFIKASI_KESALAHAN": {
-          // DB stores: words[] + correctIndex (index of the correct/error word)
           if (jaw.data && (jaw.data.selectedIndex !== undefined || Array.isArray(jaw.data.selectedIndices))) {
-            if (dt.correctIndex !== undefined && Array.isArray(dt.words)) {
-              // Simple mode: single correct answer
+            if (jaw.nilaiManual !== null) {
+              skorSoal = jaw.nilaiManual;
+            } else if (dt.correctIndex !== undefined && Array.isArray(dt.words)) {
               const studentIdx = jaw.data.selectedIndex ?? (jaw.data.selectedIndices ? jaw.data.selectedIndices[0] : -1);
               if (studentIdx === dt.correctIndex) {
                 skorSoal = soal.bobot;
               }
             } else if (Array.isArray(dt.segments)) {
-              // Legacy segments mode
               let points = 0;
               let errorCount = dt.segments.filter((s:any) => s.isError).length;
               if (errorCount === 0) errorCount = 1;
@@ -199,118 +196,124 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
               points = Math.max(0, points);
               skorSoal = (points / errorCount) * soal.bobot;
             }
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
 
         case "STABILO_SYNTAX": {
-          // DB stores: words[] (text only), answers{"idx": "category"}, categories[]
           if (jaw.data && jaw.data.assignments && Array.isArray(dt.words)) {
-            let points = 0;
-            // True answers from key: dt.answers is {"0":"فعل","1":"فاعل",...}
-            const trueAnswers = dt.answers || {};
-            let targetCount = Object.keys(trueAnswers).length;
-            if (targetCount === 0) targetCount = 1;
-            
-            const assignments = jaw.data.assignments;
-            
-            dt.words.forEach((_w: any, idx: number) => {
-              const assignedCat = assignments[idx] || assignments[String(idx)];
-              const trueCat = trueAnswers[String(idx)];
+            if (jaw.nilaiManual !== null) {
+               skorSoal = jaw.nilaiManual;
+            } else {
+              let points = 0;
+              const trueAnswers = dt.answers || {};
+              let targetCount = Object.keys(trueAnswers).length;
+              if (targetCount === 0) targetCount = 1;
               
-              if (assignedCat && trueCat) {
-                if (assignedCat === trueCat) {
-                  points++;
-                } else {
-                  points--;
+              const assignments = jaw.data.assignments;
+              
+              dt.words.forEach((_w: any, idx: number) => {
+                const assignedCat = assignments[idx] || assignments[String(idx)];
+                const trueCat = trueAnswers[String(idx)];
+                
+                if (assignedCat && trueCat) {
+                  if (assignedCat === trueCat) {
+                    points++;
+                  } else {
+                    points--;
+                  }
                 }
-              }
-            });
-            
-            points = Math.max(0, points);
-            skorSoal = (points / targetCount) * soal.bobot;
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
+              });
+              
+              points = Math.max(0, points);
+              skorSoal = (points / targetCount) * soal.bobot;
+            }
           }
           break;
         }
 
         case "JARING_RELASI": {
           if (jaw.data && jaw.data.connections && Array.isArray(dt.connections)) {
-            let points = 0;
-            let targetEdges = 0;
-            
-            // Map true connections
-            const trueGraph = new Map<number, number[]>();
-            dt.connections.forEach((c: any) => {
-               trueGraph.set(c.left, c.right || []);
-               targetEdges += (c.right || []).length;
-            });
-            if (targetEdges === 0) targetEdges = 1; // Failsafe
-
-            const studentConns = jaw.data.connections;
-            
-            studentConns.forEach((c: any) => {
-               const left = c.left;
-               const trueRights = trueGraph.get(left) || [];
-               (c.right || []).forEach((r: number) => {
-                  if (trueRights.includes(r)) {
-                     points++;
-                  } else {
-                     points--;
-                  }
-               });
-            });
-            
-            points = Math.max(0, points);
-            skorSoal = (points / targetEdges) * soal.bobot;
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
+            if (jaw.nilaiManual !== null) {
+               skorSoal = jaw.nilaiManual;
+            } else {
+              let points = 0;
+              let targetEdges = 0;
+              
+              // Map true connections
+              const trueGraph = new Map<number, number[]>();
+              dt.connections.forEach((c: any) => {
+                 trueGraph.set(c.left, c.right || []);
+                 targetEdges += (c.right || []).length;
+              });
+              if (targetEdges === 0) targetEdges = 1; // Failsafe
+  
+              const studentConns = jaw.data.connections;
+              
+              studentConns.forEach((c: any) => {
+                 const left = c.left;
+                 const trueRights = trueGraph.get(left) || [];
+                 (c.right || []).forEach((r: number) => {
+                    if (trueRights.includes(r)) {
+                       points++;
+                    } else {
+                       points--;
+                    }
+                 });
+              });
+              
+              points = Math.max(0, points);
+              skorSoal = (points / targetEdges) * soal.bobot;
+            }
           }
           break;
         }
 
         case "TABEL_TASRIF": {
           if (jaw.data && jaw.data.cells && Array.isArray(dt.rows)) {
-            let totalBlank = 0;
-            let benar = 0;
-            const answers = jaw.data.cells;
-            
-            dt.rows.forEach((row: any, rIdx: number) => {
-              (row.cells || []).forEach((cell: any, cIdx: number) => {
-                if (cell.isBlank) {
-                  totalBlank++;
-                  const key = `${rIdx}-${cIdx}`;
-                  const studentAns = (answers[key] || "").trim().toLowerCase();
-                  const possibleAnswers = (cell.value || "").split("|").map((k: string) => k.trim().toLowerCase());
-                  if (studentAns !== "" && possibleAnswers.includes(studentAns)) {
-                    benar++;
+            if (jaw.nilaiManual !== null) {
+               skorSoal = jaw.nilaiManual;
+            } else {
+              let totalBlank = 0;
+              let benar = 0;
+              const answers = jaw.data.cells;
+              
+              dt.rows.forEach((row: any, rIdx: number) => {
+                (row.cells || []).forEach((cell: any, cIdx: number) => {
+                  if (cell.isBlank) {
+                    totalBlank++;
+                    const key = `${rIdx}-${cIdx}`;
+                    const studentAns = (answers[key] || "").trim().toLowerCase();
+                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => k.trim().toLowerCase());
+                    if (studentAns !== "" && possibleAnswers.includes(studentAns)) {
+                      benar++;
+                    }
                   }
-                }
+                });
               });
-            });
-            
-            skorSoal = (benar / Math.max(1, totalBlank)) * soal.bobot;
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
+              
+              skorSoal = (benar / Math.max(1, totalBlank)) * soal.bobot;
+            }
           }
           break;
         }
 
         case "SUSUN_HURUF": {
-          // DB may have dt.jawaban (target string) or only dt.hurufAcak (shuffled characters)
-          // If jawaban is missing, the correct order = hurufAcak joined in original index order [0,1,2,...]
           if (jaw.data && Array.isArray(jaw.data.susunanIndices) && Array.isArray(dt.hurufAcak)) {
-            const studentCompiled = jaw.data.susunanIndices.map((i: number) => dt.hurufAcak[i]).join('');
-            let targetCompiled = '';
-            if (dt.jawaban) {
-              targetCompiled = dt.jawaban.replace(/\s+/g, '');
+            if (jaw.nilaiManual !== null) {
+               skorSoal = jaw.nilaiManual;
             } else {
-              // If no jawaban key, the correct order is the original index order: 0,1,2,...
-              targetCompiled = dt.hurufAcak.join('').replace(/\s+/g, '');
+              const studentCompiled = jaw.data.susunanIndices.map((i: number) => dt.hurufAcak[i]).join('');
+              let targetCompiled = '';
+              if (dt.jawaban) {
+                targetCompiled = dt.jawaban.replace(/\s+/g, '');
+              } else {
+                targetCompiled = dt.hurufAcak.join('').replace(/\s+/g, '');
+              }
+              if (studentCompiled.replace(/\s+/g, '') === targetCompiled) {
+                skorSoal = soal.bobot;
+              }
             }
-            if (studentCompiled.replace(/\s+/g, '') === targetCompiled) {
-              skorSoal = soal.bobot;
-            }
-            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
@@ -329,11 +332,6 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
               
               if (possibleAnswers.includes(studentAnswer)) {
                 skorSoal = soal.bobot;
-                // Nilai mutlak benar, simpan langsung ke DB agar tidak direview AI
-                jawabanUpdates.push({
-                   id: jaw.id,
-                   nilaiManual: skorSoal
-                });
               }
             }
           }
@@ -348,21 +346,14 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
     }
 
     // Hindari NaN jika sumBobotTotal 0
-    let nilaiAkhir = sumBobotTotal > 0 ? (sumSkorBenar / sumBobotTotal) * 100 : 0;
-    nilaiAkhir = Number(nilaiAkhir.toFixed(2));
-    totalSkorSeluruh += nilaiAkhir;
-
-    recordsMapel.push({
-      mapelId,
-      mapel,
-      nilai: nilaiAkhir
-    });
+    let nilaiAkhirMapel = sumBobotTotal > 0 ? (sumSkorBenar / sumBobotTotal) * 100 : 0;
+    nilaiAkhirMapel = Number(nilaiAkhirMapel.toFixed(2));
+    totalSkorSeluruh += nilaiAkhirMapel;
 
     if (!paket.sesiGlobal.isSimulasi) {
       // Update nilai di tabel `Nilai`
       let fieldToUpdate = "";
       if (paket.sesiGlobal.usbuKe === 3 || mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
-        // Jika ujian ini adalah ujian ke-3, atau mapel ini cuma 1 tes (langsung final), atau modenya 1 kolom
         fieldToUpdate = "nilaiNihai";
       } else if (paket.sesiGlobal.usbuKe === 1) {
         fieldToUpdate = "nilaiUsbu1";
@@ -370,19 +361,18 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
         fieldToUpdate = "nilaiUsbu2";
       }
 
-      // Ambil nilai lama
       let recordNilai = await prisma.nilai.findUnique({
         where: { riwayatId_mapelId: { riwayatId, mapelId } }
       });
 
       if (!recordNilai) {
         recordNilai = await prisma.nilai.create({
-          data: { riwayatId, mapelId, [fieldToUpdate]: nilaiAkhir }
+          data: { riwayatId, mapelId, [fieldToUpdate]: nilaiAkhirMapel }
         });
       } else {
         recordNilai = await prisma.nilai.update({
           where: { id: recordNilai.id },
-          data: { [fieldToUpdate]: nilaiAkhir }
+          data: { [fieldToUpdate]: nilaiAkhirMapel }
         });
       }
 
@@ -395,7 +385,6 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
            finalA = calcMapelNilaiAkhirUsbuain2({ u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2 });
         }
       } else {
-        // Normal 3 kolom atau sesuai rules akbarnas
         finalA = calcMapelNilaiAkhir(
           { u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2, n: recordNilai.nilaiNihai },
           isAkbarnas
@@ -413,33 +402,11 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
 
   const rataRataPaket = soalPerMapel.size > 0 ? Number((totalSkorSeluruh / soalPerMapel.size).toFixed(2)) : 0;
 
-  const dataToUpdate: any = {
-    status: statusSubmit,
-    waktuSelesai: timeCompleted,
-    nilaiTotal: rataRataPaket,
-    alasanSubmit: reason
-  };
-
-  if (isCheat) {
-    dataToUpdate.tabCloseCount = { increment: 1 };
-  }
-
-  // Update SesiUjianSantri
+  // Update SesiUjianSantri dengan perhitungan total yang baru
   const updatedSesi = await prisma.sesiUjianSantri.update({
     where: { id: sesiId },
-    data: dataToUpdate
+    data: { nilaiTotal: rataRataPaket }
   });
-
-  // Batch update jawaban jika ada auto-grade
-  if (jawabanUpdates.length > 0) {
-     const promises = jawabanUpdates.map((u) => 
-        prisma.jawabanUjianSantri.update({
-           where: { id: u.id },
-           data: { nilaiManual: u.nilaiManual, aiGraded: false } // aiGraded false karena ini disistem manual oleh string-matching otomatis, tapi krn nilaiManual udh ada maka tdk akan diganggu gugat
-        })
-     );
-     await prisma.$transaction(promises);
-  }
 
   return updatedSesi;
 }

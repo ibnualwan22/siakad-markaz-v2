@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { recalculateSesiNilai } from "@/lib/recalculate-sesi-nilai";
 
 export async function GET(req: Request) {
   try {
@@ -95,6 +96,10 @@ export async function PUT(req: Request) {
       where: { id },
       data: { nilaiManual }
     });
+
+    if (jaw && jaw.sesiId) {
+      await recalculateSesiNilai(jaw.sesiId);
+    }
 
     return NextResponse.json({ success: true, jaw });
   } catch (err: any) {

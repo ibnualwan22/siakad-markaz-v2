@@ -70,6 +70,7 @@ const navigationGroups = [
       { href: "/admin/ujian-usbu/bank-soal", label: "Bank Soal", icon: Database, permissionId: "ujian_usbu" },
       { href: "/admin/ujian-usbu/qc-bank-soal", label: "QC Bank Soal", icon: ShieldCheck, permissionId: "ujian_usbu" },
       { href: "/admin/ujian-usbu/essay-review", label: "Review Essay", icon: ClipboardEdit, permissionId: "ujian_usbu" },
+      { href: "/admin/ujian-usbu/review-jawaban", label: "Review Jawaban", icon: ClipboardCheck, permissionId: "ujian_usbu" },
       { href: "/admin/ujian-usbu/paket", label: "Paket Ujian", icon: CalendarCheck, permissionId: "ujian_usbu" },
       { href: "/admin/ujian-usbu/monitoring", label: "Monitoring", icon: Activity, permissionId: "ujian_usbu" },
     ],

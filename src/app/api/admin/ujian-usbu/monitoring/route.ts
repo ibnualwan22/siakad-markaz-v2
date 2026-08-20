@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
   try {
     const session = await getSession();
@@ -25,7 +27,6 @@ export async function GET(req: Request) {
       where: { id: sesiGlobalId },
       include: {
         paketUjianList: {
-          take: 1,
           include: { _count: { select: { soalPaketList: true } } }
         }
       }
@@ -37,15 +38,29 @@ export async function GET(req: Request) {
 
     const totalSoal = sesiGlobal.paketUjianList[0]?._count.soalPaketList || 0;
 
-    // Ambil SEMUA RiwayatSantri (daftar santri) yang ada di dufah ini
+    // Determine target programs
+    let allowedProgramIds: string[] = [];
+    if (!sesiGlobal.isSimulasi) {
+      allowedProgramIds = sesiGlobal.paketUjianList.map(p => p.programId);
+    }
+    
+    // Ambil SEMUA RiwayatSantri (daftar santri) yang ada di dufah ini, filter by program if not simulasi
     const semuaSantri = await prisma.riwayatSantri.findMany({
-      where: { dufahNama: sesiGlobal.dufahNama },
+      where: { 
+        dufahNama: sesiGlobal.dufahNama,
+        ...(sesiGlobal.isSimulasi ? {} : {
+          programId: { in: allowedProgramIds }
+        })
+      },
       include: {
-        santri: { select: { nama: true, sakan: true, kamar: true, id: true } },
+        santri: { select: { nama: true, sakan: true, kamar: true, id: true, isAktif: true } },
         kelas: { select: { nama: true } }
       },
       orderBy: { santri: { nama: 'asc' } }
     });
+
+    // Option: only return active santri if required
+    const activeSantri = semuaSantri.filter(r => r.santri.isAktif);
 
     // Ambil data sesi ujian santri yang sudah mulai (di paket milik sesi global ini)
     const sesiList = await prisma.sesiUjianSantri.findMany({
@@ -53,7 +68,7 @@ export async function GET(req: Request) {
       include: {
         riwayat: { select: { id: true, santriId: true } },
         jawabanList: {
-          select: { opsiId: true, rpiId: true }
+          select: { opsiId: true, rpiId: true, jawabanTeks: true, jawabanData: true }
         }
       }
     });
@@ -64,7 +79,7 @@ export async function GET(req: Request) {
       sesiMap.set(sesi.riwayat.id, sesi);
     }
 
-    const data = semuaSantri.map(riwayat => {
+    const data = activeSantri.map(riwayat => {
       const sesiInfo = sesiMap.get(riwayat.id);
       
       let dijawab = 0;
@@ -72,7 +87,7 @@ export async function GET(req: Request) {
       let belum = 0;
       
       if (sesiInfo) {
-        dijawab = sesiInfo.jawabanList.filter((j: any) => j.opsiId).length;
+        dijawab = sesiInfo.jawabanList.filter((j: any) => j.opsiId || j.jawabanTeks || (j.jawabanData && Object.keys(j.jawabanData).length > 0)).length;
         ragu = sesiInfo.jawabanList.filter((j: any) => j.rpiId === "RAGU").length;
         belum = (sesiInfo.jawabanList.length > 0 ? sesiInfo.jawabanList.length : totalSoal) - dijawab;
       } else {

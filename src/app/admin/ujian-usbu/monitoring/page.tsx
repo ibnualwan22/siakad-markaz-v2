@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useDeferredValue } from "react";
 import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAlert, Info, Timer, Play, RotateCcw } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -41,6 +41,7 @@ export default function MonitoringPengejaanPage() {
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [mounted, setMounted] = useState(false);
   const [filterKelas, setFilterKelas] = useState("SEMUA");
+  const deferredFilterKelas = useDeferredValue(filterKelas);
   const [sisaGlobalStr, setSisaGlobalStr] = useState<string>("");
 
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function MonitoringPengejaanPage() {
 
   useEffect(() => {
     if (selectedPaket) {
+      setFilterKelas("SEMUA"); // Reset filter when package switches
       fetchMonitoringData(selectedPaket);
       const intv = setInterval(() => fetchMonitoringData(selectedPaket, false), 15000); // 15s refresh
       return () => clearInterval(intv);
@@ -132,7 +134,7 @@ export default function MonitoringPengejaanPage() {
   const currentPaket = paketList.find(p => p.id === selectedPaket);
 
   const uniqueClasses = Array.from(new Set(monitoringData.map((d: any) => d.kelasNama))).sort();
-  const displayedData = filterKelas === "SEMUA" ? monitoringData : monitoringData.filter((d: any) => d.kelasNama === filterKelas);
+  const displayedData = deferredFilterKelas === "SEMUA" ? monitoringData : monitoringData.filter((d: any) => d.kelasNama === deferredFilterKelas);
 
   useEffect(() => {
     if (!currentPaket?.waktuSelesai) {

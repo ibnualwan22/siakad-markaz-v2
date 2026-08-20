@@ -30,7 +30,7 @@ export default function QCBankSoalPage() {
       const res = await fetch(`/api/admin/ujian-usbu/qc-bank-soal?programId=${selectedProgram}`);
       if (!res.ok) throw new Error("Gagal mengambil data QC");
       const json = await res.json();
-      setData(Array.isArray(json.aggregates) ? json.aggregates : (Array.isArray(json) ? json : []));
+      setData(Array.isArray(json.aggregatesByUsbu) ? json.aggregatesByUsbu : (Array.isArray(json) ? json : []));
       setOrphanSoals(Array.isArray(json.orphanSoals) ? json.orphanSoals : []);
     } catch (err: any) {
       toast.error(err.message || "Terjadi kesalahan");
@@ -73,8 +73,9 @@ export default function QCBankSoalPage() {
      "KURANG_USBU": { label: "Soal Usbu Kosong", color: "bg-orange-100 text-orange-700 border-orange-200", icon: ShieldCheck, ring: "ring-orange-500" },
   };
 
-  const problems = data.filter(d => d.status !== "SIAP");
-  const allGood = data.length > 0 && problems.length === 0;
+  const allMapels = data.flatMap(u => u.mapels || []);
+  const problems = allMapels.filter(d => d.status !== "SIAP");
+  const allGood = allMapels.length > 0 && problems.length === 0;
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
@@ -90,13 +91,13 @@ export default function QCBankSoalPage() {
         </div>
         <div className="w-full md:w-auto relative min-w-[200px]">
           <select 
-            className="input-field py-2.5 w-full bg-white shadow-sm font-semibold"
+            className="input-field py-2.5 w-full bg-white shadow-sm font-semibold text-gray-800"
             value={selectedProgram}
             onChange={(e) => setSelectedProgram(e.target.value)}
           >
             <option value="ALL">-- Semua Program --</option>
             {programs.map((p: any) => (
-              <option key={p.id} value={p.id}>{p.nama}</option>
+              <option key={p.id} value={p.id}>{p.nama_indo}</option>
             ))}
           </select>
         </div>
@@ -185,41 +186,55 @@ export default function QCBankSoalPage() {
       )}
 
       {/* MAIN TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="space-y-8">
          {loading ? (
-           <div className="p-12 text-center text-gray-500 font-bold flex flex-col items-center justify-center">
-             <Search size={32} className="animate-pulse mb-3 text-indigo-300" />
-             Menganalisis Bank Soal...
-           </div>
-         ) : data.length === 0 ? (
-           <div className="p-12 text-center text-gray-400 flex flex-col items-center justify-center border-dashed border-2 border-gray-100 m-4 rounded-2xl">
-             <LayoutTemplate size={48} className="mb-4 text-gray-200" />
-             Belum ada data bank soal untuk program ini.
-           </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-500 font-bold flex flex-col items-center justify-center">
+              <Search size={32} className="animate-pulse mb-3 text-indigo-300" />
+              Menganalisis Bank Soal...
+            </div>
+         ) : data.length === 0 || allMapels.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border-dashed border-2 border-gray-200 p-12 text-center text-gray-400 flex flex-col items-center justify-center">
+              <LayoutTemplate size={48} className="mb-4 text-gray-200" />
+              Belum ada data bank soal untuk program ini.
+            </div>
          ) : (
-           <div className="overflow-x-auto">
-             <table className="w-full text-left text-sm whitespace-nowrap">
-                <thead>
-                  <tr className="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-black">
-                     <th className="px-6 py-4 w-10"></th>
-                     <th className="px-6 py-4">Nama Mapel</th>
-                     <th className="px-6 py-4">Total Soal</th>
-                     <th className="px-6 py-4 min-w-[200px]">Jenis Soal</th>
-                     <th className="px-6 py-4">U1 / U2 / U3</th>
-                     <th className="px-6 py-4 text-center">Total Bobot</th>
-                     <th className="px-6 py-4">Status QC</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {data.map(d => {
-                     const isExpanded = expandedRows.has(d.mapelId);
-                     const cfg = statusMap[d.status as keyof typeof statusMap] || statusMap.SIAP;
-                     const StatusIcon = cfg.icon;
+            data.map(uGroup => uGroup.mapels.length > 0 && (
+              <div key={`usbu-${uGroup.usbu}`} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-indigo-600 px-6 py-3 border-b border-indigo-700 text-white flex items-center justify-between">
+                  <h3 className="font-bold font-display uppercase tracking-wider text-sm flex items-center gap-2">
+                    Tahap Usbu' {uGroup.usbu}
+                  </h3>
+                  <div className="text-[11px] font-medium opacity-90 flex items-center gap-4">
+                    <span>{uGroup.mapels.length} Mapel terisi</span>
+                    <span className="bg-indigo-700 px-2 py-1 flex items-center gap-1 rounded font-bold border border-indigo-500">
+                       Total Poin: {Math.round(uGroup.mapels.reduce((sum: number, m: any) => sum + m.totalBobot, 0) * 100) / 100}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                     <thead>
+                       <tr className="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-black">
+                         <th className="px-6 py-4 w-10"></th>
+                         <th className="px-6 py-4">Nama Mapel</th>
+                         <th className="px-6 py-4">Total Soal</th>
+                         <th className="px-6 py-4 min-w-[200px]">Jenis Soal</th>
+                         <th className="px-6 py-4 text-center">Total Bobot</th>
+                         <th className="px-6 py-4">Status QC</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                       {uGroup.mapels.map((d: any) => {
+                          const rowKey = `${uGroup.usbu}-${d.mapelId}`;
+                          const isExpanded = expandedRows.has(rowKey);
+                          const cfg = statusMap[d.status as keyof typeof statusMap] || statusMap.SIAP;
+                          const StatusIcon = cfg.icon;
                      
                      return (
                        <React.Fragment key={d.mapelId}>
                          <tr 
-                           onClick={() => toggleRow(d.mapelId)}
+                           onClick={() => toggleRow(rowKey)}
                            className={`transition-colors cursor-pointer group ${isExpanded ? 'bg-indigo-50/30' : 'hover:bg-slate-50'}`}
                          >
                             <td className="px-6 py-4 text-gray-400">
@@ -245,13 +260,6 @@ export default function QCBankSoalPage() {
                                  )}
                                </div>
                             </td>
-                            <td className="px-6 py-4">
-                               <div className="flex gap-2 text-xs font-bold font-mono">
-                                  <span className={`px-2 py-0.5 rounded ${d.usbuBreakdown[1] === 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>{d.usbuBreakdown[1]}</span>
-                                  <span className={`px-2 py-0.5 rounded ${d.usbuBreakdown[2] === 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>{d.usbuBreakdown[2]}</span>
-                                  <span className={`px-2 py-0.5 rounded ${d.usbuBreakdown[3] === 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>{d.usbuBreakdown[3]}</span>
-                               </div>
-                            </td>
                             <td className="px-6 py-4 text-center">
                                <span className={`inline-block font-display font-black text-lg px-3 py-1 rounded-full ring-2 ring-offset-2 ${cfg.color} ${cfg.ring}`}>
                                  {d.totalBobot}
@@ -267,7 +275,7 @@ export default function QCBankSoalPage() {
                          {/* EXPANDED CONTENT */}
                          {isExpanded && (
                            <tr>
-                              <td colSpan={7} className="p-0 border-b-2 border-indigo-100">
+                              <td colSpan={6} className="p-0 border-b-2 border-indigo-100">
                                  <div className="bg-indigo-50/50 p-6 shadow-inner relative">
                                     <h4 className="text-xs font-black uppercase text-indigo-400 tracking-wider mb-4 flex items-center gap-2">
                                        <Database size={14} /> Detail Komposisi Jenis Soal
@@ -306,6 +314,8 @@ export default function QCBankSoalPage() {
                 </tbody>
              </table>
            </div>
+         </div>
+          ))
          )}
       </div>
     </div>

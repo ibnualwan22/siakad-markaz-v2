@@ -69,6 +69,21 @@ export default function ReviewJawabanPage() {
     }
   }, [selectedPaket, selectedKelas]);
 
+  // Automatically adjust selectedKelas when selectedPaket changes
+  useEffect(() => {
+    if (!selectedPaket || kelasList.length === 0) return;
+    
+    const currentPaket = paketList.find(p => p.id === selectedPaket);
+    const validProgramIds = currentPaket ? currentPaket.paketUjianList.map((p: any) => p.programId) : [];
+    const validClasses = currentPaket?.isSimulasi 
+      ? kelasList 
+      : kelasList.filter(k => k.programId && validProgramIds.includes(k.programId));
+      
+    if (validClasses.length > 0 && !validClasses.find(k => k.id === selectedKelas)) {
+      setSelectedKelas(validClasses[0].id);
+    }
+  }, [selectedPaket, kelasList, paketList, selectedKelas]);
+
   // Refetch when filters change
   useEffect(() => {
     if (!isInitialLoad) {
@@ -614,6 +629,13 @@ export default function ReviewJawabanPage() {
     return <div className="p-8 text-center text-gray-500 font-medium">Memuat data awal...</div>;
   }
 
+  // Derived filtered class list to only show classes belonging to programs active in this session
+  const currentPaket = paketList.find(p => p.id === selectedPaket);
+  const validProgramIds = currentPaket ? currentPaket.paketUjianList.map((p: any) => p.programId) : [];
+  const filteredKelasList = currentPaket?.isSimulasi 
+    ? kelasList 
+    : kelasList.filter(k => k.programId && validProgramIds.includes(k.programId));
+
   return (
     <div className="pb-20 md:pb-8">
       {/* HEADER & FILTER */}
@@ -639,7 +661,7 @@ export default function ReviewJawabanPage() {
              <div className="w-full sm:w-48">
                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Kelas</label>
                <select className="neu-input w-full p-2 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring focus:ring-blue-100 rounded-lg" value={selectedKelas} onChange={e => setSelectedKelas(e.target.value)}>
-                  {kelasList.map(k => (
+                  {filteredKelasList.map(k => (
                     <option key={k.id} value={k.id}>{k.nama}</option>
                   ))}
                </select>

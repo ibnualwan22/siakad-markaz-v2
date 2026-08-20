@@ -35,59 +35,56 @@ export async function GET(req: Request) {
        }
     });
     
-    // Group by mapelId
-    const aggregated = new Map<string, any>();
-    
-    for (const soal of soals) {
-       const mId = soal.mapelId;
-       if (!aggregated.has(mId)) {
-          aggregated.set(mId, {
-             mapelId: mId,
-             mapelNama: mapelDict[mId]?.nama_indo || "Unknown",
-             totalSoal: 0,
-             totalBobot: 0,
-             jenisSoalMap: {}, // To compute jenisSoal breakdown
-             usbuBreakdown: { 1: 0, 2: 0, 3: 0, unassigned: 0 }
-          });
-       }
+    const usbus = [1, 2, 3];
+    const resultsByUsbu = usbus.map(u => {
+       const aggregated = new Map<string, any>();
        
-       const agg = aggregated.get(mId);
-       agg.totalSoal += 1;
-       agg.totalBobot += (soal.bobot || 0);
-       
-       // Jenis Soal Check
-       const jenisId = soal.jenisSoalId || soal.tipeSoal;
-       const jenisNama = soal.jenisSoal?.nama || soal.tipeSoal.replace(/_/g, ' ');
-       if (!agg.jenisSoalMap[jenisId]) {
-          agg.jenisSoalMap[jenisId] = { id: jenisId, nama: jenisNama, count: 0, totalBobot: 0 };
-       }
-       agg.jenisSoalMap[jenisId].count += 1;
-       agg.jenisSoalMap[jenisId].totalBobot += (soal.bobot || 0);
-       
-       // Usbu Check
-       if (soal.usbuAssignments && soal.usbuAssignments.length > 0) {
-          for (const assignment of soal.usbuAssignments) {
-             const u = assignment.usbuKe;
-             if (agg.usbuBreakdown[u] !== undefined) agg.usbuBreakdown[u] += 1;
+       // Pre-initialize ALL mapels that appear in the 'soals' list, regardless of assignment.
+       // This guarantees that if a Mapel has questions but 0 points in this Usbu, it shows up as "KURANG_BOBOT (0)".
+       for (const soal of soals) {
+          const mId = soal.mapelId;
+          if (!aggregated.has(mId)) {
+             aggregated.set(mId, {
+                mapelId: mId,
+                mapelNama: mapelDict[mId]?.nama_indo || "Unknown",
+                totalSoal: 0,
+                totalBobot: 0,
+                jenisSoalMap: {}
+             });
           }
-       } else {
-          agg.usbuBreakdown.unassigned += 1;
        }
-    }
-    
-    const result = Array.from(aggregated.values()).map(agg => {
-       // Convert jenisSoalMap to array
-       agg.jenisSoalBreakdown = Object.values(agg.jenisSoalMap);
-       delete agg.jenisSoalMap;
        
-       // Determine status
-       let status = "SIAP";
-       let totalBobot = Math.round(agg.totalBobot * 100) / 100; // avoid floating drops
-       if (totalBobot > 100) status = "OVER";
-       else if (totalBobot < 100) status = "KURANG_BOBOT";
-       else if (agg.usbuBreakdown[1] === 0 || agg.usbuBreakdown[2] === 0 || agg.usbuBreakdown[3] === 0) status = "KURANG_USBU";
+       // Now calculate the points only for checked assignments
+       for (const soal of soals) {
+          if (!soal.usbuAssignments?.some((a: any) => a.usbuKe === u)) continue;
+          
+          const agg = aggregated.get(soal.mapelId);
+          agg.totalSoal += 1;
+          agg.totalBobot += (soal.bobot || 0);
+          
+          // Jenis Soal Check
+          const jenisId = soal.jenisSoalId || soal.tipeSoal;
+          const jenisNama = soal.jenisSoal?.nama || soal.tipeSoal.replace(/_/g, ' ');
+          if (!agg.jenisSoalMap[jenisId]) {
+             agg.jenisSoalMap[jenisId] = { id: jenisId, nama: jenisNama, count: 0, totalBobot: 0 };
+          }
+          agg.jenisSoalMap[jenisId].count += 1;
+          agg.jenisSoalMap[jenisId].totalBobot += (soal.bobot || 0);
+       }
        
-       return { ...agg, totalBobot, status };
+       const mapels = Array.from(aggregated.values()).map(agg => {
+          agg.jenisSoalBreakdown = Object.values(agg.jenisSoalMap);
+          delete agg.jenisSoalMap;
+          
+          let status = "SIAP";
+          let totalBobot = Math.round(agg.totalBobot * 100) / 100;
+          if (totalBobot > 100) status = "OVER";
+          else if (totalBobot < 100) status = "KURANG_BOBOT";
+          
+          return { ...agg, totalBobot, status };
+       });
+
+       return { usbu: u, mapels };
     });
     
     const orphanSoalsRaw = await prisma.bankSoalUsbu.findMany({
@@ -112,7 +109,7 @@ export async function GET(req: Request) {
     }));
 
     return NextResponse.json({
-       aggregates: result,
+       aggregatesByUsbu: resultsByUsbu,
        orphanSoals
     });
   } catch (err: any) {

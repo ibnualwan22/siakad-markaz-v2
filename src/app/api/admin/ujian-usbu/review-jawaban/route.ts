@@ -22,9 +22,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Paket ujian dan Kelas harus dipilih" }, { status: 400 });
     }
 
-    // 1. Get the PaketUjian for this sesiGlobalId (assume the main active one, or we can just fetch all pakets for this global sesi)
+    // 1. Dapatkan kelas untuk mengetahui programId dari kelas tersebut
+    const kls = await prisma.kelas.findUnique({ where: { id: kelasId } });
+    if (!kls) {
+      return NextResponse.json({ error: "Kelas tidak ditemukan" }, { status: 404 });
+    }
+
+    // 2. Dapatkan PaketUjian HANYA untuk program terkait pada sesiGlobalId ini, agar mapel program lain tidak bocor
     const pakets = await prisma.paketUjian.findMany({
-      where: { sesiGlobalId }
+      where: { sesiGlobalId, programId: kls.programId }
     });
     
     if (pakets.length === 0) {

@@ -113,6 +113,7 @@ export async function POST(req: Request) {
       return {
         soalId: sp.soal.id,
         mapelId: sp.soal.mapelId,
+        jenisSoalId: sp.soal.jenisSoalId,
         pertanyaan: sp.soal.pertanyaan,
         gambarUrl: sp.soal.gambarUrl,
         grupSoalId: sp.soal.grupSoalId,
@@ -126,26 +127,41 @@ export async function POST(req: Request) {
     });
 
     if (paket.sesiGlobal.acakSoal) {
-      // Kelompokkan berdasarkan mapelId agar mapel tidak tercampur
+      // Layer 1: Kelompokkan berdasarkan mapelId agar mapel tidak tercampur
       const grouped = new Map<string, typeof soalDisajikan>();
       for (const s of soalDisajikan) {
         if (!grouped.has(s.mapelId)) grouped.set(s.mapelId, []);
         grouped.get(s.mapelId)!.push(s);
       }
       
-      // Acak urutan Mapel
+      // Acak urutan Layer 1 (Mapel)
       const mapelKeys = shuffleArray(Array.from(grouped.keys()));
       
       const newSoalDisajikan: typeof soalDisajikan = [];
       for (const key of mapelKeys) {
         const soalPerMapel = grouped.get(key)!;
         
-        // Pisahkan soal mandiri dan soal grup qiro'ah
-        const grupMap = new Map<string, typeof soalDisajikan>();
-        const soalMandiri: typeof soalDisajikan = [];
-        
+        // Layer 2: Kelompokkan berdasarkan Jenis Soal di dalam Mapel (jangan biarkan bercampur)
+        const groupedByJenis = new Map<string, typeof soalDisajikan>();
         for (const s of soalPerMapel) {
-          if (s.grupSoalId) {
+          // Fallback ke tipeSoal murni jika kebetulan record lama tidak punya jenisSoalId
+          const jKey = s.jenisSoalId || s.tipeSoal; 
+          if (!groupedByJenis.has(jKey)) groupedByJenis.set(jKey, []);
+          groupedByJenis.get(jKey)!.push(s);
+        }
+        
+        // Acak urutan Layer 2 (Jenis Soal) untuk santri ini
+        const jenisKeys = shuffleArray(Array.from(groupedByJenis.keys()));
+        
+        for (const jKey of jenisKeys) {
+          const soalPerJenis = groupedByJenis.get(jKey)!;
+          
+          // Layer 3: Pisahkan soal mandiri dan soal grup qiro'ah (agar bacaan menyatu)
+          const grupMap = new Map<string, typeof soalDisajikan>();
+          const soalMandiri: typeof soalDisajikan = [];
+        
+          for (const s of soalPerJenis) {
+            if (s.grupSoalId) {
             if (!grupMap.has(s.grupSoalId)) grupMap.set(s.grupSoalId, []);
             grupMap.get(s.grupSoalId)!.push(s);
           } else {
@@ -153,28 +169,28 @@ export async function POST(req: Request) {
           }
         }
         
-        // Gabungkan: setiap grup qiro'ah dianggap sebagai 1 "unit" soal
-        // Soal induk + anak grup disatukan agar tidak terpisah saat diacak
-        const units: (typeof soalDisajikan)[] = [];
-        for (const s of soalMandiri) {
-          const anakGrup = grupMap.get(s.soalId);
-          if (anakGrup) {
-            // Soal ini adalah induk grup — satukan dengan anak-anaknya
-            units.push([s, ...anakGrup]);
-            grupMap.delete(s.soalId);
-          } else {
-            units.push([s]);
+          // Gabungkan: setiap grup qiro'ah dianggap sebagai 1 "unit" soal
+          // Soal induk + anak grup disatukan agar tidak terpisah saat diacak
+          const units: (typeof soalDisajikan)[] = [];
+          for (const s of soalMandiri) {
+            const anakGrup = grupMap.get(s.soalId);
+            if (anakGrup) {
+              units.push([s, ...anakGrup]);
+              grupMap.delete(s.soalId);
+            } else {
+              units.push([s]);
+            }
           }
-        }
-        // Sisa grup yang induknya bukan di mapel ini (fallback)
-        for (const [, anak] of grupMap) {
-          units.push(anak);
-        }
-        
-        // Acak unit-unit, lalu flatten
-        const shuffledUnits = shuffleArray(units);
-        for (const unit of shuffledUnits) {
-          newSoalDisajikan.push(...unit);
+          // Sisa grup yang ekstrim / outlier
+          for (const [, anak] of grupMap) {
+            units.push(anak);
+          }
+          
+          // Acak unit-unit di dalam blok Jenis Soal ini, lalu flatten
+          const shuffledUnits = shuffleArray(units);
+          for (const unit of shuffledUnits) {
+            newSoalDisajikan.push(...unit);
+          }
         }
       }
       soalDisajikan = newSoalDisajikan;

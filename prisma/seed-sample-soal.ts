@@ -24,10 +24,10 @@ function buildSoalData(tipe: string, nomor: number): {
         {
           pertanyaan: "ما معنى كلمة \"كِتَابٌ\"؟",
           opsiList: [
-            { teks: "كتاب (Book)", isCorrect: true },
-            { teks: "قلم (Pen)", isCorrect: false },
-            { teks: "بيت (House)", isCorrect: false },
-            { teks: "باب (Door)", isCorrect: false },
+            { teks: "كتاب (Buku)", isCorrect: true },
+            { teks: "قلم (Bolpoin)", isCorrect: false },
+            { teks: "بيت (Rumah)", isCorrect: false },
+            { teks: "باب (Pintu)", isCorrect: false },
           ],
         },
         {
@@ -363,21 +363,21 @@ function buildSoalData(tipe: string, nomor: number): {
     case "KITABAH":
       return [
         {
-          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (مَدْرَسَة):",
+          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (Sekolah):",
           dataTambahan: {
             huruf: ["م", "د", "ر", "س", "ة"],
           },
           kunciJawaban: "مَدْرَسَة",
         },
         {
-          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (مُعَلِّم):",
+          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (Guru):",
           dataTambahan: {
             huruf: ["م", "ع", "ل", "م"],
           },
           kunciJawaban: "مُعَلِّم",
         },
         {
-          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (مَكْتَبَة):",
+          pertanyaan: "رَكِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَةٍ صَحِيحَةٍ (Meja):",
           dataTambahan: {
             huruf: ["م", "ك", "ت", "ب", "ة"],
           },
@@ -547,35 +547,35 @@ function buildSoalData(tipe: string, nomor: number): {
     case "SUSUN_HURUF":
       return [
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (كِتَاب):",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (Buku):",
           dataTambahan: {
             hurufAcak: ["ب", "ا", "ت", "ك"],
           },
           kunciJawaban: "كِتَاب",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (مَدْرَسَة):",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (Sekolah):",
           dataTambahan: {
             hurufAcak: ["س", "ر", "د", "م", "ة"],
           },
           kunciJawaban: "مَدْرَسَة",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (مُعَلِّم):",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (Guru):",
           dataTambahan: {
             hurufAcak: ["ع", "ل", "م", "م"],
           },
           kunciJawaban: "مُعَلِّم",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (قَلَم):",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (Bolpoin):",
           dataTambahan: {
             hurufAcak: ["م", "ل", "ق"],
           },
           kunciJawaban: "قَلَم",
         },
         {
-          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (تِلْمِيذ):",
+          pertanyaan: "رَتِّبِ الْحُرُوفَ لِتَكْوِينِ كَلِمَة (Murid):",
           dataTambahan: {
             hurufAcak: ["م", "ي", "ذ", "ل", "ت"],
           },
@@ -832,15 +832,15 @@ async function main() {
     });
 
     if (existingCount > 0) {
-       // Delete old seeded questions so we can inject the perfect 5 new questions
-       await prisma.bankSoalUsbu.deleteMany({
-          where: {
-            jenisSoalId: jenisSoal.id,
-            programId: program.id,
-            mapelId: mapel.id,
-          }
-       });
-       console.log(`♻️  ${tipe}: menghapus soal lama untuk di-seed ulang.`);
+      // Delete old seeded questions so we can inject the perfect 5 new questions
+      await prisma.bankSoalUsbu.deleteMany({
+        where: {
+          jenisSoalId: jenisSoal.id,
+          programId: program.id,
+          mapelId: mapel.id,
+        }
+      });
+      console.log(`♻️  ${tipe}: menghapus soal lama untuk di-seed ulang.`);
     }
 
     // Buat soal dinamis selama data dari fungsi masih ada
@@ -866,12 +866,12 @@ async function main() {
           dataTambahan: data.dataTambahan || null,
           opsiList: isPilihanGanda && data.opsiList
             ? {
-                create: data.opsiList.map((opsi, i) => ({
-                  teks: opsi.teks,
-                  isCorrect: opsi.isCorrect,
-                  urutan: i + 1,
-                })),
-              }
+              create: data.opsiList.map((opsi, i) => ({
+                teks: opsi.teks,
+                isCorrect: opsi.isCorrect,
+                urutan: i + 1,
+              })),
+            }
             : undefined,
         },
       });

@@ -5,8 +5,8 @@ import { checkPermission } from "@/lib/permission";
 
 export async function GET() {
   const session = await getSession();
-  const hasPermission = await checkPermission("ruang_kelas");
-  if (!session || !hasPermission) {
+  // Any logged-in Admin/Teacher can view the class list for dropdowns
+  if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

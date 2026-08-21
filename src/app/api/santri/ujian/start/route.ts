@@ -269,7 +269,9 @@ export async function POST(req: Request) {
           ...s,
           jawabanId: jwbExist?.id,
           opsiTerpilih: jwbExist?.opsiId || null,
-          rpiId: jwbExist?.rpiId || null
+          rpiId: jwbExist?.rpiId || null,
+          jawabanTeks: jwbExist?.jawabanTeks || null,
+          jawabanData: jwbExist?.jawabanData || null
         };
       })
     };

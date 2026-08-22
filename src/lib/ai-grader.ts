@@ -48,6 +48,7 @@ Jawaban Siswa: ${params.jawabanSantri}`;
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
+      signal: AbortSignal.timeout(60000), // Batasi maksimal 60 detik
       body: JSON.stringify({
         model: "agnes-2.5-flash", // fallback default, maybe need adjust config later
         messages: [

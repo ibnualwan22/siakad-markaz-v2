@@ -64,7 +64,7 @@ Jawaban Siswa: ${params.jawabanSantri}`;
             "Content-Type": "application/json",
             "Authorization": `Bearer ${apiKey}`,
           },
-          signal: AbortSignal.timeout(15000), // Batasi maksimal 15 detik (Cepat-Gagal agar bisa lanjut API selanjutnya sebelum web timeout)
+          signal: AbortSignal.timeout(45000), // Diperpanjang menjadi 45 detik untuk toleransi beban "Pengeboman" Batch Processing
           body: JSON.stringify({
             model: "agnes-2.5-flash", // fallback default, maybe need adjust config later
             messages: [

@@ -195,11 +195,20 @@ export default function ReviewJawabanPage() {
     }
 
     // PG / Benar Salah / Isian (exact match)
-    if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH"].includes(soal.tipeSoal)) {
-      const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
+    if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH", "PG_MULTI"].includes(soal.tipeSoal)) {
       let isBenar = false;
-      if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
-      else if (jaw.jawabanTeks && soal.kunciJawaban && jaw.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) isBenar = true;
+      
+      if (soal.tipeSoal === "PG_MULTI") {
+        const correctIds = soal.opsiList?.filter((o: any) => o.isCorrect).map((o: any) => o.id) || [];
+        const selectedIds = jaw.jawabanData?.selectedIds || [];
+        if (correctIds.length > 0 && correctIds.length === selectedIds.length && selectedIds.every((id: string) => correctIds.includes(id))) {
+          isBenar = true;
+        }
+      } else {
+        const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
+        if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
+        else if (jaw.jawabanTeks && soal.kunciJawaban && jaw.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) isBenar = true;
+      }
       
       return isBenar ? (
         <span className="inline-flex items-center gap-1 text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded text-xs"><CheckCircle size={14}/> Benar</span>

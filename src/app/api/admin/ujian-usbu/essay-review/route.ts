@@ -80,14 +80,14 @@ export async function PUT(req: Request) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (session.role !== "ADMIN") {
        const p = await prisma.rolePermission.findUnique({
-         where: { role_permission: { role: session.role, permission: "ujian_usbu_review" } }
+         where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
        });
        if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { id, nilaiManual } = await req.json();
 
-    if (!id || typeof nilaiManual !== 'number') {
+    if (!id || (typeof nilaiManual !== 'number' && nilaiManual !== null)) {
       return NextResponse.json({ error: "Invalid data" }, { status: 400 });
     }
 

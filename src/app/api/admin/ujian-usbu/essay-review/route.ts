@@ -58,8 +58,7 @@ export async function GET(req: Request) {
           }
         }
       },
-      orderBy: { sesiId: 'asc' },
-      take: 200 // Limit untuk safety, bisa pagination nanti
+      orderBy: { sesiId: 'asc' }
     });
 
     // 3. Attach soal to jawaban

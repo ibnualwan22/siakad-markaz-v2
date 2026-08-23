@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, CheckCircle, CheckCircle2, XCircle, Clock, X, Brain, Edit3, Save, AlertCircle, ChevronDown, ChevronRight, Activity, BookOpen, Layers } from "lucide-react";
 import toast from "react-hot-toast";
+import Swal from "sweetalert2";
 
 export default function ReviewJawabanPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
@@ -160,6 +161,46 @@ export default function ReviewJawabanPage() {
        toast.error("Terjadi kesalahan saat menghubungi server AI.", { id: "ai-grade" });
     } finally {
        setIsAIGrading(null);
+    }
+  };
+
+  const handleBulkAiGrade = async () => {
+    if (!selectedPaket) {
+       toast.error("Pesan: Paket Ujian harus dipilih!");
+       return;
+    }
+    
+    const confirm = await Swal.fire({
+      title: "Auto-Grade Seluruh Kelas?",
+      text: "Sistem akan menilai SEMUA jawaban essay yang masih berstatus kosong untuk seluruh kelas di paket ini secara berjalan di belakang layar.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonText: "Ya, Mulai Penilaian AI (Background)",
+      cancelButtonText: "Batal"
+    });
+
+    if (confirm.isConfirmed) {
+       toast.loading("Mengirim perintah ke server...", { id: "bulk-ai" });
+       try {
+         const res = await fetch("/api/admin/ujian-usbu/start-bulk-ai-grade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paketId: selectedPaket })
+         });
+         
+         const json = await res.json();
+         if (!res.ok) throw new Error(json.error || "Gagal memulai background task");
+         
+         toast.dismiss("bulk-ai");
+         
+         Swal.fire({
+            title: "Proses Diluncurkan!",
+            text: "Nilai AI sedang berproses di sistem server (Background mode). Anda bebas untuk beralih halaman, menutup browser, atau mematikan laptop tanpa menghentikan proses ini.",
+            icon: "success"
+         });
+       } catch (err: any) {
+         toast.error(err.message, { id: "bulk-ai" });
+       }
     }
   };
 
@@ -720,6 +761,17 @@ export default function ReviewJawabanPage() {
                     <option key={k.id} value={k.id}>{k.nama}</option>
                   ))}
                </select>
+             </div>
+             
+             <div className="w-full md:w-auto self-end mt-2 md:mt-0 md:ml-4">
+               <button 
+                 onClick={handleBulkAiGrade}
+                 disabled={!selectedPaket}
+                 className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50"
+               >
+                 <Brain size={18} /> 
+                 <span>Auto-Grade Seluruh Kelas (Background)</span>
+               </button>
              </div>
           </div>
         </div>

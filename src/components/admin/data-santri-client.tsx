@@ -140,6 +140,20 @@ export function DataSantriClient({
     setPage(1);
   }
 
+  async function handleForceCheckout(id: string, nama: string) {
+    if (!confirm(`Apakah Anda yakin ingin melakukan Force Checkout pada santri ${nama}? Aksi ini akan menonaktifkan santri secara sepihak.`)) return;
+    const toastId = toast.loading("Memproses Checkout...");
+    try {
+      const res = await fetch(`/api/admin/checkout/${id}/force-checkout`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal checkout");
+      toast.success("Santri berhasil dicheckout", { id: toastId });
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message, { id: toastId });
+    }
+  }
+
   function toggleSort(field: SortField) {
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -306,6 +320,7 @@ export function DataSantriClient({
                   { field: "" as SortField, label: "Kategori", sortable: false },
                   { field: "" as SortField, label: "No. WA Santri", sortable: false },
                   { field: "" as SortField, label: "Gender", sortable: false },
+                  { field: "" as SortField, label: "Aksi", sortable: false },
                 ]).map((col, i) => (
                   <th key={i} className="px-4 py-3 text-left text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">
                     {col.sortable ? (
@@ -383,6 +398,16 @@ export function DataSantriClient({
                       )}
                     </td>
                     <td className="px-4 py-3"><GenderBadge gender={r.gender} /></td>
+                    <td className="px-4 py-3 text-center">
+                      {!r.isCheckedOut && (
+                        <button 
+                          onClick={() => handleForceCheckout(r.id, r.nama)} 
+                          className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 font-bold text-[10px] transition shrink-0 whitespace-nowrap"
+                        >
+                          Checkout
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

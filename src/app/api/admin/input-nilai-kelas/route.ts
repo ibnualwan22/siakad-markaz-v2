@@ -87,6 +87,7 @@ export async function GET(request: Request) {
           riwayatId: santri.riwayatId, // Use active riwayat for saving
           santriId: santri.santriId,
           nama: santri.nama,
+          isCheckedOut: santri.isCheckedOut,
           is_tasmi: false,
           nilai: nilaiMap,
         };
@@ -174,6 +175,7 @@ export async function GET(request: Request) {
         riwayatId: santri.riwayatId,
         santriId: santri.santriId,
         nama: santri.nama,
+        isCheckedOut: santri.isCheckedOut,
         is_tasmi: dbData?.is_tasmi ?? false,
         jumlah_kolom_usbu: dbData?.jumlah_kolom_usbu ?? kelasInfo?.jumlah_kolom_usbu ?? 0,
         nilai: nilaiMap,

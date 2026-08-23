@@ -25,6 +25,7 @@ type DashboardSantri = {
   kelasNama: string;
   kelasId: string | null;
   gender: string;
+  isCheckedOut: boolean;
 };
 
 type ProgramItem = {
@@ -62,7 +63,7 @@ export function DashboardCharts({
     // Add "Belum Ditempatkan"
     parentMap.set("Belum Ditempatkan", 0);
 
-    santriRows.forEach((santri) => {
+    santriRows.filter(s => !s.isCheckedOut).forEach((santri) => {
       const parentName = santri.programId === null ? "Belum Ditempatkan" : santri.programNama;
       const count = parentMap.get(parentName) || 0;
       parentMap.set(parentName, count + 1);
@@ -90,7 +91,7 @@ export function DashboardCharts({
     
     ruanganMap.set("Belum Ditempatkan", 0);
 
-    santriRows.forEach((santri) => {
+    santriRows.filter(s => !s.isCheckedOut).forEach((santri) => {
       const roomName = santri.kelasId !== null 
         ? santri.kelasNama 
         : (santri.programId !== null ? santri.programNama : "Belum Ditempatkan");
@@ -114,7 +115,7 @@ export function DashboardCharts({
       });
     });
 
-    santriRows.forEach((s) => {
+    santriRows.filter(s => !s.isCheckedOut).forEach((s) => {
       if (s.kelasId && s.kelasNama) {
         let stats = statsMap.get(s.kelasNama);
         if (!stats) {
@@ -153,7 +154,8 @@ export function DashboardCharts({
   };
 
   const totalSantri = santriRows.length;
-  const totalAssigned = santriRows.filter(s => s.programId !== null).length;
+  const totalAktif = santriRows.filter(s => !s.isCheckedOut).length;
+  const totalCheckout = santriRows.filter(s => s.isCheckedOut).length;
   
   return (
     <div className="space-y-6">
@@ -164,12 +166,12 @@ export function DashboardCharts({
             <h3 className="mt-2 text-4xl font-black font-display" style={{ color: "var(--color-text)" }}>{totalSantri}</h3>
          </div>
          <div className="p-6 flex flex-col justify-center rounded-xl" style={{ background: "var(--color-primary)", boxShadow: "4px 4px 12px rgba(0,102,102,0.3), -3px -3px 8px rgba(0,133,133,0.15)", borderRadius: "var(--radius-xl)" }}>
-            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.7)" }}>Sudah Ditempatkan</p>
-            <h3 className="mt-2 text-4xl font-black font-display text-white">{totalAssigned}</h3>
+            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "rgba(255,255,255,0.7)" }}>Santri Aktif</p>
+            <h3 className="mt-2 text-4xl font-black font-display text-white">{totalAktif}</h3>
          </div>
-         <div className="neu-card p-6 flex flex-col justify-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-danger)" }}>Belum Ditempatkan</p>
-            <h3 className="mt-2 text-4xl font-black font-display" style={{ color: "var(--color-text)" }}>{totalSantri - totalAssigned}</h3>
+         <div className="neu-card p-6 flex flex-col justify-center border-l-4" style={{ borderColor: "var(--color-danger)" }}>
+            <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-danger)" }}>Santri Checkout</p>
+            <h3 className="mt-2 text-4xl font-black font-display text-red-600">{totalCheckout}</h3>
          </div>
       </div>
 

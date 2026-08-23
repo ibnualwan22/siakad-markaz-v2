@@ -44,6 +44,7 @@ type SantriRow = {
   nama: string;
   is_tasmi: boolean;
   jumlah_kolom_usbu: number;
+  isCheckedOut?: boolean;
   nilai: Record<string, NilaiData>;
 };
 
@@ -458,12 +459,17 @@ export function InputNilaiBulkClient({
                     const hasChange = !!changes[row.riwayatId];
 
                     return (
-                      <tr key={row.riwayatId} className={`transition hover:bg-[var(--color-secondary)]/80 ${hasChange ? 'bg-[var(--color-warning-light)]/10' : ''}`}>
-                        <td className="px-2 md:px-4 py-2 text-center font-medium text-[var(--color-text-subtle)] sticky left-0 bg-white z-10 border-r border-[var(--color-surface)] shadow-[1px_0_0_0_#f1f5f9] min-w-[40px] md:min-w-[50px]">{index + 1}</td>
-                        <td className="px-3 md:px-4 py-2 font-bold text-[var(--color-text)] sticky left-[40px] md:left-[50px] bg-white z-10 border-r border-[var(--color-surface)] shadow-[1px_0_0_0_#f1f5f9] min-w-[140px] w-[140px] md:min-w-[250px] md:w-[250px] whitespace-normal leading-snug text-xs md:text-sm">
+                      <tr key={row.riwayatId} className={`transition hover:bg-[var(--color-secondary)]/80 ${hasChange ? 'bg-[var(--color-warning-light)]/10' : ''} ${row.isCheckedOut ? 'bg-red-50/50 hover:bg-red-100' : ''}`}>
+                        <td className={`px-2 md:px-4 py-2 text-center font-medium sticky left-0 z-10 border-r border-[var(--color-surface)] shadow-[1px_0_0_0_#f1f5f9] min-w-[40px] md:min-w-[50px] ${row.isCheckedOut ? 'bg-red-50 text-red-900' : 'bg-white text-[var(--color-text-subtle)]'}`}>{index + 1}</td>
+                        <td className={`px-3 md:px-4 py-2 font-bold sticky left-[40px] md:left-[50px] z-10 border-r border-[var(--color-surface)] shadow-[1px_0_0_0_#f1f5f9] min-w-[140px] w-[140px] md:min-w-[250px] md:w-[250px] whitespace-normal leading-snug text-xs md:text-sm ${row.isCheckedOut ? 'text-red-900 bg-red-50' : 'text-[var(--color-text)] bg-white'}`}>
                           <div className="flex flex-col gap-1">
-                            <span>{row.nama}</span>
-                            {isAdmin && (
+                            <span className="flex items-center gap-1.5 flex-wrap">
+                              {row.nama}
+                              {row.isCheckedOut && (
+                                <span className="px-1 py-0.5 text-[8px] font-black tracking-wide bg-red-200 text-red-700 rounded-sm">CHECK OUT</span>
+                              )}
+                            </span>
+                            {isAdmin && !row.isCheckedOut && (
                               <select 
                                 value={getUsbuainVal(row) ?? 0}
                                 onChange={(e) => handleUsbuainChange(row.riwayatId, Number(e.target.value))}
@@ -482,8 +488,9 @@ export function InputNilaiBulkClient({
                               <input 
                                 type="checkbox" 
                                 checked={tasmi}
+                                disabled={row.isCheckedOut}
                                 onChange={(e) => handleTasmiChange(row.riwayatId, e.target.checked)}
-                                className="h-5 w-5 rounded border-[var(--color-surface-dark)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer"
+                                className="h-5 w-5 rounded border-[var(--color-surface-dark)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               />
                             </label>
                           ) : (
@@ -506,9 +513,10 @@ export function InputNilaiBulkClient({
                                     <input 
                                       type="number" min={0} max={100} 
                                       value={u1 === null ? "" : u1}
+                                      disabled={row.isCheckedOut}
                                       onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "u1", e.target.value === "" ? null : Number(e.target.value))}
                                       onWheel={(e) => e.currentTarget.blur()}
-                                      className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 focus:bg-[var(--color-primary-50)]/30 hover:border-[var(--color-surface-dark)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                      className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 focus:bg-[var(--color-primary-50)]/30 hover:border-[var(--color-surface-dark)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" 
                                     />
                                   ) : (
                                     <div className="w-full rounded-lg border border-[var(--color-surface)] bg-[var(--color-secondary)] px-2 py-1.5 text-center font-bold text-[var(--color-text-subtle)]">{u1 === null ? "-" : u1}</div>
@@ -521,9 +529,10 @@ export function InputNilaiBulkClient({
                                     <input 
                                       type="number" min={0} max={100} 
                                       value={u2 === null ? "" : u2}
+                                      disabled={row.isCheckedOut}
                                       onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "u2", e.target.value === "" ? null : Number(e.target.value))}
                                       onWheel={(e) => e.currentTarget.blur()}
-                                      className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 focus:bg-[var(--color-primary-50)]/30 hover:border-[var(--color-surface-dark)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                      className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 focus:bg-[var(--color-primary-50)]/30 hover:border-[var(--color-surface-dark)] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" 
                                     />
                                   ) : (
                                     <div className="w-full rounded-lg border border-[var(--color-surface)] bg-[var(--color-secondary)] px-2 py-1.5 text-center font-bold text-[var(--color-text-subtle)]">{u2 === null ? "-" : u2}</div>
@@ -536,10 +545,11 @@ export function InputNilaiBulkClient({
                                     <input 
                                       type="number" min={0} max={100}
                                       value={n !== null ? n : ""}
+                                      disabled={row.isCheckedOut}
                                       onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "n", e.target.value === "" ? null : Number(e.target.value))}
                                       onFocus={(e) => e.target.select()}
                                       onWheel={(e) => e.currentTarget.blur()}
-                                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] bg-white"
+                                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-center text-sm font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                                     />
                                   ) : (
                                     <div className="w-full rounded-lg bg-gray-50/50 px-2 py-1.5 text-center font-bold text-gray-300">X</div>
@@ -584,10 +594,11 @@ export function InputNilaiBulkClient({
                                           <input 
                                             type="number" min={0} max={100}
                                             value={avg === null ? "" : Math.round(avg)}
+                                            disabled={row.isCheckedOut}
                                             onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "a", e.target.value === "" ? null : Number(e.target.value))}
                                             onWheel={(e) => e.currentTarget.blur()}
                                             placeholder="Nilai"
-                                            className="w-full rounded border border-emerald-300 bg-white px-1 py-1 text-center text-[10px] font-bold text-emerald-800 outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-full rounded border border-emerald-300 bg-white px-1 py-1 text-center text-[10px] font-bold text-emerald-800 outline-none focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                                           />
                                         </div>
                                       ) : (
@@ -600,11 +611,12 @@ export function InputNilaiBulkClient({
                                           <input type="number" min={0} max={maxTambahan} step="any"
                                             value={curTambahan || ""}
                                             placeholder="+"
+                                            disabled={row.isCheckedOut}
                                             onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "tambahan" as any, e.target.value === "" ? 0 : Math.min(maxTambahan, Math.max(0, Number(e.target.value))))}
                                             onWheel={(e) => e.currentTarget.blur()}
-                                            className="w-full rounded border border-amber-300 bg-amber-50 px-0.5 py-0.5 text-center text-[10px] font-bold text-amber-800 outline-none focus:border-amber-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-full rounded border border-amber-300 bg-amber-50 px-0.5 py-0.5 text-center text-[10px] font-bold text-amber-800 outline-none focus:border-amber-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                                           />
-                                          {exactFinal !== null && exactFinal < kkm && kkmDiff > 0 && (
+                                          {exactFinal !== null && exactFinal < kkm && kkmDiff > 0 && !row.isCheckedOut && (
                                             <button
                                               type="button"
                                               onClick={() => handleNilaiChange(row.riwayatId, m.id, "tambahan" as any, Number(kkmDiff.toFixed(2)))}
@@ -635,9 +647,10 @@ export function InputNilaiBulkClient({
                                   <input 
                                     type="number" min={0} max={100} 
                                     value={a === null ? "" : a}
+                                    disabled={row.isCheckedOut}
                                     onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "a", e.target.value === "" ? null : Number(e.target.value))}
                                     onWheel={(e) => e.currentTarget.blur()}
-                                    className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                                    className="w-full rounded-lg border border-[var(--color-surface-dark)] bg-white px-2 py-1.5 text-center font-bold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-emerald-100 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500" 
                                   />
                                 </td>
                                 <td className="px-0.5 py-1 border-r border-[var(--color-surface-dark)] bg-amber-50/30">
@@ -645,11 +658,12 @@ export function InputNilaiBulkClient({
                                     <>
                                       <input type="number" min={0} max={maxT} step="any"
                                         value={curT || ""} placeholder="+"
+                                        disabled={row.isCheckedOut}
                                         onChange={(e) => handleNilaiChange(row.riwayatId, m.id, "tambahan" as any, e.target.value === "" ? 0 : Math.min(maxT, Math.max(0, Number(e.target.value))))}
                                         onWheel={(e) => e.currentTarget.blur()}
-                                        className="w-full rounded border border-amber-300 bg-amber-50 px-0.5 py-0.5 text-center text-[10px] font-bold text-amber-800 outline-none focus:border-amber-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        className="w-full rounded border border-amber-300 bg-amber-50 px-0.5 py-0.5 text-center text-[10px] font-bold text-amber-800 outline-none focus:border-amber-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
                                       />
-                                      {exactFinalT !== null && exactFinalT < kkm && kkmDiffT > 0 && (
+                                      {exactFinalT !== null && exactFinalT < kkm && kkmDiffT > 0 && !row.isCheckedOut && (
                                         <button
                                           type="button"
                                           onClick={() => handleNilaiChange(row.riwayatId, m.id, "tambahan" as any, Number(kkmDiffT.toFixed(2)))}

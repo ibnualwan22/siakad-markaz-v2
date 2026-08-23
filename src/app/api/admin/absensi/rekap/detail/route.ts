@@ -65,7 +65,7 @@ export async function GET(request: Request) {
     const masterSantriList = await getMasterSantriList();
     const activeSantriMap = new Map<string, string>();
     for (const ms of masterSantriList) {
-      if (ms.isAktif) {
+      if (ms.isAktif && !ms.isCheckedOut) {
         activeSantriMap.set(ms.id, ms.dufahNama);
       }
     }

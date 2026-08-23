@@ -32,7 +32,6 @@ export async function GET(request: Request) {
       riwayatId: { in: santriIds },
       statusIzin: "AKTIF",
       OR: [
-        { tipeIzin: "HARIAN", tanggalMulai: dateZero },
         { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: dateZero }, tanggalSelesai: { gte: dateZero } },
         { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: dateZero } }
       ]
@@ -112,7 +111,6 @@ export async function POST(request: Request) {
         riwayatId: { in: santriIds },
         statusIzin: "AKTIF",
         OR: [
-          { tipeIzin: "HARIAN", tanggalMulai: dateZero },
           { tipeIzin: { notIn: ["HARIAN", "KELUAR_PARE"] }, tanggalMulai: { lte: dateZero }, tanggalSelesai: { gte: dateZero } },
           { tipeIzin: "KELUAR_PARE", tanggalMulai: { lte: dateZero } }
         ]

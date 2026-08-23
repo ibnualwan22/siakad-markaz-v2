@@ -226,7 +226,7 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
   const toCreate: any[] = [];
 
   for (const masterSantri of masterSantriList) {
-    if (!masterSantri.isAktif) continue;
+    if (!masterSantri.isAktif && !masterSantri.isCheckedOut) continue;
     const currentRiwayat = riwayatList.find(r => r.santriId === masterSantri.id && r.dufahNama === masterSantri.dufahNama);
     if (!currentRiwayat) {
       const historicalAkbarnas = riwayatList.filter(
@@ -383,6 +383,7 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
         statusKelulusan: program && hasCompleteNilai ? status : "TIDAK_LULUS",
         isTasmi: riwayat?.is_tasmi ?? false,
         isAktif: masterSantri.isAktif,
+        isCheckedOut: masterSantri.isCheckedOut,
         canPrintSyahadah:
           Boolean(program) &&
           hasCompleteNilai &&

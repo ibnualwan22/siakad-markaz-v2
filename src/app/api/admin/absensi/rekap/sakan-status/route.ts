@@ -16,7 +16,7 @@ export async function GET() {
     const santriPerSakan = new Map<string, number>();
 
     for (const ms of masterSantriList) {
-      if (ms.isAktif && ms.sakan && ms.sakan !== "-") {
+      if (ms.isAktif && !ms.isCheckedOut && ms.sakan && ms.sakan !== "-") {
         allSakan.add(ms.sakan);
         santriPerSakan.set(ms.sakan, (santriPerSakan.get(ms.sakan) || 0) + 1);
       }
@@ -40,7 +40,7 @@ export async function GET() {
     // Map ke sakan name via master data
     const activeSantriMap = new Map<string, string>();
     for (const ms of masterSantriList) {
-      if (ms.isAktif) {
+      if (ms.isAktif && !ms.isCheckedOut) {
         activeSantriMap.set(ms.id, ms.dufahNama);
       }
     }

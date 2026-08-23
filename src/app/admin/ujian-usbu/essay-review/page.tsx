@@ -124,6 +124,20 @@ export default function EssayReviewPage() {
     triggerAIGrade(pendingEssay);
   };
 
+  const handleServerBulkGrade = async () => {
+    const res = await fetch("/api/admin/ujian-usbu/start-bulk-ai-grade", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}) // Tanpa paketId = GLOBAL (semua)
+    });
+    const json = await res.json();
+    if (res.ok) {
+      toast.success("Proses AI (Background) dimulai! Anda boleh menutup halaman ini.", { duration: 8000 });
+    } else {
+      toast.error(json.error || "Gagal memulai");
+    }
+  };
+
   return (
     <div className="p-4 md:p-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -131,7 +145,7 @@ export default function EssayReviewPage() {
             <h1 className="text-2xl font-bold font-display text-gray-800">Review Essay (AI & Manual)</h1>
             <p className="text-gray-500">Berikan penilaian untuk soal bertipe essay dan isian manual.</p>
           </div>
-          <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
              <select className="input-field py-2.5 max-w-[150px]" value={filter} onChange={e => setFilter(e.target.value)}>
                 <option value="ALL">Semua Jawaban</option>
                 <option value="PENDING">Pending (Belum dinilai)</option>
@@ -150,6 +164,13 @@ export default function EssayReviewPage() {
              >
                 <Brain size={18} className={queueState.isActive ? "animate-pulse" : ""} /> 
                 {queueState.isActive ? "Dalam Antrean..." : "Grade All with AI"}
+             </button>
+             <button 
+                onClick={handleServerBulkGrade}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center gap-2 shadow-sm whitespace-nowrap"
+             >
+                <Brain size={18} />
+                Auto-Grade Background (Bisa Ditutup)
              </button>
           </div>
         </div>

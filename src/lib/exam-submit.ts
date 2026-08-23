@@ -441,5 +441,86 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
      await prisma.$transaction(promises);
   }
 
+  // ===== AUTO AI GRADING HOOK =====
+  // Kumpulkan essay yang belum dinilai untuk santri ini, lalu jalankan AI di background
+  const essayTypes = ["ESSAY_SINGKAT", "ESSAY_PANJANG", "ESSAY_ARAB", "ESSAY_GAMBAR"];
+  const pendingEssayIds: string[] = [];
+  
+  for (const sp of paket.soalPaketList) {
+    if (essayTypes.includes(sp.soal.tipeSoal)) {
+      const jaw = jawabanMap.get(sp.soal.id);
+      // Hanya yang ada jawabannya DAN belum dinilai
+      if (jaw && jaw.id && jaw.nilaiManual === null && jaw.teks) {
+        // Cek apakah sudah ter-update oleh jawabanUpdates di atas
+        const alreadyUpdated = jawabanUpdates.some(u => u.id === jaw.id);
+        if (!alreadyUpdated) {
+          pendingEssayIds.push(jaw.id);
+        }
+      }
+    }
+  }
+
+  if (pendingEssayIds.length > 0) {
+    // Fire-and-forget: jangan di-await agar response santri tidak tertunda
+    autoGradeEssaysBackground(pendingEssayIds, sesiId).catch(err => 
+      console.error("[AUTO-AI-SUBMIT] Background grading error:", err)
+    );
+  }
+
   return updatedSesi;
 }
+
+// ===== BACKGROUND AI AUTO-GRADER (dipanggil setelah submit) =====
+async function autoGradeEssaysBackground(jawabanIds: string[], sesiId: string) {
+  const { gradeEssayWithAI } = await import("@/lib/ai-grader");
+  const { recalculateSesiNilai: recalcFn } = await import("@/lib/recalculate-sesi-nilai");
+  const removeHtml = (s: string) => (s || "").replace(/<[^>]*>?/gm, '');
+
+  console.log(`[AUTO-AI-SUBMIT] Memulai auto-grade untuk ${jawabanIds.length} essay (Sesi: ${sesiId})`);
+
+  for (const jawId of jawabanIds) {
+    try {
+      const jaw: any = await prisma.jawabanUjianSantri.findUnique({
+        where: { id: jawId }
+      });
+      if (!jaw || !jaw.jawabanTeks || jaw.nilaiManual !== null) continue;
+
+      const soal: any = await prisma.bankSoalUsbu.findUnique({
+        where: { id: jaw.soalId }
+      });
+      if (!soal) continue;
+
+      const result = await gradeEssayWithAI({
+        pertanyaan: removeHtml(soal.pertanyaan),
+        kunciJawaban: soal.kunciJawaban || "",
+        jawabanSantri: jaw.jawabanTeks,
+        bobot: soal.bobot,
+        tipeSoal: soal.tipeSoal
+      });
+
+      if (result && result.score !== undefined) {
+        let finalScore = result.score;
+        if (finalScore > soal.bobot && finalScore <= 100) finalScore = (finalScore / 100) * soal.bobot;
+        if (finalScore > soal.bobot) finalScore = soal.bobot;
+        if (finalScore < 0) finalScore = 0;
+
+        // @ts-ignore
+        await prisma.jawabanUjianSantri.update({
+          where: { id: jawId },
+          // @ts-ignore
+          data: { nilaiManual: finalScore, aiGraded: true, aiFeedback: result.feedback || null }
+        });
+      }
+
+      // Jeda 2.5 detik per soal (rate-limit safety)
+      await new Promise(resolve => setTimeout(resolve, 2500));
+    } catch (err) {
+      console.error(`[AUTO-AI-SUBMIT] Error pada jawaban ${jawId}:`, err);
+    }
+  }
+
+  // Recalculate total sesi setelah semua essay dinilai
+  await recalcFn(sesiId).catch(console.error);
+  console.log(`[AUTO-AI-SUBMIT] Selesai auto-grade sesi ${sesiId}`);
+}
+

@@ -33,7 +33,7 @@ async function runBackgroundAutoGrade(paketId?: string) {
       const whereClause: any = {
         nilaiManual: null,
         aiGraded: false,
-        jawabanTeks: { not: null },
+        jawabanTeks: { not: null, notIn: [""] },
         soalId: { in: essaySoalIds }
       };
 
@@ -93,12 +93,21 @@ async function runBackgroundAutoGrade(paketId?: string) {
             await prisma.jawabanUjianSantri.update({
               where: { id: jaw.id },
               // @ts-ignore
-              data: { aiFeedback: `[ERROR] ${result?.error || "Gagal mendapatkan respon AI"}` }
+              data: { 
+                 aiGraded: true, // MUST BE TRUE TO BREAK OUT OF QUEUE
+                 aiFeedback: `[ERROR] ${result?.error || "Gagal mendapatkan respon AI"}` 
+              }
             });
             totalErrors++;
           }
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[BULK-AI] Error pada jawaban ${jaw.id}:`, err);
+          // @ts-ignore
+          await prisma.jawabanUjianSantri.update({
+             where: { id: jaw.id },
+             // @ts-ignore
+             data: { aiGraded: true, aiFeedback: `[FATAL] ${err.message || String(err)}` }
+          }).catch(console.error);
           totalErrors++;
         }
       }

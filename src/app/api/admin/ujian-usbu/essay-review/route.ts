@@ -58,7 +58,8 @@ export async function GET(req: Request) {
           }
         }
       },
-      orderBy: { sesiId: 'asc' }
+      orderBy: { sesiId: 'asc' },
+      take: 100 // Batas atas untuk kecepatan query dan rendering. AI Bulk tetap jalan di server.
     });
 
     // 3. Attach soal to jawaban

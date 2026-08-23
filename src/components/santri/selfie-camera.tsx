@@ -145,6 +145,13 @@ export default function SelfieCamera({ perizinanId, onClose, onSuccess }: Props)
                 Pastikan wajah & waktu terlihat jelas
               </span>
             </div>
+            
+            {/* Privacy Warning */}
+            <div className="absolute bottom-28 left-0 w-full text-center px-4">
+              <span className="text-white/80 text-[10px] font-medium bg-black/40 px-3 py-1.5 rounded-lg backdrop-blur-sm max-w-[280px] inline-block leading-snug">
+                Privasi Aman: Foto akan <strong>otomatis terhapus</strong> perlahan dari server dalam 7 hari kedepan.
+              </span>
+            </div>
           </>
         ) : (
           <img src={capturedImage} alt="Captured" className="w-full h-full object-contain bg-black" />

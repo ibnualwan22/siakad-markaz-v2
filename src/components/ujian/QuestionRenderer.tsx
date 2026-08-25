@@ -697,6 +697,9 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                 onChange={(e) => {
                    onAnswer({ jawabanData: { ...jawabanData, answers: { ...answers, [idxStr]: e.target.value } } });
                 }}
+                onFocus={(e) => {
+                   setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+                }}
                 className="mx-2 px-3 py-1 bg-gray-50 border-b-2 border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none transition-colors w-24 md:w-32 text-center text-blue-700 font-bold font-sans"
               />
             );
@@ -1275,6 +1278,9 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
         value={val}
         onChange={handleChange}
         onBlur={handleBlur}
+        onFocus={(e) => {
+          setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+        }}
         placeholder={placeholder}
         className={className}
         dir="auto"
@@ -1290,6 +1296,9 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
       value={val}
       onChange={handleChange}
       onBlur={handleBlur}
+      onFocus={(e) => {
+        setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
+      }}
       placeholder={placeholder}
       className={className}
       dir="auto"

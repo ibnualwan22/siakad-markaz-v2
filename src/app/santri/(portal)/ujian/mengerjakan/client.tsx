@@ -26,6 +26,7 @@ export default function ClientMengerjakanUjian() {
   const hasSubmitted = useRef(false);
   const isSaving = useRef(false);
   const wakeLockRef = useRef<any>(null);
+  const baselineHeightRef = useRef<number>(0);
 
   useEffect(() => {
     if (!sesiId) return router.replace("/santri/ujian");
@@ -115,12 +116,14 @@ export default function ClientMengerjakanUjian() {
   useEffect(() => {
     if (!secureMode || hasSubmitted.current) return;
 
+    // ── Platform Detection ──
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
     // 1. Block Keyboard Shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.altKey || e.metaKey) {
         e.preventDefault();
       }
-      // Block F5, F11, F12
       if (['F5', 'F11', 'F12'].includes(e.key)) {
         e.preventDefault();
       }
@@ -132,27 +135,44 @@ export default function ClientMengerjakanUjian() {
     };
 
     // 3. Tab Visibility Change & Auto Submit
+    //    iOS: grace 3s (swipe gesture / notifikasi sekilas bisa trigger hidden)
+    //    Android: instant (dilindungi oleh fullscreen)
+    let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
-      if (document.hidden && !hasSubmitted.current) {
-        // SANTRI CHEATED by switching tabs/windows!
+      if (!document.hidden) {
+        // Tab kembali visible — batalkan pending submit
+        if (visibilityTimer) { clearTimeout(visibilityTimer); visibilityTimer = null; }
+        return;
+      }
+      if (hasSubmitted.current) return;
+
+      if (isIOS) {
+        // Grace 3 detik untuk iOS — swipe gesture, notifikasi banner
+        visibilityTimer = setTimeout(() => {
+          if (document.hidden && !hasSubmitted.current) {
+            handleAutoSubmit("TAB_CLOSE");
+          }
+        }, 3000);
+      } else {
         handleAutoSubmit("TAB_CLOSE");
       }
     };
 
-    // 4. Before Unload confirmation (TIDAK LAGI AUTO-SUBMIT)
+    // 4. Before Unload confirmation
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (!hasSubmitted.current) {
         e.preventDefault();
-        e.returnValue = ''; // Required for most browsers to show confirmation dialog
+        e.returnValue = '';
       }
     };
 
-    // 5. Blur Detection — catches floating/overlay apps (e.g. WhatsApp bubble on Realme 9i)
-    // Uses a 3-second grace period so brief notification bar pulls don't trigger auto-submit
+    // 5. Blur Detection — catches floating/overlay apps
+    //    iOS: grace 5s (Safari toolbar collapse/expand sering trigger blur)
+    //    Android: grace 3s
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    const BLUR_GRACE = isIOS ? 5000 : 3000;
 
     const isVirtualKeyboardOpen = () => {
-      // If viewport shrinks by more than 150px relative to window height, keyboard is probably open
       if (window.visualViewport) {
         return window.innerHeight - window.visualViewport.height > 150;
       }
@@ -161,32 +181,56 @@ export default function ClientMengerjakanUjian() {
 
     const handleBlur = () => {
       if (hasSubmitted.current) return;
-      if (isVirtualKeyboardOpen()) return; // SAFE: Bug 1 - Oppo keyboard steals focus
+      if (isVirtualKeyboardOpen()) return;
 
-      // Start grace period — if focus isn't regained within 3s, auto-submit
       blurTimer = setTimeout(() => {
         if (!document.hasFocus() && !hasSubmitted.current && !isVirtualKeyboardOpen()) {
           handleAutoSubmit("FLOATING_APP");
         }
-      }, 3000);
+      }, BLUR_GRACE);
     };
 
     const handleFocus = () => {
-      // User came back within grace period — cancel auto-submit
-      if (blurTimer) {
-        clearTimeout(blurTimer);
-        blurTimer = null;
-      }
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
     };
 
     // 6. Periodic Focus Check — backup for devices where blur doesn't fire
-    const focusCheckInterval = setInterval(() => {
-      if (!document.hasFocus() && !document.hidden && !hasSubmitted.current) {
-        if (isVirtualKeyboardOpen()) return; // SAFE: Bug 1 - Oppo keyboard bypass
-        // Browser lost focus but tab is still visible = floating/overlay app!
-        handleAutoSubmit("FOCUS_LOST");
+    //    DIMATIKAN di iOS karena hasFocus() sering false saat animasi keyboard
+    let focusCheckInterval: ReturnType<typeof setInterval> | undefined;
+    if (!isIOS) {
+      focusCheckInterval = setInterval(() => {
+        if (!document.hasFocus() && !document.hidden && !hasSubmitted.current) {
+          if (isVirtualKeyboardOpen()) return;
+          handleAutoSubmit("FOCUS_LOST");
+        }
+      }, 5000);
+    }
+
+    // 7. Split-Screen Detection (Android only)
+    //    Bandingkan innerHeight saat ini vs baseline saat mulai ujian
+    //    Jika menyusut >35% tanpa keyboard → split-screen terdeteksi
+    const handleResize = () => {
+      if (hasSubmitted.current || isIOS) return;
+      const baseline = baselineHeightRef.current;
+      if (!baseline) return;
+
+      const currentHeight = window.innerHeight;
+      const shrinkRatio = currentHeight / baseline;
+
+      if (shrinkRatio < 0.65 && !isVirtualKeyboardOpen()) {
+        handleAutoSubmit("SPLIT_SCREEN");
       }
-    }, 5000);
+    };
+
+    // 8. Keyboard-Aware Auto-Scroll — saat keyboard muncul, scroll input ke tengah
+    const handleViewportResize = () => {
+      const active = document.activeElement as HTMLElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        setTimeout(() => {
+          active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    };
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("contextmenu", handleContextMenu);
@@ -194,6 +238,8 @@ export default function ClientMengerjakanUjian() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", handleViewportResize);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -202,8 +248,11 @@ export default function ClientMengerjakanUjian() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
-      clearInterval(focusCheckInterval);
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+      if (focusCheckInterval) clearInterval(focusCheckInterval);
       if (blurTimer) clearTimeout(blurTimer);
+      if (visibilityTimer) clearTimeout(visibilityTimer);
     };
   }, [secureMode, sesiId]);
 
@@ -277,6 +326,7 @@ export default function ClientMengerjakanUjian() {
   };
 
   const handleMulai = () => {
+    baselineHeightRef.current = window.innerHeight;
     enterFullscreen();
     setHasStarted(true);
   };
@@ -420,8 +470,13 @@ export default function ClientMengerjakanUjian() {
           <p className="text-gray-500 mb-6 px-4">
             Saat tombol ditekan, browser akan masuk mode <strong>Fullscreen</strong>. Jangan berpindah tab atau menutup jendela ujian.
           </p>
+          {/iPad|iPhone|iPod/.test(typeof navigator !== 'undefined' ? navigator.userAgent : '') && (
+            <div className="bg-blue-50 text-blue-800 border border-blue-100 rounded-xl p-4 text-sm text-left mb-4 shadow-inner">
+              <strong>📱 Pengguna iPhone:</strong> Fullscreen tidak didukung di Safari/Chrome iOS. Pastikan Anda tidak membuka notifikasi, Control Center, atau berpindah aplikasi selama ujian berlangsung.
+            </div>
+          )}
           <div className="bg-orange-50 text-orange-800 border border-orange-100 rounded-xl p-4 text-sm text-left mb-8 shadow-inner">
-            <strong>PERINGATAN:</strong> Segala bentuk perpindahan jendela, notifikasi yang menggeser fokus browser, atau keluar dari Fullscreen akan otomatis menyelesaikan (Submit) ujian Anda.
+            <strong>PERINGATAN:</strong> Segala bentuk perpindahan jendela, notifikasi yang menggeser fokus browser, membuka layar belah dua (split-screen), atau keluar dari Fullscreen akan otomatis menyelesaikan (Submit) ujian Anda.
           </div>
           <button 
             onClick={handleMulai}
@@ -580,7 +635,7 @@ export default function ClientMengerjakanUjian() {
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
           .santri-mobile-menu-btn { display: none !important; }
-          body { overflow: hidden !important; overscroll-behavior: none; }
+          body { overscroll-behavior: none; }
         `}} />
       )}
       

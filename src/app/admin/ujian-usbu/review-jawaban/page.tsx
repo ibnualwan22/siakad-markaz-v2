@@ -54,10 +54,10 @@ export default function ReviewJawabanPage() {
     });
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (!selectedPaket || !selectedKelas) return;
     
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     try {
       const res = await fetch(`/api/admin/ujian-usbu/review-jawaban?sesiGlobalId=${selectedPaket}&kelasId=${selectedKelas}`);
       if (!res.ok) throw new Error("Gagal mengambil data");
@@ -68,7 +68,7 @@ export default function ReviewJawabanPage() {
       toast.error(err.message || "Terjadi kesalahan sistem");
       setData([]);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [selectedPaket, selectedKelas]);
 
@@ -108,7 +108,7 @@ export default function ReviewJawabanPage() {
       toast.success("Skor berhasil direvisi. Total dihitung ulang otomatis.");
       setEditingJawabanId(null);
       // Reload table to get the latest scores immediately
-      fetchData();
+      fetchData(true);
     } catch (err) {
       toast.error("Gagal mengupdate nilai");
     } finally {
@@ -156,7 +156,7 @@ export default function ReviewJawabanPage() {
        }
        
        toast.success(`Selesai! ${successCount} jawaban berhasil dinilai AI.`, { id: "ai-grade" });
-       fetchData(); // reload
+       fetchData(true); // reload
     } catch (err) {
        toast.error("Terjadi kesalahan saat menghubungi server AI.", { id: "ai-grade" });
     } finally {
@@ -685,6 +685,7 @@ export default function ReviewJawabanPage() {
 
     data.forEach((soal: any) => {
       const mapel = soal.mapelNama || 'Tanpa Mapel';
+      const tipeSoal = soal.tipeSoal || 'UNDEFINED';
       
       soal.jawabanSantri.forEach((jaw: any) => {
         const sNama = jaw.santriNama || 'Tanpa Nama';
@@ -701,15 +702,41 @@ export default function ReviewJawabanPage() {
            santriMap[sNama].mapels[mapel] = {
               nama: mapel,
               totalNilaiMapel: 0,
-              jawabanList: []
+              jawabanList: [],
+              tipeSoalScores: {}
            };
         }
         
-        const isDihitung = jaw.nilaiManual !== null && jaw.nilaiManual !== undefined;
-        if (isDihitung) {
-           santriMap[sNama].totalNilai += jaw.nilaiManual;
-           santriMap[sNama].mapels[mapel].totalNilaiMapel += jaw.nilaiManual;
+        if (!santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal]) {
+           santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal] = 0;
         }
+
+        // Calculate score for this question (either manual/AI, or auto-exact match)
+        let poin = 0;
+        if (jaw.nilaiManual !== null && jaw.nilaiManual !== undefined) {
+           poin = jaw.nilaiManual;
+        } else {
+           // Structured EXACT type auto-grading
+           if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH", "PG_MULTI"].includes(tipeSoal)) {
+              let isBenar = false;
+              if (tipeSoal === "PG_MULTI") {
+                const correctIds = soal.opsiList?.filter((o: any) => o.isCorrect).map((o: any) => o.id) || [];
+                const selectedIds = jaw.jawabanData?.selectedIds || [];
+                if (correctIds.length > 0 && correctIds.length === selectedIds.length && selectedIds.every((id: string) => correctIds.includes(id))) {
+                  isBenar = true;
+                }
+              } else {
+                const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
+                if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
+                else if (jaw.jawabanTeks && soal.kunciJawaban && jaw.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) isBenar = true;
+              }
+              if (isBenar) poin = soal.bobot;
+           }
+        }
+
+        santriMap[sNama].totalNilai += poin;
+        santriMap[sNama].mapels[mapel].totalNilaiMapel += poin;
+        santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal] += poin;
         
         santriMap[sNama].mapels[mapel].jawabanList.push({
            soal,
@@ -1043,11 +1070,18 @@ export default function ReviewJawabanPage() {
                              <h3 className="text-lg font-bold text-gray-800">{santri.nama}</h3>
                              <p className="text-xs text-gray-500 font-medium mt-0.5">Status: {santri.sesiStatus}</p>
                              
-                             <div className="flex flex-wrap gap-2 mt-3">
+                             <div className="flex flex-col gap-2 mt-3">
                                {Object.values(santri.mapels).map((m: any) => (
-                                 <span key={m.nama} className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
-                                   {m.nama}: {m.totalNilaiMapel}
-                                 </span>
+                                 <div key={m.nama} className="flex flex-wrap items-center gap-2">
+                                   <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                                     {m.nama}: {m.totalNilaiMapel}
+                                   </span>
+                                   {Object.entries(m.tipeSoalScores || {}).map(([ts, score]: [string, any]) => (
+                                      <span key={ts} className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                                        {ts.replace(/_/g, ' ')}: {score}
+                                      </span>
+                                   ))}
+                                 </div>
                                ))}
                              </div>
                            </div>

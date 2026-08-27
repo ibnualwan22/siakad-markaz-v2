@@ -10,31 +10,13 @@ export default async function InputTasmiPage() {
   await requirePermission("input_tasmi");
   
   const session = await getSession();
-  const isAdmin = session?.role === "ADMIN" || session?.role === "Administrator";
+  const isAdmin = true; // Forced to true to make access global across all classes for authorized users
   const allowedKelasId = session?.kelasId ?? null;
   
   const hasEditPermission = await checkPermission("input_tasmi_edit");
 
   // Fetch full program list structure with mapels and kelas
   const programList = await getProgramCatalog();
-
-  if (!isAdmin && !allowedKelasId) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-[var(--color-surface-dark)] min-h-[300px] text-center space-y-4">
-        <div className="h-12 w-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600 font-bold text-xl">!</div>
-        <h3 className="text-xl font-bold text-[var(--color-text)]">Akses Kelas Belum Diatur</h3>
-        <p className="text-sm text-[var(--color-text-muted)] max-w-sm leading-relaxed">
-          Akun Anda belum dihubungkan dengan kelas manapun. Silakan hubungi Super Admin untuk mengatur penugasan kelas Anda.
-        </p>
-        <Link 
-          href="/admin/dashboard" 
-          className="bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white font-bold text-xs py-2 px-4 rounded-xl transition-colors"
-        >
-          Kembali ke Dashboard
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

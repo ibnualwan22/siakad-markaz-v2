@@ -14,7 +14,7 @@ export default function QCBankSoalPage() {
   const [orphanSoals, setOrphanSoals] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch("/api/admin/program")
+    fetch("/api/admin/program?bypassFilter=true")
       .then(res => res.json())
       .then(res => setPrograms(Array.isArray(res) ? res : []))
       .catch(console.error);

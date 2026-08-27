@@ -87,7 +87,7 @@ function SortableItem({ id, item, isHorizontal, isMatch, index }: { id: string, 
            ☰
          </div>
       )}
-      <div className={isHorizontal ? "select-none" : "flex-1 overflow-hidden"}>{item}</div>
+      <div className={isHorizontal ? "select-none" : "flex-1 min-w-0 break-words"}>{item}</div>
     </div>
   );
 }
@@ -105,11 +105,22 @@ function OrderingComponent({
   isHorizontal?: boolean,
   fixedLefts?: string[]
 }) {
-  const [items, setItems] = useState(value && value.length === initialItems.length ? value : initialItems);
+  // Use index-based unique IDs to handle duplicate text values (e.g., two items both being "لِ")
+  const buildIds = (arr: string[]) => arr.map((_, i) => `item-${i}`);
+  const buildTextMap = (arr: string[]) => {
+    const map: Record<string, string> = {};
+    arr.forEach((text, i) => { map[`item-${i}`] = text; });
+    return map;
+  };
+
+  const resolvedItems = value && value.length === initialItems.length ? value : initialItems;
+  const [orderedIds, setOrderedIds] = useState(() => buildIds(resolvedItems));
+  const [textMap, setTextMap] = useState(() => buildTextMap(resolvedItems));
 
   useEffect(() => {
     if (!value || value.length === 0) {
-      setItems(initialItems);
+      setOrderedIds(buildIds(initialItems));
+      setTextMap(buildTextMap(initialItems));
     }
   }, [value, initialItems]);
 
@@ -128,11 +139,11 @@ function OrderingComponent({
   function handleDragEnd(event: any) {
     const { active, over } = event;
     if (active.id !== over.id) {
-      const oldIndex = items.indexOf(active.id);
-      const newIndex = items.indexOf(over.id);
-      const newItems = arrayMove(items, oldIndex, newIndex);
-      setItems(newItems);
-      onChange(newItems);
+      const oldIndex = orderedIds.indexOf(active.id as string);
+      const newIndex = orderedIds.indexOf(over.id as string);
+      const newIds = arrayMove(orderedIds, oldIndex, newIndex);
+      setOrderedIds(newIds);
+      onChange(newIds.map(id => textMap[id]));
     }
   }
 
@@ -143,17 +154,19 @@ function OrderingComponent({
       onDragEnd={handleDragEnd}
     >
       <SortableContext 
-        items={items}
+        items={orderedIds}
         strategy={isHorizontal ? horizontalListSortingStrategy : verticalListSortingStrategy}
       >
         <div className={`mt-4 flex ${isHorizontal ? 'flex-row-reverse flex-wrap justify-center gap-3' : 'flex-col gap-3 w-full max-w-2xl'}`}>
-          {items.map((item, index) => (
-            <div key={item} className={`flex items-stretch ${isHorizontal ? 'gap-2' : ''} ${fixedLefts ? 'w-full gap-0' : 'gap-3'}`}>
+          {orderedIds.map((id, index) => {
+            const itemText = textMap[id];
+            return (
+            <div key={id} className={`flex items-stretch ${isHorizontal ? 'gap-2' : ''} ${fixedLefts ? 'w-full gap-0' : 'gap-3'}`}>
                {fixedLefts && fixedLefts[index] && (() => {
                  const color = matchColors[index % matchColors.length];
                  return (
                    <div 
-                     className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center shadow-sm text-gray-700 relative z-10" 
+                     className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center shadow-sm text-gray-700 relative z-10 min-w-0" 
                      style={{ borderRightWidth: '4px', borderRightColor: color }}
                    >
                       <SoalText html={fixedLefts[index]} className="text-sm md:text-base font-medium prose break-words overflow-auto" />
@@ -169,17 +182,18 @@ function OrderingComponent({
                    </div>
                  );
                })()}
-               <div className={fixedLefts ? "flex-1 relative z-10 min-w-0" : "w-full"}>
+               <div className={fixedLefts ? "flex-1 relative z-10 min-w-0 overflow-visible" : "w-full"}>
                  <SortableItem 
-                    id={item} 
-                    item={<SoalText html={item} className={`pointer-events-none prose break-words ${isHorizontal ? '' : 'text-sm md:text-base'}`} />} 
+                    id={id} 
+                    item={<SoalText html={itemText} className={`pointer-events-none prose break-words ${isHorizontal ? '' : 'text-sm md:text-base'}`} />} 
                     isHorizontal={isHorizontal} 
                     isMatch={!!fixedLefts}
                     index={index}
                  />
                </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </SortableContext>
     </DndContext>

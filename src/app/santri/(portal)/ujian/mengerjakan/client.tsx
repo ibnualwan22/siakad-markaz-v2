@@ -135,8 +135,9 @@ export default function ClientMengerjakanUjian() {
     };
 
     // 3. Tab Visibility Change & Auto Submit
-    //    iOS: grace 3s (swipe gesture / notifikasi sekilas bisa trigger hidden)
-    //    Android: instant (dilindungi oleh fullscreen)
+    //    iOS: grace 5s (swipe gesture / notifikasi sekilas bisa trigger hidden)
+    //    Android: grace 5s (cukup untuk notifikasi sekilas, tapi tidak cukup untuk buka WA/ChatGPT)
+    const VISIBILITY_GRACE = isIOS ? 5000 : 5000;
     let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
     const handleVisibilityChange = () => {
       if (!document.hidden) {
@@ -146,16 +147,11 @@ export default function ClientMengerjakanUjian() {
       }
       if (hasSubmitted.current) return;
 
-      if (isIOS) {
-        // Grace 3 detik untuk iOS — swipe gesture, notifikasi banner
-        visibilityTimer = setTimeout(() => {
-          if (document.hidden && !hasSubmitted.current) {
-            handleAutoSubmit("TAB_CLOSE");
-          }
-        }, 3000);
-      } else {
-        handleAutoSubmit("TAB_CLOSE");
-      }
+      visibilityTimer = setTimeout(() => {
+        if (document.hidden && !hasSubmitted.current) {
+          handleAutoSubmit("TAB_CLOSE");
+        }
+      }, VISIBILITY_GRACE);
     };
 
     // 4. Before Unload confirmation
@@ -167,10 +163,10 @@ export default function ClientMengerjakanUjian() {
     };
 
     // 5. Blur Detection — catches floating/overlay apps
-    //    iOS: grace 5s (Safari toolbar collapse/expand sering trigger blur)
-    //    Android: grace 3s
+    //    iOS: grace 8s (Safari toolbar collapse/expand sering trigger blur)
+    //    Android: grace 5s
     let blurTimer: ReturnType<typeof setTimeout> | null = null;
-    const BLUR_GRACE = isIOS ? 5000 : 3000;
+    const BLUR_GRACE = isIOS ? 8000 : 5000;
 
     const isVirtualKeyboardOpen = () => {
       if (window.visualViewport) {

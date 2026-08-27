@@ -647,10 +647,12 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
       <div className="mt-4">
         <DebouncedTextInput
           key={soal.soalId}
+          isTextarea={true}
+          rows={2}
           initialValue={jawabanTeks || ""}
           onSave={(val: string) => onAnswer({ jawabanTeks: val })}
           placeholder="Ketik jawaban Anda di sini..."
-          className="w-full p-4 border-2 border-gray-200 rounded-xl text-lg font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition"
+          className="w-full p-4 border-2 border-gray-200 rounded-xl text-lg font-medium focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition resize-none"
         />
       </div>
     );
@@ -888,6 +890,10 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                                 <input
                                   type="text"
                                   dir="auto"
+                                   autoComplete="off"
+                                   autoCorrect="off"
+                                   autoCapitalize="off"
+                                   spellCheck={false}
                                   value={answers[key] || ""}
                                   onChange={(e) => {
                                      onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: e.target.value } } });
@@ -1245,7 +1251,7 @@ function TapAndConnectComponent({
   );
 }
 
-function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTextarea = false }: any) {
+function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTextarea = false, rows = 6 }: any) {
   const [val, setVal] = React.useState(initialValue || "");
   const saveTimeout = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -1271,6 +1277,13 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
     onSave(e.target.value);
   };
 
+  const sharedProps = {
+    autoComplete: "off" as const,
+    autoCorrect: "off" as const,
+    autoCapitalize: "off" as const,
+    spellCheck: false,
+  };
+
   if (isTextarea) {
     return (
       <textarea
@@ -1284,7 +1297,8 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
         placeholder={placeholder}
         className={className}
         dir="auto"
-        rows={6}
+        rows={rows}
+        {...sharedProps}
       />
     );
   }
@@ -1302,6 +1316,7 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
       placeholder={placeholder}
       className={className}
       dir="auto"
+      {...sharedProps}
     />
   );
 };

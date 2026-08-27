@@ -288,6 +288,43 @@ export async function POST(request: Request) {
             }
           }
         }
+
+        // Re-check Tasmi Config for this riwayat
+        const riwayatWithProgram = await tx.riwayatSantri.findUnique({
+          where: { id: update.riwayatId }
+        });
+        
+        if (riwayatWithProgram?.programId) {
+          const tasmiConfigs = await tx.tasmiConfig.findMany({
+            where: { programId: riwayatWithProgram.programId }
+          });
+          
+          if (tasmiConfigs.length > 0) {
+             const freshNilaiList = await tx.nilai.findMany({
+                where: { riwayatId: update.riwayatId }
+             });
+             const freshMap = new Map(freshNilaiList.map(n => [n.mapelId, n]));
+             
+             let allFilled = true;
+             for (const config of tasmiConfigs) {
+                const mapelNilai = freshMap.get(config.mapelId);
+                if (!mapelNilai) {
+                  allFilled = false;
+                  break;
+                }
+                if (config.kolom === 'u1' && mapelNilai.nilaiUsbu1 === null) allFilled = false;
+                if (config.kolom === 'u2' && mapelNilai.nilaiUsbu2 === null) allFilled = false;
+                if (config.kolom === 'n' && mapelNilai.nilaiNihai === null) allFilled = false;
+             }
+             
+             if (riwayatWithProgram.is_tasmi !== allFilled) {
+                await tx.riwayatSantri.update({
+                  where: { id: update.riwayatId },
+                  data: { is_tasmi: allFilled }
+                });
+             }
+          }
+        }
       }
     });
 

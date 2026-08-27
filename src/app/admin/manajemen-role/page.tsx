@@ -100,6 +100,9 @@ const AVAILABLE_PERMISSIONS = [
   { id: "riwayat_santri_edit", label: "Riwayat Santri (Aksi)", desc: "Akses mengedit riwayat santri", category: "Divisi Syahadah", type: "aksi" },
   { id: "pengaturan_syahadah", label: "Pengaturan Syahadah (Lihat)", desc: "Akses melihat pengaturan syahadah", category: "Divisi Syahadah", type: "lihat" },
   { id: "pengaturan_syahadah_edit", label: "Pengaturan Syahadah (Aksi)", desc: "Akses mengubah pengaturan syahadah (Kop, TTD, Bobot Mapel)", category: "Divisi Syahadah", type: "aksi" },
+  { id: "input_tasmi", label: "Input Tasmi' (Lihat)", desc: "Akses melihat status tasmi' santri dan input nilai kolom tasmi'", category: "Divisi Syahadah", type: "lihat" },
+  { id: "input_tasmi_edit", label: "Input Tasmi' (Aksi)", desc: "Akses mem-bypass otomatisasi centang status tasmi' secara manual", category: "Divisi Syahadah", type: "aksi" },
+  { id: "tasmi_config", label: "Konfigurasi Tasmi' (Aksi)", desc: "Akses mengatur kolom mana dari mapel mana saja yang menjadi syarat mutlak Tasmi'", category: "Divisi Syahadah", type: "aksi" },
 
   // Divisi CBT / Ujian
   { id: "ujian_usbu", label: "CBT / Ujian (Lihat)", desc: "Akses melihat monitoring sesi ujian dan bank soal", category: "Divisi CBT / Ujian", type: "lihat" },

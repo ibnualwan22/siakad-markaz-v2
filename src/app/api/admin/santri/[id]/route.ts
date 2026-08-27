@@ -89,9 +89,31 @@ export async function PUT(
       return NextResponse.json({ error: "Nilai harus berupa bilangan 0-100." }, { status: 400 });
     }
 
+    // Fetch TasmiConfig to auto-check is_tasmi
+    const tasmiConfigs = await prisma.tasmiConfig.findMany({
+      where: { programId: program.id }
+    });
+
+    let autoTasmi = payload.is_tasmi ?? false;
+    if (tasmiConfigs.length > 0) {
+      let allFilled = true;
+      for (const config of tasmiConfigs) {
+        const item = nilaiList.find(n => n.mapelId === config.mapelId);
+        if (!item) {
+          allFilled = false;
+          break;
+        }
+        if (config.kolom === 'u1' && (item.nilaiUsbu1 === null)) allFilled = false;
+        if (config.kolom === 'u2' && (item.nilaiUsbu2 === null)) allFilled = false;
+        if (config.kolom === 'n' && (item.nilaiNihai === null)) allFilled = false;
+      }
+      // Strictly enforce auto check
+      autoTasmi = allFilled;
+    }
+
     const statusKelulusan = calculateStatus(
       {
-        is_tasmi: payload.is_tasmi ?? false,
+        is_tasmi: autoTasmi,
       },
       nilaiList.map(n => ({ skor: n.nilaiAkhir || 0 })),
       program,
@@ -137,7 +159,7 @@ export async function PUT(
           data: {
             programId: program.id,
             kelasId: kelas.id,
-            is_tasmi: payload.is_tasmi ?? false,
+            is_tasmi: autoTasmi,
             status_kelulusan: statusKelulusan,
             jumlah_kolom_usbu: payload.jumlah_kolom_usbu,
           },
@@ -153,7 +175,7 @@ export async function PUT(
           update: {
             programId: program.id,
             kelasId: kelas.id,
-            is_tasmi: payload.is_tasmi ?? false,
+            is_tasmi: autoTasmi,
             status_kelulusan: statusKelulusan,
             jumlah_kolom_usbu: payload.jumlah_kolom_usbu,
           },
@@ -162,7 +184,7 @@ export async function PUT(
             dufahNama: targetDufah,
             programId: program.id,
             kelasId: kelas.id,
-            is_tasmi: payload.is_tasmi ?? false,
+            is_tasmi: autoTasmi,
             status_kelulusan: statusKelulusan,
             jumlah_kolom_usbu: payload.jumlah_kolom_usbu,
           },

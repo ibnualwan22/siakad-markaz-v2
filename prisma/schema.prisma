@@ -27,6 +27,7 @@ model Program {
   pesertaTauziRekomendasiList PesertaTauzi[]        @relation("ProgramRekomendasi")
   bankSoalUsbuList            BankSoalUsbu[]
   paketUjianList              PaketUjian[]
+  tasmiConfigList             TasmiConfig[]
 }
 
 model Kelas {
@@ -59,6 +60,7 @@ model Mapel {
   nilaiList          Nilai[]
   bankSoalUsbuList   BankSoalUsbu[]
   jenisSoalList      JenisSoal[]
+  tasmiConfigList    TasmiConfig[]
 }
 
 model ProgramMapel {
@@ -996,4 +998,16 @@ model AnggotaJasus {
   dufah      Dufah          @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
 
   @@unique([santriId, dufahNama])
+}
+
+model TasmiConfig {
+  id        String  @id @default(cuid())
+  programId String
+  mapelId   String
+  kolom     String  // "u1", "u2", atau "n"
+
+  program   Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  mapel     Mapel   @relation(fields: [mapelId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, mapelId, kolom])
 }

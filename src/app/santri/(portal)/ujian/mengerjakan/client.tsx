@@ -24,9 +24,10 @@ export default function ClientMengerjakanUjian() {
 
   // Anti-cheat refs
   const hasSubmitted = useRef(false);
-  const isSaving = useRef(false);
+
   const wakeLockRef = useRef<any>(null);
   const baselineHeightRef = useRef<number>(0);
+  const showSummaryRef = useRef(false);
 
   useEffect(() => {
     if (!sesiId) return router.replace("/santri/ujian");
@@ -77,6 +78,11 @@ export default function ClientMengerjakanUjian() {
       return () => clearTimeout(timer);
     }
   }, [hasStarted]);
+
+  // Sync ref so async anti-cheat callbacks can check current summary state
+  useEffect(() => {
+    showSummaryRef.current = showSummary;
+  }, [showSummary]);
 
   // Wake Lock API to prevent screen from sleeping during the exam
   const requestWakeLock = async () => {
@@ -148,7 +154,7 @@ export default function ClientMengerjakanUjian() {
       if (hasSubmitted.current) return;
 
       visibilityTimer = setTimeout(() => {
-        if (document.hidden && !hasSubmitted.current) {
+        if (document.hidden && !hasSubmitted.current && !showSummaryRef.current) {
           handleAutoSubmit("TAB_CLOSE");
         }
       }, VISIBILITY_GRACE);
@@ -180,7 +186,7 @@ export default function ClientMengerjakanUjian() {
       if (isVirtualKeyboardOpen()) return;
 
       blurTimer = setTimeout(() => {
-        if (!document.hasFocus() && !hasSubmitted.current && !isVirtualKeyboardOpen()) {
+        if (!document.hasFocus() && !hasSubmitted.current && !showSummaryRef.current && !isVirtualKeyboardOpen()) {
           handleAutoSubmit("FLOATING_APP");
         }
       }, BLUR_GRACE);
@@ -195,7 +201,7 @@ export default function ClientMengerjakanUjian() {
     let focusCheckInterval: ReturnType<typeof setInterval> | undefined;
     if (!isIOS) {
       focusCheckInterval = setInterval(() => {
-        if (!document.hasFocus() && !document.hidden && !hasSubmitted.current) {
+        if (!document.hasFocus() && !document.hidden && !hasSubmitted.current && !showSummaryRef.current) {
           if (isVirtualKeyboardOpen()) return;
           handleAutoSubmit("FOCUS_LOST");
         }
@@ -206,7 +212,7 @@ export default function ClientMengerjakanUjian() {
     //    Bandingkan innerHeight saat ini vs baseline saat mulai ujian
     //    Jika menyusut >35% tanpa keyboard → split-screen terdeteksi
     const handleResize = () => {
-      if (hasSubmitted.current || isIOS) return;
+      if (hasSubmitted.current || isIOS || showSummaryRef.current) return;
       const baseline = baselineHeightRef.current;
       if (!baseline) return;
 
@@ -384,10 +390,55 @@ export default function ClientMengerjakanUjian() {
     }
   };
 
+  // ===== QUEUE-BASED SAVE SYSTEM =====
+  // Instead of dropping saves when one is in-flight (old isSaving.current guard),
+  // we queue them and process sequentially with retry.
+  const saveQueueRef = useRef<Array<{ soalId: string; payload: any }>>([]);
+  const isProcessingQueueRef = useRef(false);
+  const [unsavedCount, setUnsavedCount] = useState(0);
+
+  const processQueue = async () => {
+    if (isProcessingQueueRef.current || hasSubmitted.current) return;
+    isProcessingQueueRef.current = true;
+
+    while (saveQueueRef.current.length > 0) {
+      const item = saveQueueRef.current[0];
+      let success = false;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch("/api/santri/ujian/jawab", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sesiId,
+              soalId: item.soalId,
+              ...item.payload
+            })
+          });
+          if (res.ok) { success = true; break; }
+          // Server returned error — retry after delay
+        } catch (error) {
+          // Network error — retry after delay
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+      }
+
+      saveQueueRef.current.shift(); // Remove from queue regardless
+      setUnsavedCount(saveQueueRef.current.length);
+
+      if (!success) {
+        console.error(`[SAVE] Gagal simpan jawaban soal ${item.soalId} setelah 3 percobaan`);
+      }
+    }
+
+    isProcessingQueueRef.current = false;
+  };
+
   const handleAnswerSubmit = async (soalId: string, payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => {
-    if (isSaving.current || hasSubmitted.current) return;
+    if (hasSubmitted.current) return;
     
-    // Optimistic UI Update
+    // Optimistic UI + SessionStorage Update (always succeeds)
     const newExamData = { ...examData };
     const curSoal = newExamData.soal.find((s:any) => s.soalId === soalId);
     if (!curSoal) return;
@@ -399,25 +450,59 @@ export default function ClientMengerjakanUjian() {
     setExamData(newExamData);
     sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     
-    // Async save to DB
-    isSaving.current = true;
-    try {
-      await fetch("/api/santri/ujian/jawab", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sesiId,
-          soalId,
-          ...payload
-        })
-      });
-    } catch (error) {
-      console.error("Gagal auto-save:", error);
-      // Silently fail but user will still have local state
-    } finally {
-      isSaving.current = false;
-    }
+    // Replace existing queue entry for same soalId (latest answer wins)
+    saveQueueRef.current = saveQueueRef.current.filter(q => q.soalId !== soalId);
+    saveQueueRef.current.push({ soalId, payload });
+    setUnsavedCount(saveQueueRef.current.length);
+
+    // Trigger queue processing
+    processQueue();
   };
+
+  // Periodic batch sync: every 30 seconds, push ALL answers from sessionStorage to DB as failsafe
+  useEffect(() => {
+    if (!hasStarted || hasSubmitted.current || !sesiId) return;
+
+    const batchSync = async () => {
+      if (hasSubmitted.current) return;
+      const stored = sessionStorage.getItem(`exam_${sesiId}`);
+      if (!stored) return;
+      
+      try {
+        const parsed = JSON.parse(stored);
+        if (!parsed.soal) return;
+        
+        // Find answers that exist in sessionStorage but might not be in DB
+        const answeredSoal = parsed.soal.filter((s: any) => 
+          s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0)
+        );
+        
+        for (const s of answeredSoal) {
+          if (hasSubmitted.current) break;
+          const payload: any = {};
+          if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
+          if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
+          if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
+          if (s.rpiId) payload.rpiId = s.rpiId;
+          
+          try {
+            await fetch("/api/santri/ujian/jawab", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
+            });
+          } catch (e) {
+            // Will retry on next batch sync cycle
+          }
+        }
+      } catch (e) {
+        console.error("[BATCH-SYNC] Error:", e);
+      }
+    };
+
+    const interval = setInterval(batchSync, 30000);
+    return () => clearInterval(interval);
+  }, [hasStarted, sesiId]);
 
   const toggleRagu = async () => {
     if (hasSubmitted.current) return;
@@ -512,13 +597,15 @@ export default function ClientMengerjakanUjian() {
 
   if (showSummary) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4 md:p-8 flex items-center justify-center">
+      <div className="fixed inset-0 bg-gray-50 flex flex-col font-sans z-50 overflow-hidden">
         <style dangerouslySetInnerHTML={{__html: `
           aside { display: none !important; }
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
           .santri-mobile-menu-btn { display: none !important; }
+          body { overflow: hidden !important; overscroll-behavior: none; }
         `}} />
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center">
         <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
           <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
           
@@ -617,6 +704,7 @@ export default function ClientMengerjakanUjian() {
              </button>
           </div>
         </div>
+        </div>
       </div>
     );
   }
@@ -668,6 +756,11 @@ export default function ClientMengerjakanUjian() {
              >
                <Grid3X3 size={18} />
              </button>
+             {unsavedCount > 0 && (
+               <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold animate-pulse" title={`${unsavedCount} jawaban sedang disimpan...`}>
+                 ⏳ {unsavedCount}
+               </div>
+             )}
              <div className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r rounded-lg md:rounded-xl shadow-inner font-mono font-bold text-base md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
                <Clock size={16} className="md:w-5 md:h-5" />
                {formatTime(timeLeft)}

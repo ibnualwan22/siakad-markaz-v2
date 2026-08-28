@@ -213,17 +213,31 @@ export function InputTasmiBulkClient({
           </select>
         </div>
 
-        {isAkbarnas && (
-          <div className="flex-1 min-w-[200px]">
-            <label className="mb-2 block text-sm font-bold text-slate-700">Bulan Pembelajaran (Khusus Akbarnas)</label>
-            <select
-              className="neu-input w-full bg-slate-50 text-[var(--color-primary)] font-bold text-lg cursor-pointer hover:bg-slate-100 transition"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+          {isAkbarnas && (
+            <div className="flex-1 min-w-[200px]">
+              <label className="mb-2 block text-sm font-bold text-slate-700">Bulan Pembelajaran (Khusus Akbarnas)</label>
+              <select
+                className="neu-input w-full bg-slate-50 text-[var(--color-primary)] font-bold text-lg cursor-pointer hover:bg-slate-100 transition"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+              >
+                <option value="1">Bulan 1 (Riwayat Baru)</option>
+                <option value="2">Bulan 2 (Riwayat Aktif)</option>
+              </select>
+            </div>
+          )}
+        
+        {/* Save button at the top for easy access on mobile */}
+        {selectedKelasId && (
+          <div className="mt-4 flex pb-2 border-b border-[var(--color-surface-dark)]">
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !hasUnsavedChanges}
+              className="w-full md:w-auto flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-bold text-white shadow-md transition md:rounded-full hover:bg-[var(--color-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-300"
             >
-              <option value="1">Bulan 1 (Riwayat Baru)</option>
-              <option value="2">Bulan 2 (Riwayat Aktif)</option>
-            </select>
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSaving ? "Menyimpan Data..." : "Simpan Semua Perubahan"}
+            </button>
           </div>
         )}
       </div>
@@ -322,25 +336,25 @@ export function InputTasmiBulkClient({
 
       {/* Floating Action Bar */}
       {selectedKelasId && (
-        <div className="fixed bottom-0 left-0 lg:left-72 right-0 z-20 border-t border-[var(--color-surface-dark)] bg-white/80 p-4 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] backdrop-blur-md">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-            <div>
+        <div className="fixed bottom-0 left-0 lg:left-72 right-0 z-30 border-t border-[var(--color-surface-dark)] bg-white/90 p-3 sm:p-4 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] backdrop-blur-md pb-safe">
+          <div className="mx-auto flex max-w-6xl flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            <div className="text-center sm:text-left w-full sm:w-auto">
               {hasUnsavedChanges ? (
-                <div className="flex items-center gap-2 text-amber-600 font-medium">
-                  <AlertCircle className="h-5 w-5" />
+                <div className="flex items-center justify-center sm:justify-start gap-2 text-amber-600 font-bold text-sm sm:text-base">
+                  <AlertCircle className="h-5 w-5 shrink-0" />
                   Ada perubahan yang belum disimpan
                 </div>
               ) : (
-                <p className="text-sm font-medium text-slate-500">Semua perubahan telah disimpan</p>
+                <p className="text-xs sm:text-sm font-medium text-slate-500">Semua perubahan telah disimpan</p>
               )}
             </div>
             
             <button
               onClick={handleSave}
               disabled={isSaving || !hasUnsavedChanges}
-              className="flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-[var(--color-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-300"
+              className="flex w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-3 sm:py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-[var(--color-primary-dark)] disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-300"
             >
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isSaving ? <Loader2 className="h-5 w-5 sm:h-4 sm:w-4 animate-spin" /> : <Save className="h-5 w-5 sm:h-4 sm:w-4" />}
               {isSaving ? "Menyimpan Data..." : "Simpan Data Tasmi'"}
             </button>
           </div>

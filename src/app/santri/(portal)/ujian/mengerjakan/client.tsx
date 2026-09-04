@@ -211,18 +211,41 @@ export default function ClientMengerjakanUjian() {
     // 7. Split-Screen Detection (Android only)
     //    Bandingkan innerHeight saat ini vs baseline saat mulai ujian
     //    Jika menyusut >35% tanpa keyboard → split-screen terdeteksi
+    //    PENTING: Skip saat orientasi berubah (auto-rotate)
+    const orientationGraceRef = { active: false };
+    
+    const handleOrientationChange = () => {
+      // Saat rotasi layar, update baseline dan beri grace period 1.5s
+      orientationGraceRef.active = true;
+      setTimeout(() => {
+        baselineHeightRef.current = window.innerHeight;
+        orientationGraceRef.active = false;
+      }, 1500);
+    };
+
     const handleResize = () => {
       if (hasSubmitted.current || isIOS || showSummaryRef.current) return;
+      if (orientationGraceRef.active) return; // Skip saat rotasi
+
       const baseline = baselineHeightRef.current;
       if (!baseline) return;
 
       const currentHeight = window.innerHeight;
       const shrinkRatio = currentHeight / baseline;
 
-      if (shrinkRatio < 0.65 && !isVirtualKeyboardOpen()) {
+      // Cek apakah ini rotasi (luas layar relatif sama) atau split-screen (luas menyusut)
+      const currentArea = window.innerWidth * window.innerHeight;
+      const baselineArea = (window.screen?.width || window.innerWidth) * (window.screen?.height || window.innerHeight);
+      const areaShrink = baselineArea > 0 ? currentArea / baselineArea : 1;
+
+      // Split-screen: height menyusut >35% DAN luas layar juga menyusut >30%
+      if (shrinkRatio < 0.65 && areaShrink < 0.7 && !isVirtualKeyboardOpen()) {
         handleAutoSubmit("SPLIT_SCREEN");
       }
     };
+
+    // Listen untuk orientation change event
+    window.addEventListener("orientationchange", handleOrientationChange);
 
     // 8. Keyboard-Aware Auto-Scroll — saat keyboard muncul, scroll input ke tengah
     const handleViewportResize = () => {
@@ -251,6 +274,7 @@ export default function ClientMengerjakanUjian() {
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleOrientationChange);
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
       if (focusCheckInterval) clearInterval(focusCheckInterval);
       if (blurTimer) clearTimeout(blurTimer);
@@ -333,10 +357,49 @@ export default function ClientMengerjakanUjian() {
     setHasStarted(true);
   };
 
+  // ===== FLUSH SEMUA JAWABAN KE DB SEBELUM SUBMIT =====
+  const flushAllAnswersToDb = async () => {
+    // 1. Tunggu queue selesai diproses
+    while (isProcessingQueueRef.current || saveQueueRef.current.length > 0) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    // 2. Final batch sync — kirim SEMUA jawaban dari sessionStorage ke DB
+    const stored = sessionStorage.getItem(`exam_${sesiId}`);
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (!parsed.soal) return;
+      const answeredSoal = parsed.soal.filter((s: any) =>
+        s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0)
+      );
+      // Kirim semua jawaban secara paralel (batch) — lebih cepat dari serial
+      await Promise.allSettled(
+        answeredSoal.map((s: any) => {
+          const payload: any = {};
+          if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
+          if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
+          if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
+          if (s.rpiId) payload.rpiId = s.rpiId;
+          return fetch("/api/santri/ujian/jawab", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
+          });
+        })
+      );
+    } catch (e) {
+      console.error("[FLUSH] Error pada final flush:", e);
+    }
+  };
+
   const handleAutoSubmit = async (reason: string) => {
     if (hasSubmitted.current) return;
     hasSubmitted.current = true;
     setIsSubmitting(true);
+
+    // PENTING: Flush semua jawaban ke DB sebelum submit
+    await flushAllAnswersToDb();
     
     // Hapus local storage
     if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
@@ -365,6 +428,9 @@ export default function ClientMengerjakanUjian() {
     if (hasSubmitted.current) return;
     hasSubmitted.current = true;
     setIsSubmitting(true);
+
+    // PENTING: Flush semua jawaban ke DB sebelum submit
+    await flushAllAnswersToDb();
     
     if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
     
@@ -395,6 +461,7 @@ export default function ClientMengerjakanUjian() {
   // we queue them and process sequentially with retry.
   const saveQueueRef = useRef<Array<{ soalId: string; payload: any }>>([]);
   const isProcessingQueueRef = useRef(false);
+  const failedSoalIdsRef = useRef<Set<string>>(new Set());
   const [unsavedCount, setUnsavedCount] = useState(0);
 
   const processQueue = async () => {
@@ -416,20 +483,26 @@ export default function ClientMengerjakanUjian() {
               ...item.payload
             })
           });
-          if (res.ok) { success = true; break; }
-          // Server returned error — retry after delay
+          if (res.ok) {
+            success = true;
+            failedSoalIdsRef.current.delete(item.soalId);
+            break;
+          }
         } catch (error) {
           // Network error — retry after delay
         }
         if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
       }
 
-      saveQueueRef.current.shift(); // Remove from queue regardless
-      setUnsavedCount(saveQueueRef.current.length);
+      saveQueueRef.current.shift();
 
       if (!success) {
-        console.error(`[SAVE] Gagal simpan jawaban soal ${item.soalId} setelah 3 percobaan`);
+        // Track failed save so batch sync can retry it
+        failedSoalIdsRef.current.add(item.soalId);
+        console.error(`[SAVE] Gagal simpan jawaban soal ${item.soalId} setelah 3 percobaan — batch sync akan mencoba ulang`);
       }
+
+      setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
     }
 
     isProcessingQueueRef.current = false;
@@ -460,11 +533,12 @@ export default function ClientMengerjakanUjian() {
   };
 
   // Periodic batch sync: every 30 seconds, push ALL answers from sessionStorage to DB as failsafe
+  // Juga berjalan segera saat pertama kali start (delay 5 detik)
   useEffect(() => {
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
     const batchSync = async () => {
-      if (hasSubmitted.current) return;
+      if (hasSubmitted.current || isProcessingQueueRef.current) return;
       const stored = sessionStorage.getItem(`exam_${sesiId}`);
       if (!stored) return;
       
@@ -472,11 +546,12 @@ export default function ClientMengerjakanUjian() {
         const parsed = JSON.parse(stored);
         if (!parsed.soal) return;
         
-        // Find answers that exist in sessionStorage but might not be in DB
+        // Kirim SEMUA jawaban yang sudah terisi
         const answeredSoal = parsed.soal.filter((s: any) => 
           s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0)
         );
         
+        let syncedCount = 0;
         for (const s of answeredSoal) {
           if (hasSubmitted.current) break;
           const payload: any = {};
@@ -486,22 +561,33 @@ export default function ClientMengerjakanUjian() {
           if (s.rpiId) payload.rpiId = s.rpiId;
           
           try {
-            await fetch("/api/santri/ujian/jawab", {
+            const res = await fetch("/api/santri/ujian/jawab", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
             });
+            if (res.ok) {
+              failedSoalIdsRef.current.delete(s.soalId);
+              syncedCount++;
+            }
           } catch (e) {
             // Will retry on next batch sync cycle
           }
+        }
+
+        if (syncedCount > 0) {
+          setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
         }
       } catch (e) {
         console.error("[BATCH-SYNC] Error:", e);
       }
     };
 
+    // Jalankan batch sync pertama kali setelah 5 detik
+    const initialTimeout = setTimeout(batchSync, 5000);
+    // Lalu repeat setiap 30 detik
     const interval = setInterval(batchSync, 30000);
-    return () => clearInterval(interval);
+    return () => { clearTimeout(initialTimeout); clearInterval(interval); };
   }, [hasStarted, sesiId]);
 
   const toggleRagu = async () => {
@@ -514,20 +600,16 @@ export default function ClientMengerjakanUjian() {
     setExamData(newExamData);
     sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     
-    try {
-      await fetch("/api/santri/ujian/jawab", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sesiId,
-          soalId: curSoal.soalId,
-          opsiId: curSoal.opsiTerpilih,
-          jawabanTeks: curSoal.jawabanTeks,
-          jawabanData: curSoal.jawabanData,
-          rpiId: newRagu
-        })
-      });
-    } catch (e) {}
+    // Kirim melalui queue system (bukan fetch langsung) — termasuk semua field
+    const payload: any = { rpiId: newRagu };
+    if (curSoal.opsiTerpilih) payload.opsiId = curSoal.opsiTerpilih;
+    if (curSoal.jawabanTeks) payload.jawabanTeks = curSoal.jawabanTeks;
+    if (curSoal.jawabanData && Object.keys(curSoal.jawabanData).length > 0) payload.jawabanData = curSoal.jawabanData;
+    
+    saveQueueRef.current = saveQueueRef.current.filter(q => q.soalId !== curSoal.soalId);
+    saveQueueRef.current.push({ soalId: curSoal.soalId, payload });
+    setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
+    processQueue();
   };
 
   const formatTime = (secs: number) => {

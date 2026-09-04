@@ -901,24 +901,32 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                           return (
                             <td key={cIdx} className="p-2 border-r border-amber-100 align-middle min-w-[100px]">
                               {cell.isBlank ? (
-                                <input
-                                  type="text"
+                                <textarea
                                   dir="auto"
-                                   autoComplete="off"
-                                   autoCorrect="off"
-                                   autoCapitalize="off"
-                                   spellCheck={false}
+                                  rows={1}
+                                  autoComplete="off"
+                                  autoCorrect="off"
+                                  autoCapitalize="off"
+                                  spellCheck={false}
+                                  data-form-type="other"
+                                  data-lpignore="true"
+                                  name={`tasrif_${rIdx}_${cIdx}`}
                                   value={answers[key] || ""}
                                   onChange={(e) => {
-                                     onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: e.target.value } } });
+                                     // Hapus newline agar tetap 1 baris
+                                     const val = e.target.value.replace(/\n/g, '');
+                                     onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: val } } });
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') e.preventDefault();
                                   }}
                                   onFocus={(e) => {
-                                     // Scroll into view with extra delay for keyboard animation
                                      setTimeout(() => {
                                        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                      }, 400);
                                   }}
-                                  className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner"
+                                  className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner resize-none overflow-hidden"
+                                  style={{ lineHeight: '1.5' }}
                                 />
                               ) : (
                                 <span className="font-serif text-xl md:text-2xl text-gray-800 py-2 inline-block">{cell.value.split('|')[0].trim()}</span>

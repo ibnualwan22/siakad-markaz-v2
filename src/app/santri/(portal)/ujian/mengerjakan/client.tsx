@@ -181,12 +181,42 @@ export default function ClientMengerjakanUjian() {
       return false;
     };
 
+    // Grace period setelah keyboard ditutup — beberapa HP (Samsung A55, Oppo A16)
+    // mengembalikan document.hasFocus() = false sesaat setelah keyboard hilang,
+    // yang memicu blur/focus_lost auto-submit secara false positive.
+    const keyboardDismissGraceRef = { active: false, timer: null as ReturnType<typeof setTimeout> | null };
+    let wasKeyboardOpen = false;
+
+    const handleVisualViewportChange = () => {
+      const kbOpen = isVirtualKeyboardOpen();
+      
+      // Keyboard baru saja DITUTUP (dulu terbuka, sekarang tertutup)
+      if (wasKeyboardOpen && !kbOpen) {
+        keyboardDismissGraceRef.active = true;
+        if (keyboardDismissGraceRef.timer) clearTimeout(keyboardDismissGraceRef.timer);
+        keyboardDismissGraceRef.timer = setTimeout(() => {
+          keyboardDismissGraceRef.active = false;
+        }, 3000); // 3 detik grace period setelah keyboard hilang
+      }
+      
+      wasKeyboardOpen = kbOpen;
+
+      // Keyboard-Aware Auto-Scroll
+      const active = document.activeElement as HTMLElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        setTimeout(() => {
+          active.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    };
+
     const handleBlur = () => {
       if (hasSubmitted.current) return;
       if (isVirtualKeyboardOpen()) return;
+      if (keyboardDismissGraceRef.active) return; // Skip saat grace period keyboard
 
       blurTimer = setTimeout(() => {
-        if (!document.hasFocus() && !hasSubmitted.current && !showSummaryRef.current && !isVirtualKeyboardOpen()) {
+        if (!document.hasFocus() && !hasSubmitted.current && !showSummaryRef.current && !isVirtualKeyboardOpen() && !keyboardDismissGraceRef.active) {
           handleAutoSubmit("FLOATING_APP");
         }
       }, BLUR_GRACE);
@@ -203,6 +233,7 @@ export default function ClientMengerjakanUjian() {
       focusCheckInterval = setInterval(() => {
         if (!document.hasFocus() && !document.hidden && !hasSubmitted.current && !showSummaryRef.current) {
           if (isVirtualKeyboardOpen()) return;
+          if (keyboardDismissGraceRef.active) return; // Skip saat grace period keyboard
           handleAutoSubmit("FOCUS_LOST");
         }
       }, 5000);
@@ -247,16 +278,6 @@ export default function ClientMengerjakanUjian() {
     // Listen untuk orientation change event
     window.addEventListener("orientationchange", handleOrientationChange);
 
-    // 8. Keyboard-Aware Auto-Scroll — saat keyboard muncul, scroll input ke tengah
-    const handleViewportResize = () => {
-      const active = document.activeElement as HTMLElement;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
-        setTimeout(() => {
-          active.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 150);
-      }
-    };
-
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -264,7 +285,7 @@ export default function ClientMengerjakanUjian() {
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
     window.addEventListener("resize", handleResize);
-    window.visualViewport?.addEventListener("resize", handleViewportResize);
+    window.visualViewport?.addEventListener("resize", handleVisualViewportChange);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -275,7 +296,7 @@ export default function ClientMengerjakanUjian() {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientationChange);
-      window.visualViewport?.removeEventListener("resize", handleViewportResize);
+      window.visualViewport?.removeEventListener("resize", handleVisualViewportChange);
       if (focusCheckInterval) clearInterval(focusCheckInterval);
       if (blurTimer) clearTimeout(blurTimer);
       if (visibilityTimer) clearTimeout(visibilityTimer);

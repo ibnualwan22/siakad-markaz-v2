@@ -158,18 +158,7 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
             {serialNumber}
           </div>
 
-          <div
-            {...elProps("paragrafPembuka", editorMode, selectedElement, onSelectElement, "Paragraf Pembuka")}
-            style={{
-              fontSize: "15pt",
-              color: "#333",
-              textAlign: "center",
-              marginBottom: "5mm",
-              transform: `translate(${lo.paragrafPembuka.offsetX}mm, ${lo.paragrafPembuka.offsetY}mm)`,
-            }}
-          >
-            This certificate is proudly presented to
-          </div>
+          {/* Paragraf Pembuka dihapus */}
 
           {/* Nama Santri */}
           <div
@@ -184,38 +173,36 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
               style={{
                 fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
-                color: "#b08527",
                 display: "inline-block",
                 whiteSpace: "nowrap",
-                paddingBottom: "1mm",
                 paddingLeft: "10mm",
                 paddingRight: "10mm",
+                background: "linear-gradient(to right, #b3823c, #d8c568)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                lineHeight: 1,
               }}
             >
               {data.masterSantri.nama.toUpperCase()}
+            </span>
+            <span
+              style={{
+                fontSize: "24pt",
+                fontWeight: "900",
+                display: "block",
+                marginTop: "1mm",
+                background: "linear-gradient(to right, #b3823c, #d8c568)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              C.AC.
             </span>
           </div>
 
 
 
-          {/* Body Text */}
-          <p
-            {...elProps("teksDufah", editorMode, selectedElement, onSelectElement, "Teks Keterangan")}
-            style={{
-              fontSize: "12pt",
-              lineHeight: 1.5,
-              color: "#1a1a1a",
-              textAlign: "center",
-              margin: 0,
-              maxWidth: "250mm",
-              transform: `translate(${lo.teksDufah.offsetX}mm, ${lo.teksDufah.offsetY}mm)`,
-            }}
-          >
-            Has successfully completed the prescribed curriculum and is hereby declared competent. The holder of<br />
-            this certificate is entitled to bear the professional non-academic designation of <strong>C.AC. (Certified Arabic</strong><br />
-            <strong>Competency)</strong> in accordance with applicable international standards and regulations.<br />
-            Congratulations on this remarkable achievement.
-          </p>
+          {/* Body Text dihapus */}
         </div>
 
         {/* Tanggal Cetak */}
@@ -229,8 +216,9 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
             ...(editorMode ? { cursor: "pointer" } : {}),
           }}
         >
-          <p style={{ fontSize: "11pt", fontWeight: "600", color: "#1a0e00", margin: 0, whiteSpace: "nowrap" }}>
-            Issued in Pare, {data.template.tgl_cetak_indo}
+          <p style={{ fontSize: "11pt", fontWeight: "600", color: "#1a0e00", margin: 0, whiteSpace: "nowrap", textAlign: "center" }}>
+            Issued in Pare<br />
+            {data.template.tgl_cetak_indo}
           </p>
         </div>
 
@@ -248,9 +236,9 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
             alignItems: "center"
           }}
         >
-          <div style={{ background: "linear-gradient(135deg, #1d4ed8, #60a5fa)", padding: "1.5mm", borderRadius: "3mm", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" as any }}>
+          <div style={{ background: "linear-gradient(135deg, #b3823c, #d8c568)", padding: "1.5mm", borderRadius: "3mm", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" as any }}>
             <div style={{ background: "white", padding: "1.5mm", borderRadius: "2mm", display: "flex", justifyContent: "center", alignItems: "center", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" as any }}>
-              <QRCodeSVG value={qrUrl} size={90} fgColor="#1d4ed8" />
+              <QRCodeSVG value={qrUrl} size={110} fgColor="#b3823c" />
             </div>
           </div>
         </div>

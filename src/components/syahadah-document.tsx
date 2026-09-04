@@ -102,7 +102,7 @@ export function SyahadahDocument({ qrUrl, data, layout, editorMode, selectedElem
         onClick={() => editorMode && onSelectElement?.(null as any)}
       >
         <img
-          src="/images/syahadah-bg.webp"
+          src="/images/syahadah-bg.png"
           alt=""
           style={{
             position: "absolute",

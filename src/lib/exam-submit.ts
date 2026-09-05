@@ -59,6 +59,7 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
   let totalSkorSeluruh = 0;
   const recordsMapel = [];
   const jawabanUpdates: any[] = [];
+  const nilaiOpsQueue: Array<{ mapelId: string; mapel: any; nilaiAkhir: number; fieldToUpdate: string }> = [];
 
   const timeCompleted = new Date();
   const isCheat = !["MANUAL", "TIME_UP", "FORCE_SUBMIT"].includes(reason);
@@ -358,56 +359,80 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
       nilai: nilaiAkhir
     });
 
+    // Kumpulkan info untuk batch update nanti (bukan sequential DB per mapel)
     if (!paket.sesiGlobal.isSimulasi) {
-      // Update nilai di tabel `Nilai`
       let fieldToUpdate = "";
       if (paket.sesiGlobal.usbuKe === 3 || mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
-        // Jika ujian ini adalah ujian ke-3, atau mapel ini cuma 1 tes (langsung final), atau modenya 1 kolom
         fieldToUpdate = "nilaiNihai";
       } else if (paket.sesiGlobal.usbuKe === 1) {
         fieldToUpdate = "nilaiUsbu1";
       } else if (paket.sesiGlobal.usbuKe === 2) {
         fieldToUpdate = "nilaiUsbu2";
       }
+      nilaiOpsQueue.push({ mapelId, mapel, nilaiAkhir, fieldToUpdate });
+    }
+  }
 
-      // Ambil nilai lama
-      let recordNilai = await prisma.nilai.findUnique({
-        where: { riwayatId_mapelId: { riwayatId, mapelId } }
-      });
-
-      if (!recordNilai) {
-        recordNilai = await prisma.nilai.create({
-          data: { riwayatId, mapelId, [fieldToUpdate]: nilaiAkhir }
-        });
-      } else {
-        recordNilai = await prisma.nilai.update({
-          where: { id: recordNilai.id },
-          data: { [fieldToUpdate]: nilaiAkhir }
-        });
+  // ===== BATCH NILAI UPDATE — satu transaction untuk semua mapel =====
+  if (nilaiOpsQueue.length > 0) {
+    // 1. Pre-fetch semua Nilai records yang ada dalam satu query
+    const existingNilai = await prisma.nilai.findMany({
+      where: {
+        riwayatId,
+        mapelId: { in: nilaiOpsQueue.map(q => q.mapelId) }
       }
+    });
+    const nilaiMap = new Map(existingNilai.map(n => [n.mapelId, n]));
 
-      // Recalculate Final Score 'nilaiAkhir' for this mapel if possible
-      let finalA = null;
-      if (mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
-        finalA = recordNilai.nilaiNihai;
-      } else if (effectiveUsbuainMode === 2 && mapel.jumlah_tes === 3) {
-        if (recordNilai.nilaiUsbu1 !== null && recordNilai.nilaiUsbu2 !== null) {
-           finalA = calcMapelNilaiAkhirUsbuain2({ u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2 });
-        }
+    // 2. Kumpulkan semua operasi DB
+    const txOps: any[] = [];
+
+    for (const q of nilaiOpsQueue) {
+      const existing = nilaiMap.get(q.mapelId);
+
+      if (!existing) {
+        // Create baru
+        txOps.push(
+          prisma.nilai.create({
+            data: { riwayatId, mapelId: q.mapelId, [q.fieldToUpdate]: q.nilaiAkhir }
+          })
+        );
       } else {
-        // Normal 3 kolom atau sesuai rules akbarnas
-        finalA = calcMapelNilaiAkhir(
-          { u1: recordNilai.nilaiUsbu1, u2: recordNilai.nilaiUsbu2, n: recordNilai.nilaiNihai },
-          isAkbarnas
+        // Update existing + hitung nilaiAkhir
+        const updatedData: any = { [q.fieldToUpdate]: q.nilaiAkhir };
+
+        // Recalculate nilaiAkhir langsung
+        const recNilai = { ...existing, [q.fieldToUpdate]: q.nilaiAkhir };
+        let finalA = null;
+        if (q.mapel.jumlah_tes === 1 || effectiveUsbuainMode === 1) {
+          finalA = recNilai.nilaiNihai;
+        } else if (effectiveUsbuainMode === 2 && q.mapel.jumlah_tes === 3) {
+          if (recNilai.nilaiUsbu1 !== null && recNilai.nilaiUsbu2 !== null) {
+            finalA = calcMapelNilaiAkhirUsbuain2({ u1: recNilai.nilaiUsbu1, u2: recNilai.nilaiUsbu2 });
+          }
+        } else {
+          finalA = calcMapelNilaiAkhir(
+            { u1: recNilai.nilaiUsbu1, u2: recNilai.nilaiUsbu2, n: recNilai.nilaiNihai },
+            isAkbarnas
+          );
+        }
+
+        if (finalA !== null) {
+          updatedData.nilaiAkhir = finalA;
+        }
+
+        txOps.push(
+          prisma.nilai.update({
+            where: { id: existing.id },
+            data: updatedData
+          })
         );
       }
+    }
 
-      if (finalA !== null) {
-        await prisma.nilai.update({
-          where: { id: recordNilai.id },
-          data: { nilaiAkhir: finalA }
-        });
-      }
+    // 3. Execute semua dalam SATU transaction (bukan 15+ sequential queries)
+    if (txOps.length > 0) {
+      await prisma.$transaction(txOps);
     }
   }
 
@@ -471,56 +496,90 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
 }
 
 // ===== BACKGROUND AI AUTO-GRADER (dipanggil setelah submit) =====
-async function autoGradeEssaysBackground(jawabanIds: string[], sesiId: string) {
-  const { gradeEssayWithAI } = await import("@/lib/ai-grader");
-  const { recalculateSesiNilai: recalcFn } = await import("@/lib/recalculate-sesi-nilai");
-  const removeHtml = (s: string) => (s || "").replace(/<[^>]*>?/gm, '');
 
-  console.log(`[AUTO-AI-SUBMIT] Memulai auto-grade untuk ${jawabanIds.length} essay (Sesi: ${sesiId})`);
+// Global concurrency limiter untuk AI grading
+// Membatasi max 3 sesi AI grading berjalan bersamaan di seluruh server
+let activeAiGradingCount = 0;
+const MAX_CONCURRENT_AI_GRADING = 3;
+const AI_GRADING_QUEUE: Array<() => void> = [];
 
-  for (const jawId of jawabanIds) {
-    try {
-      const jaw: any = await prisma.jawabanUjianSantri.findUnique({
-        where: { id: jawId }
-      });
-      if (!jaw || !jaw.jawabanTeks || jaw.nilaiManual !== null) continue;
-
-      const soal: any = await prisma.bankSoalUsbu.findUnique({
-        where: { id: jaw.soalId }
-      });
-      if (!soal) continue;
-
-      const result = await gradeEssayWithAI({
-        pertanyaan: removeHtml(soal.pertanyaan),
-        kunciJawaban: soal.kunciJawaban || "",
-        jawabanSantri: jaw.jawabanTeks,
-        bobot: soal.bobot,
-        tipeSoal: soal.tipeSoal
-      });
-
-      if (result && result.score !== undefined) {
-        let finalScore = result.score;
-        if (finalScore > soal.bobot && finalScore <= 100) finalScore = (finalScore / 100) * soal.bobot;
-        if (finalScore > soal.bobot) finalScore = soal.bobot;
-        if (finalScore < 0) finalScore = 0;
-
-        // @ts-ignore
-        await prisma.jawabanUjianSantri.update({
-          where: { id: jawId },
-          // @ts-ignore
-          data: { nilaiManual: finalScore, aiGraded: true, aiFeedback: result.feedback || null }
-        });
-      }
-
-      // Jeda 2.5 detik per soal (rate-limit safety)
-      await new Promise(resolve => setTimeout(resolve, 2500));
-    } catch (err) {
-      console.error(`[AUTO-AI-SUBMIT] Error pada jawaban ${jawId}:`, err);
-    }
+function acquireAiSlot(): Promise<void> {
+  if (activeAiGradingCount < MAX_CONCURRENT_AI_GRADING) {
+    activeAiGradingCount++;
+    return Promise.resolve();
   }
+  return new Promise(resolve => {
+    AI_GRADING_QUEUE.push(resolve);
+  });
+}
 
-  // Recalculate total sesi setelah semua essay dinilai
-  await recalcFn(sesiId).catch(console.error);
-  console.log(`[AUTO-AI-SUBMIT] Selesai auto-grade sesi ${sesiId}`);
+function releaseAiSlot() {
+  if (AI_GRADING_QUEUE.length > 0) {
+    const next = AI_GRADING_QUEUE.shift()!;
+    next(); // langsung berikan slot ke yang menunggu
+  } else {
+    activeAiGradingCount--;
+  }
+}
+
+async function autoGradeEssaysBackground(jawabanIds: string[], sesiId: string) {
+  // Tunggu slot tersedia (max 3 bersamaan)
+  await acquireAiSlot();
+  
+  try {
+    const { gradeEssayWithAI } = await import("@/lib/ai-grader");
+    const { recalculateSesiNilai: recalcFn } = await import("@/lib/recalculate-sesi-nilai");
+    const removeHtml = (s: string) => (s || "").replace(/<[^>]*>?/gm, '');
+
+    console.log(`[AUTO-AI-SUBMIT] Memulai auto-grade untuk ${jawabanIds.length} essay (Sesi: ${sesiId}) [Active: ${activeAiGradingCount}/${MAX_CONCURRENT_AI_GRADING}]`);
+
+    for (const jawId of jawabanIds) {
+      try {
+        const jaw: any = await prisma.jawabanUjianSantri.findUnique({
+          where: { id: jawId }
+        });
+        if (!jaw || !jaw.jawabanTeks || jaw.nilaiManual !== null) continue;
+
+        const soal: any = await prisma.bankSoalUsbu.findUnique({
+          where: { id: jaw.soalId }
+        });
+        if (!soal) continue;
+
+        const result = await gradeEssayWithAI({
+          pertanyaan: removeHtml(soal.pertanyaan),
+          kunciJawaban: soal.kunciJawaban || "",
+          jawabanSantri: jaw.jawabanTeks,
+          bobot: soal.bobot,
+          tipeSoal: soal.tipeSoal
+        });
+
+        if (result && result.score !== undefined) {
+          let finalScore = result.score;
+          if (finalScore > soal.bobot && finalScore <= 100) finalScore = (finalScore / 100) * soal.bobot;
+          if (finalScore > soal.bobot) finalScore = soal.bobot;
+          if (finalScore < 0) finalScore = 0;
+
+          // @ts-ignore
+          await prisma.jawabanUjianSantri.update({
+            where: { id: jawId },
+            // @ts-ignore
+            data: { nilaiManual: finalScore, aiGraded: true, aiFeedback: result.feedback || null }
+          });
+        }
+
+        // Jeda 4 detik per soal (rate-limit safety — dinaikkan dari 2.5 detik)
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      } catch (err) {
+        console.error(`[AUTO-AI-SUBMIT] Error pada jawaban ${jawId}:`, err);
+      }
+    }
+
+    // Recalculate total sesi setelah semua essay dinilai
+    await recalcFn(sesiId).catch(console.error);
+    console.log(`[AUTO-AI-SUBMIT] Selesai auto-grade sesi ${sesiId}`);
+  } finally {
+    // PENTING: selalu lepaskan slot meskipun error
+    releaseAiSlot();
+  }
 }
 

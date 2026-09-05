@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -62,18 +63,54 @@ export async function GET(req: Request) {
     // Option: only return active santri if required
     const activeSantri = semuaSantri.filter(r => r.santri.isAktif);
 
-    // Ambil data sesi ujian santri yang sudah mulai (di paket milik sesi global ini)
+    // Ambil data sesi ujian santri — OPTIMIZED: gunakan _count alih-alih load semua jawaban
     const sesiList = await prisma.sesiUjianSantri.findMany({
       where: { paket: { sesiGlobalId } },
-      include: {
+      select: {
+        id: true,
+        status: true,
+        waktuMulai: true,
+        waktuSelesai: true,
+        nilaiTotal: true,
+        tabCloseCount: true,
+        alasanSubmit: true,
         riwayat: { select: { id: true, santriId: true } },
-        jawabanList: {
-          select: { opsiId: true, rpiId: true, jawabanTeks: true, jawabanData: true }
-        }
+        _count: {
+          select: {
+            jawabanList: true  // total jawaban (termasuk kosong)
+          }
+        },
       }
     });
 
-    // Indekskan sesi berdasarkan riwayatId (karena 1 riwayat = 1 santri di dufah ini)
+    // Hitung dijawab dan ragu secara terpisah dengan aggregate query (jauh lebih ringan)
+    const jawabStats = await prisma.jawabanUjianSantri.groupBy({
+      by: ['sesiId'],
+      where: {
+        sesi: { paket: { sesiGlobalId } },
+        OR: [
+          { opsiId: { not: null } },
+          { jawabanTeks: { not: null } },
+          { jawabanData: { not: Prisma.DbNull } }
+        ]
+      },
+      _count: { id: true }
+    });
+
+    const raguStats = await prisma.jawabanUjianSantri.groupBy({
+      by: ['sesiId'],
+      where: {
+        sesi: { paket: { sesiGlobalId } },
+        rpiId: "RAGU"
+      },
+      _count: { id: true }
+    });
+
+    // Buat map untuk lookup cepat
+    const dijawabMap = new Map(jawabStats.map(s => [s.sesiId, (s._count as any).id as number]));
+    const raguMap = new Map(raguStats.map(s => [s.sesiId, (s._count as any).id as number]));
+
+    // Indekskan sesi berdasarkan riwayatId
     const sesiMap = new Map();
     for (const sesi of sesiList) {
       sesiMap.set(sesi.riwayat.id, sesi);
@@ -87,9 +124,10 @@ export async function GET(req: Request) {
       let belum = 0;
       
       if (sesiInfo) {
-        dijawab = sesiInfo.jawabanList.filter((j: any) => j.opsiId || j.jawabanTeks || (j.jawabanData && Object.keys(j.jawabanData).length > 0)).length;
-        ragu = sesiInfo.jawabanList.filter((j: any) => j.rpiId === "RAGU").length;
-        belum = (sesiInfo.jawabanList.length > 0 ? sesiInfo.jawabanList.length : totalSoal) - dijawab;
+        dijawab = dijawabMap.get(sesiInfo.id) || 0;
+        ragu = raguMap.get(sesiInfo.id) || 0;
+        const totalJawaban = sesiInfo._count.jawabanList || totalSoal;
+        belum = totalJawaban - dijawab;
       } else {
         belum = totalSoal;
       }

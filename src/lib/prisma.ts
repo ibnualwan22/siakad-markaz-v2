@@ -1,7 +1,18 @@
 import { PrismaClient } from '@prisma/client';
 
 const prismaClientSingleton = () => {
-  return new PrismaClient();
+  // Tambahkan connection pool config jika belum ada di DATABASE_URL
+  const dbUrl = process.env.DATABASE_URL || "";
+  const separator = dbUrl.includes("?") ? "&" : "?";
+  const pooledUrl = dbUrl.includes("connection_limit") 
+    ? dbUrl 
+    : `${dbUrl}${separator}connection_limit=15&pool_timeout=30`;
+
+  return new PrismaClient({
+    datasources: {
+      db: { url: pooledUrl }
+    }
+  });
 };
 
 declare const globalThis: {

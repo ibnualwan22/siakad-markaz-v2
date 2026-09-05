@@ -328,7 +328,7 @@ export default function ClientMengerjakanUjian() {
   }, [timeLeft, hasStarted, examData]);
 
   // Polling Real-Time Force Submit Detection
-  // Mengecek ke server setiap 15 detik apakah sesi ini sudah dipaksa submit oleh admin
+  // Mengecek ke server setiap 30 detik apakah sesi ini sudah dipaksa submit oleh admin
   useEffect(() => {
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
@@ -351,7 +351,7 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
-    const interval = setInterval(pullStatus, 15000);
+    const interval = setInterval(pullStatus, 30000);
     return () => clearInterval(interval);
   }, [hasStarted, sesiId, router]);
 
@@ -378,37 +378,49 @@ export default function ClientMengerjakanUjian() {
     setHasStarted(true);
   };
 
-  // ===== FLUSH SEMUA JAWABAN KE DB SEBELUM SUBMIT =====
+  // ===== FLUSH JAWABAN YANG BELUM TERSAVE KE DB SEBELUM SUBMIT =====
   const flushAllAnswersToDb = async () => {
-    // 1. Tunggu queue selesai diproses
-    while (isProcessingQueueRef.current || saveQueueRef.current.length > 0) {
+    // 1. Tunggu queue selesai diproses (max 15 detik timeout)
+    const flushStart = Date.now();
+    while ((isProcessingQueueRef.current || saveQueueRef.current.length > 0) && (Date.now() - flushStart < 15000)) {
       await new Promise(r => setTimeout(r, 300));
     }
 
-    // 2. Final batch sync — kirim SEMUA jawaban dari sessionStorage ke DB
+    // 2. Hanya kirim jawaban yang GAGAL tersave sebelumnya (bukan semua)
+    if (failedSoalIdsRef.current.size === 0) return;
+
     const stored = sessionStorage.getItem(`exam_${sesiId}`);
     if (!stored) return;
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.soal) return;
-      const answeredSoal = parsed.soal.filter((s: any) =>
-        s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0)
+      const failedIds = Array.from(failedSoalIdsRef.current);
+      const failedSoal = parsed.soal.filter((s: any) =>
+        failedIds.includes(s.soalId) &&
+        (s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0))
       );
-      // Kirim semua jawaban secara paralel (batch) — lebih cepat dari serial
-      await Promise.allSettled(
-        answeredSoal.map((s: any) => {
-          const payload: any = {};
-          if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
-          if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
-          if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
-          if (s.rpiId) payload.rpiId = s.rpiId;
-          return fetch("/api/santri/ujian/jawab", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
-          });
-        })
-      );
+
+      if (failedSoal.length === 0) return;
+
+      // Kirim dengan concurrency limit (max 5 bersamaan) untuk tidak membanjiri server
+      const CONCURRENCY = 5;
+      for (let i = 0; i < failedSoal.length; i += CONCURRENCY) {
+        const batch = failedSoal.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(
+          batch.map((s: any) => {
+            const payload: any = {};
+            if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
+            if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
+            if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
+            if (s.rpiId) payload.rpiId = s.rpiId;
+            return fetch("/api/santri/ujian/jawab", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
+            });
+          })
+        );
+      }
     } catch (e) {
       console.error("[FLUSH] Error pada final flush:", e);
     }
@@ -553,13 +565,16 @@ export default function ClientMengerjakanUjian() {
     processQueue();
   };
 
-  // Periodic batch sync: every 30 seconds, push ALL answers from sessionStorage to DB as failsafe
-  // Juga berjalan segera saat pertama kali start (delay 5 detik)
+  // Periodic batch sync: hanya retry jawaban yang GAGAL, bukan semua
+  // Interval 60 detik untuk mengurangi beban server
   useEffect(() => {
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
     const batchSync = async () => {
       if (hasSubmitted.current || isProcessingQueueRef.current) return;
+      // Hanya sync jika ada jawaban yang gagal tersave
+      if (failedSoalIdsRef.current.size === 0) return;
+
       const stored = sessionStorage.getItem(`exam_${sesiId}`);
       if (!stored) return;
       
@@ -567,13 +582,15 @@ export default function ClientMengerjakanUjian() {
         const parsed = JSON.parse(stored);
         if (!parsed.soal) return;
         
-        // Kirim SEMUA jawaban yang sudah terisi
-        const answeredSoal = parsed.soal.filter((s: any) => 
-          s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0)
+        // Hanya kirim jawaban yang GAGAL di percobaan sebelumnya
+        const failedIds = Array.from(failedSoalIdsRef.current);
+        const failedSoal = parsed.soal.filter((s: any) => 
+          failedIds.includes(s.soalId) &&
+          (s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0))
         );
         
         let syncedCount = 0;
-        for (const s of answeredSoal) {
+        for (const s of failedSoal) {
           if (hasSubmitted.current) break;
           const payload: any = {};
           if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
@@ -604,10 +621,10 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
-    // Jalankan batch sync pertama kali setelah 5 detik
-    const initialTimeout = setTimeout(batchSync, 5000);
-    // Lalu repeat setiap 30 detik
-    const interval = setInterval(batchSync, 30000);
+    // Jalankan batch sync pertama kali setelah 10 detik
+    const initialTimeout = setTimeout(batchSync, 10000);
+    // Lalu repeat setiap 60 detik (dikurangi dari 30 detik)
+    const interval = setInterval(batchSync, 60000);
     return () => { clearTimeout(initialTimeout); clearInterval(interval); };
   }, [hasStarted, sesiId]);
 

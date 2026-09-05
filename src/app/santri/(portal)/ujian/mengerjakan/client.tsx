@@ -378,51 +378,81 @@ export default function ClientMengerjakanUjian() {
     setHasStarted(true);
   };
 
-  // ===== FLUSH JAWABAN YANG BELUM TERSAVE KE DB SEBELUM SUBMIT =====
-  const flushAllAnswersToDb = async () => {
-    // 1. Tunggu queue selesai diproses (max 15 detik timeout)
-    const flushStart = Date.now();
-    while ((isProcessingQueueRef.current || saveQueueRef.current.length > 0) && (Date.now() - flushStart < 15000)) {
-      await new Promise(r => setTimeout(r, 300));
+  // ===== SIMPLE BUFFERED SAVE =====
+  // Seperti logika asli: 1 request in-flight pada satu waktu.
+  // Perbedaan kunci: jika ada save baru saat sedang saving, SIMPAN (buffer),
+  // bukan BUANG. Setelah save selesai, buffer langsung diproses.
+  const isSaving = useRef(false);
+  const pendingSave = useRef<{ soalId: string; payload: any } | null>(null);
+  const savedSoalIds = useRef<Set<string>>(new Set()); // Track soal yang sudah tersimpan di DB
+  const [unsavedCount, setUnsavedCount] = useState(0);
+
+  const processSave = async (soalId: string, payload: any) => {
+    try {
+      const res = await fetch("/api/santri/ujian/jawab", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sesiId, soalId, ...payload })
+      });
+      if (res.ok) {
+        savedSoalIds.current.add(soalId);
+      }
+    } catch (error) {
+      console.error("Gagal auto-save:", error);
     }
 
-    // 2. Hanya kirim jawaban yang GAGAL tersave sebelumnya (bukan semua)
-    if (failedSoalIdsRef.current.size === 0) return;
+    // Proses pending save jika ada
+    if (pendingSave.current) {
+      const next = pendingSave.current;
+      pendingSave.current = null;
+      setUnsavedCount(0);
+      await processSave(next.soalId, next.payload);
+    } else {
+      isSaving.current = false;
+      setUnsavedCount(0);
+    }
+  };
+
+  // Flush sebelum submit: hanya kirim jawaban yang BELUM ter-confirm di DB
+  const flushUnsavedAnswers = async () => {
+    // Tunggu save yang sedang berjalan selesai
+    const start = Date.now();
+    while (isSaving.current && Date.now() - start < 10000) {
+      await new Promise(r => setTimeout(r, 200));
+    }
 
     const stored = sessionStorage.getItem(`exam_${sesiId}`);
     if (!stored) return;
+
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.soal) return;
-      const failedIds = Array.from(failedSoalIdsRef.current);
-      const failedSoal = parsed.soal.filter((s: any) =>
-        failedIds.includes(s.soalId) &&
+
+      // Hanya kirim jawaban yang sudah diisi DAN belum ter-confirm saved
+      const unsaved = parsed.soal.filter((s: any) =>
+        !savedSoalIds.current.has(s.soalId) &&
         (s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0))
       );
 
-      if (failedSoal.length === 0) return;
+      if (unsaved.length === 0) return;
 
-      // Kirim dengan concurrency limit (max 5 bersamaan) untuk tidak membanjiri server
-      const CONCURRENCY = 5;
-      for (let i = 0; i < failedSoal.length; i += CONCURRENCY) {
-        const batch = failedSoal.slice(i, i + CONCURRENCY);
-        await Promise.allSettled(
-          batch.map((s: any) => {
-            const payload: any = {};
-            if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
-            if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
-            if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
-            if (s.rpiId) payload.rpiId = s.rpiId;
-            return fetch("/api/santri/ujian/jawab", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
-            });
-          })
-        );
+      // Kirim secara serial (1 per 1, tidak membanjiri server)
+      for (const s of unsaved) {
+        const p: any = {};
+        if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
+        if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
+        if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
+        if (s.rpiId) p.rpiId = s.rpiId;
+        try {
+          await fetch("/api/santri/ujian/jawab", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
+          });
+        } catch (e) {}
       }
     } catch (e) {
-      console.error("[FLUSH] Error pada final flush:", e);
+      console.error("[FLUSH] Error:", e);
     }
   };
 
@@ -432,7 +462,7 @@ export default function ClientMengerjakanUjian() {
     setIsSubmitting(true);
 
     // PENTING: Flush semua jawaban ke DB sebelum submit
-    await flushAllAnswersToDb();
+    await flushUnsavedAnswers();
     
     // Hapus local storage
     if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
@@ -463,7 +493,7 @@ export default function ClientMengerjakanUjian() {
     setIsSubmitting(true);
 
     // PENTING: Flush semua jawaban ke DB sebelum submit
-    await flushAllAnswersToDb();
+    await flushUnsavedAnswers();
     
     if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
     
@@ -489,62 +519,10 @@ export default function ClientMengerjakanUjian() {
     }
   };
 
-  // ===== QUEUE-BASED SAVE SYSTEM =====
-  // Instead of dropping saves when one is in-flight (old isSaving.current guard),
-  // we queue them and process sequentially with retry.
-  const saveQueueRef = useRef<Array<{ soalId: string; payload: any }>>([]);
-  const isProcessingQueueRef = useRef(false);
-  const failedSoalIdsRef = useRef<Set<string>>(new Set());
-  const [unsavedCount, setUnsavedCount] = useState(0);
-
-  const processQueue = async () => {
-    if (isProcessingQueueRef.current || hasSubmitted.current) return;
-    isProcessingQueueRef.current = true;
-
-    while (saveQueueRef.current.length > 0) {
-      const item = saveQueueRef.current[0];
-      let success = false;
-
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await fetch("/api/santri/ujian/jawab", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sesiId,
-              soalId: item.soalId,
-              ...item.payload
-            })
-          });
-          if (res.ok) {
-            success = true;
-            failedSoalIdsRef.current.delete(item.soalId);
-            break;
-          }
-        } catch (error) {
-          // Network error — retry after delay
-        }
-        if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
-      }
-
-      saveQueueRef.current.shift();
-
-      if (!success) {
-        // Track failed save so batch sync can retry it
-        failedSoalIdsRef.current.add(item.soalId);
-        console.error(`[SAVE] Gagal simpan jawaban soal ${item.soalId} setelah 3 percobaan — batch sync akan mencoba ulang`);
-      }
-
-      setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
-    }
-
-    isProcessingQueueRef.current = false;
-  };
-
   const handleAnswerSubmit = async (soalId: string, payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => {
     if (hasSubmitted.current) return;
     
-    // Optimistic UI + SessionStorage Update (always succeeds)
+    // Optimistic UI + SessionStorage (selalu berhasil)
     const newExamData = { ...examData };
     const curSoal = newExamData.soal.find((s:any) => s.soalId === soalId);
     if (!curSoal) return;
@@ -556,77 +534,15 @@ export default function ClientMengerjakanUjian() {
     setExamData(newExamData);
     sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     
-    // Replace existing queue entry for same soalId (latest answer wins)
-    saveQueueRef.current = saveQueueRef.current.filter(q => q.soalId !== soalId);
-    saveQueueRef.current.push({ soalId, payload });
-    setUnsavedCount(saveQueueRef.current.length);
-
-    // Trigger queue processing
-    processQueue();
+    // Kirim ke DB (1 request at a time, tidak drop)
+    if (isSaving.current) {
+      pendingSave.current = { soalId, payload };
+      setUnsavedCount(1);
+    } else {
+      isSaving.current = true;
+      processSave(soalId, payload);
+    }
   };
-
-  // Periodic batch sync: hanya retry jawaban yang GAGAL, bukan semua
-  // Interval 60 detik untuk mengurangi beban server
-  useEffect(() => {
-    if (!hasStarted || hasSubmitted.current || !sesiId) return;
-
-    const batchSync = async () => {
-      if (hasSubmitted.current || isProcessingQueueRef.current) return;
-      // Hanya sync jika ada jawaban yang gagal tersave
-      if (failedSoalIdsRef.current.size === 0) return;
-
-      const stored = sessionStorage.getItem(`exam_${sesiId}`);
-      if (!stored) return;
-      
-      try {
-        const parsed = JSON.parse(stored);
-        if (!parsed.soal) return;
-        
-        // Hanya kirim jawaban yang GAGAL di percobaan sebelumnya
-        const failedIds = Array.from(failedSoalIdsRef.current);
-        const failedSoal = parsed.soal.filter((s: any) => 
-          failedIds.includes(s.soalId) &&
-          (s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0))
-        );
-        
-        let syncedCount = 0;
-        for (const s of failedSoal) {
-          if (hasSubmitted.current) break;
-          const payload: any = {};
-          if (s.opsiTerpilih) payload.opsiId = s.opsiTerpilih;
-          if (s.jawabanTeks) payload.jawabanTeks = s.jawabanTeks;
-          if (s.jawabanData && Object.keys(s.jawabanData).length > 0) payload.jawabanData = s.jawabanData;
-          if (s.rpiId) payload.rpiId = s.rpiId;
-          
-          try {
-            const res = await fetch("/api/santri/ujian/jawab", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sesiId, soalId: s.soalId, ...payload })
-            });
-            if (res.ok) {
-              failedSoalIdsRef.current.delete(s.soalId);
-              syncedCount++;
-            }
-          } catch (e) {
-            // Will retry on next batch sync cycle
-          }
-        }
-
-        if (syncedCount > 0) {
-          setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
-        }
-      } catch (e) {
-        console.error("[BATCH-SYNC] Error:", e);
-      }
-    };
-
-    // Jalankan batch sync pertama kali setelah 10 detik
-    const initialTimeout = setTimeout(batchSync, 10000);
-    // Lalu repeat setiap 60 detik (dikurangi dari 30 detik)
-    const interval = setInterval(batchSync, 60000);
-    return () => { clearTimeout(initialTimeout); clearInterval(interval); };
-  }, [hasStarted, sesiId]);
 
   const toggleRagu = async () => {
     if (hasSubmitted.current) return;
@@ -638,16 +554,19 @@ export default function ClientMengerjakanUjian() {
     setExamData(newExamData);
     sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     
-    // Kirim melalui queue system (bukan fetch langsung) — termasuk semua field
+    // Kirim melalui buffered save — termasuk semua field
     const payload: any = { rpiId: newRagu };
     if (curSoal.opsiTerpilih) payload.opsiId = curSoal.opsiTerpilih;
     if (curSoal.jawabanTeks) payload.jawabanTeks = curSoal.jawabanTeks;
     if (curSoal.jawabanData && Object.keys(curSoal.jawabanData).length > 0) payload.jawabanData = curSoal.jawabanData;
     
-    saveQueueRef.current = saveQueueRef.current.filter(q => q.soalId !== curSoal.soalId);
-    saveQueueRef.current.push({ soalId: curSoal.soalId, payload });
-    setUnsavedCount(saveQueueRef.current.length + failedSoalIdsRef.current.size);
-    processQueue();
+    if (isSaving.current) {
+      pendingSave.current = { soalId: curSoal.soalId, payload };
+      setUnsavedCount(1);
+    } else {
+      isSaving.current = true;
+      processSave(curSoal.soalId, payload);
+    }
   };
 
   const formatTime = (secs: number) => {

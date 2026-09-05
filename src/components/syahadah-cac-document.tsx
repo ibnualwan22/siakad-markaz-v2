@@ -155,7 +155,7 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
               transform: `translate(${lo.teksPeriode.offsetX}mm, ${lo.teksPeriode.offsetY}mm)`,
             }}
           >
-            {serialNumber}
+            {serialNumber === "Sedang mengambil serial..." || serialNumber === "Gagal mengambil Serial" ? serialNumber : `No. : ${serialNumber}`}
           </div>
 
           {/* Paragraf Pembuka dihapus */}
@@ -187,7 +187,7 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
             </span>
             <span
               style={{
-                fontSize: "24pt",
+                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
                 display: "block",
                 marginTop: "1mm",

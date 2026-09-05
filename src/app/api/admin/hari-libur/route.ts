@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { cleanupAbsenKelasForLibur } from "@/lib/hari-libur";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -61,6 +62,9 @@ export async function POST(request: Request) {
         keterangan: keterangan || null
       }
     });
+
+    // Jalankan pembersihan rekap absen yang terinjeksi izin sebelumnya
+    await cleanupAbsenKelasForLibur(tgl, newLibur.isSemuaSesi, newLibur.sesiLibur);
 
     return NextResponse.json(newLibur);
   } catch (error: any) {

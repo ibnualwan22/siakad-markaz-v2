@@ -33,3 +33,33 @@ export async function getHariLiburTanggal(tanggal: Date) {
     where: { tanggal }
   });
 }
+
+/**
+ * Hapus auto-injeksi absen kelas (keterangan mengandung "[TRS-")
+ * jika hari/sesi tersebut dijadikan libur.
+ */
+export async function cleanupAbsenKelasForLibur(tanggal: Date, isSemuaSesi: boolean, sesiLibur: SesiKelas[]) {
+  // Hanya hapus record yang diinject otomatis oleh sistem (mengandung "[TRS-")
+  // dan yang statusnya IZIN atau SAKIT
+  const targetStatuses: import("@prisma/client").StatusAbsen[] = ["IZIN", "SAKIT"];
+  const targetKeterangan = { contains: "[TRS-" };
+
+  if (isSemuaSesi) {
+    await prisma.absenKelas.deleteMany({
+      where: {
+        tanggal: tanggal,
+        status: { in: targetStatuses },
+        keterangan: targetKeterangan
+      }
+    });
+  } else if (sesiLibur.length > 0) {
+    await prisma.absenKelas.deleteMany({
+      where: {
+        tanggal: tanggal,
+        sesi: { in: sesiLibur },
+        status: { in: targetStatuses },
+        keterangan: targetKeterangan
+      }
+    });
+  }
+}

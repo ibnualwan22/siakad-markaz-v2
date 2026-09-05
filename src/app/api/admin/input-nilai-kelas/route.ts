@@ -290,6 +290,9 @@ export async function POST(request: Request) {
         }
 
         // Re-check Tasmi Config for this riwayat
+        // Skip auto-check if user explicitly set is_tasmi (manual override)
+        if (update.is_tasmi !== undefined) continue;
+
         const riwayatWithProgram = await tx.riwayatSantri.findUnique({
           where: { id: update.riwayatId }
         });

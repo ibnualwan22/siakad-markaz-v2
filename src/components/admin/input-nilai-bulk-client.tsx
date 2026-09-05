@@ -483,19 +483,15 @@ export function InputNilaiBulkClient({
                           </div>
                         </td>
                         <td className="px-4 py-2 text-center md:sticky md:left-[300px] bg-white md:z-10 border-r border-[var(--color-surface-dark)] md:shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] min-w-[80px]">
-                          {activeFlags.u3 ? (
-                            <label className="inline-flex cursor-pointer items-center justify-center w-full h-full">
-                              <input 
-                                type="checkbox" 
-                                checked={tasmi}
-                                disabled={row.isCheckedOut}
-                                onChange={(e) => handleTasmiChange(row.riwayatId, e.target.checked)}
-                                className="h-5 w-5 rounded border-[var(--color-surface-dark)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              />
-                            </label>
-                          ) : (
-                            <span className="text-[10px] text-[var(--color-text-subtle)] font-medium">Menunggu Nihai</span>
-                          )}
+                          <label className="inline-flex cursor-pointer items-center justify-center w-full h-full">
+                            <input 
+                              type="checkbox" 
+                              checked={tasmi}
+                              disabled={row.isCheckedOut}
+                              onChange={(e) => handleTasmiChange(row.riwayatId, e.target.checked)}
+                              className="h-5 w-5 rounded border-[var(--color-surface-dark)] text-[var(--color-primary)] focus:ring-[var(--color-primary)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                          </label>
                         </td>
                         
                         {mapels.map(m => {

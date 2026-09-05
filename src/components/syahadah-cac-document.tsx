@@ -181,6 +181,8 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 lineHeight: 1,
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact" as any,
               }}
             >
               {data.masterSantri.nama.toUpperCase()}
@@ -194,6 +196,8 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
                 background: "linear-gradient(to right, #b3823c, #d8c568)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
+                WebkitPrintColorAdjust: "exact",
+                printColorAdjust: "exact" as any,
               }}
             >
               C.AC.

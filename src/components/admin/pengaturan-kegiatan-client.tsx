@@ -29,10 +29,10 @@ export function PengaturanKegiatanClient({ initialList, initialLokasi }: { initi
 
   // ----- Lokasi State -----
   const [lokasiList, setLokasiList] = useState<Lokasi[]>(initialLokasi);
-  const [newLokasi, setNewLokasi] = useState({ nama: "", latitude: "", longitude: "", radius: "50" });
+  const [newLokasi, setNewLokasi] = useState({ nama: "", latitude: "", longitude: "", radius: "150" });
   const [isAddingLokasi, setIsAddingLokasi] = useState(false);
   const [editLokasiId, setEditLokasiId] = useState<string | null>(null);
-  const [editLokasiData, setEditLokasiData] = useState({ nama: "", latitude: "", longitude: "", radius: "50" });
+  const [editLokasiData, setEditLokasiData] = useState({ nama: "", latitude: "", longitude: "", radius: "150" });
   const [isLocating, setIsLocating] = useState(false);
 
   const handleAutoLocation = (target: "new" | "edit") => {
@@ -162,7 +162,7 @@ export function PengaturanKegiatanClient({ initialList, initialLokasi }: { initi
       const data = await res.json();
       if (data.success) {
         setLokasiList((prev) => [...prev, data.lokasi].sort((a, b) => a.nama.localeCompare(b.nama, "id")));
-        setNewLokasi({ nama: "", latitude: "", longitude: "", radius: "50" });
+        setNewLokasi({ nama: "", latitude: "", longitude: "", radius: "150" });
         toast.success(`Lokasi "${data.lokasi.nama}" ditambahkan`);
       } else {
         toast.error(data.error ?? "Gagal menambahkan lokasi");

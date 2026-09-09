@@ -274,14 +274,17 @@ model KategoriKegiatan {
 }
 
 model AbsenKegiatan {
-  id         String           @id @default(cuid())
-  riwayatId  String
-  kategoriId String
-  tanggal    DateTime         @db.Date
-  status     StatusAbsen
-  keterangan String?
-  riwayat    RiwayatSantri    @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
-  kategori   KategoriKegiatan @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
+  id          String           @id @default(cuid())
+  riwayatId   String
+  kategoriId  String
+  tanggal     DateTime         @db.Date
+  status      StatusAbsen
+  keterangan  String?
+  latitude    Float?
+  longitude   Float?
+  gpsAccuracy Float?
+  riwayat     RiwayatSantri    @relation(fields: [riwayatId], references: [id], onDelete: Cascade)
+  kategori    KategoriKegiatan @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
 
   @@unique([riwayatId, kategoriId, tanggal])
 }

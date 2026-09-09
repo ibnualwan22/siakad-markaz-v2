@@ -51,17 +51,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized / Santri Tidak Aktif' }, { status: 401 });
     }
 
-    const { kode, latitude, longitude } = await request.json();
+    const { kode, latitude, longitude, accuracy } = await request.json();
 
     if (!kode) {
       return NextResponse.json({ error: "Kode akses wajib diisi" }, { status: 400 });
     }
 
-    // [GEOFENCING DISABLED] — Validasi koordinat dinonaktifkan sementara.
-    // Untuk mengaktifkan kembali, uncomment baris berikut:
-    // if (latitude === undefined || longitude === undefined) {
-    //   return NextResponse.json({ error: "Kode akses dan Lokasi GPS wajib diisi" }, { status: 400 });
-    // }
+    if (latitude === undefined || longitude === undefined) {
+      return NextResponse.json({ error: "Lokasi GPS wajib diisi. Harap pastikan GPS aktif." }, { status: 400 });
+    }
 
     const upperKode = kode.trim().toUpperCase();
 
@@ -127,32 +125,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, message: `Berhasil mengubah status ${existingAbsen.status} menjadi HADIR untuk kegiatan ${sesi.kategori.nama}` });
     }
 
-    // ===================================================================
-    // [GEOFENCING DISABLED] — Validasi Lokasi (Haversine)
-    // Dinonaktifkan sementara karena masih tahap awal. Untuk mengaktifkan
-    // kembali, uncomment blok di bawah ini.
-    // ===================================================================
-    // let isLocationValid = false;
-    // let closestDistance = Infinity;
-    //
-    // for (const locRel of sesi.lokasiList) {
-    //   const { lokasi } = locRel;
-    //   const distance = haversineDistance(latitude, longitude, lokasi.latitude, lokasi.longitude);
-    //   
-    //   if (distance < closestDistance) closestDistance = distance;
-    //   
-    //   if (distance <= lokasi.radius) {
-    //     isLocationValid = true;
-    //     break; // Within at least one location radius
-    //   }
-    // }
-    //
-    // if (!isLocationValid) {
-    //   return NextResponse.json({ 
-    //     error: "Lokasi tidak valid", 
-    //     detail: `Anda terdeteksi berada ~${Math.round(closestDistance)} meter dari titik pusat yang terdekat. Mohon mendekat ke lokasi kegiatan.` 
-    //   }, { status: 400 });
-    // }
+    let isLocationValid = false;
+    let closestDistance = Infinity;
+    let closestLokasiNama = "";
+
+    for (const locRel of sesi.lokasiList) {
+      const { lokasi } = locRel;
+      const distance = haversineDistance(latitude, longitude, lokasi.latitude, lokasi.longitude);
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestLokasiNama = lokasi.nama;
+      }
+      
+      if (distance <= lokasi.radius) {
+        isLocationValid = true;
+        break; // Within at least one location radius
+      }
+    }
+
+    if (!isLocationValid) {
+      return NextResponse.json({ 
+        error: "Lokasi tidak valid", 
+        detail: `Anda terdeteksi berada ~${Math.round(closestDistance)} meter dari lokasi ${closestLokasiNama}. Mohon mendekat ke pusat letak kegiatan.` 
+      }, { status: 400 });
+    }
 
     // 5. Success! Insert HADIR
     await prisma.absenKegiatan.create({
@@ -161,7 +158,10 @@ export async function POST(request: Request) {
         kategoriId: sesi.kategoriId,
         tanggal: today,
         status: "HADIR",
-        keterangan: "Self-Attendance"
+        keterangan: "Self-Attendance",
+        latitude: latitude,
+        longitude: longitude,
+        gpsAccuracy: accuracy
       }
     });
 

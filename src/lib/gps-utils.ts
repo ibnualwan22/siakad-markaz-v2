@@ -6,6 +6,13 @@ export type GpsDiagnosis =
   | "NOT_HTTPS"
   | "UNKNOWN_ERROR";
 
+// Deteksi iOS (iPhone/iPad) untuk memberikan instruksi spesifik
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad modern
+}
+
 export async function diagnoseGpsIssue(): Promise<{ code: GpsDiagnosis; message: string }> {
   // 1. Cek HTTPS
   if (typeof window !== 'undefined' && location.protocol !== "https:" && location.hostname !== "localhost") {
@@ -23,36 +30,44 @@ export async function diagnoseGpsIssue(): Promise<{ code: GpsDiagnosis; message:
     };
   }
 
-  // 3. Cek Permission API (hanya jika disupport oleh browser, eg. Safari iOS mungkin tidak support)
+  // 3. Cek Permission API
+  // CATATAN: Safari iOS TIDAK mendukung navigator.permissions.query({name: "geolocation"})
+  // sehingga akan masuk ke catch block. Kita tangani secara khusus untuk iOS.
   if ('permissions' in navigator) {
     try {
       const result = await navigator.permissions.query({ name: "geolocation" });
       if (result.state === "denied") {
-        return {
-          code: "PERMISSION_DENIED",
-          message: "Anda / browser telah menolak akses lokasi. Silakan ubah izin lokasi (Site Settings) pada browser Anda dan tahan/muat ulang halaman ini."
-        };
+        const msg = isIOS()
+          ? "Akses lokasi ditolak. Pada iPhone, buka Pengaturan > Privasi & Keamanan > Layanan Lokasi, pastikan Safari diizinkan."
+          : "Anda / browser telah menolak akses lokasi. Silakan ubah izin lokasi (Site Settings) pada browser Anda dan muat ulang halaman ini.";
+        return { code: "PERMISSION_DENIED", message: msg };
       }
       if (result.state === "prompt") {
         return {
           code: "PERMISSION_NOT_ASKED",
-          message: "Akses lokasi belum diberikan. Browser akan meminta izin saat Anda menekan tombol absen."
+          message: "Akses lokasi belum diberikan. Tekan tombol di bawah untuk mengaktifkan."
         };
       }
       if (result.state === "granted") {
-        return {
-          code: "READY",
-          message: "GPS Siap."
-        };
+        return { code: "READY", message: "GPS Siap." };
       }
     } catch (e) {
-      console.warn("Permission API query failed, falling back to manual detection.", e);
+      // Safari iOS akan error di sini — ini NORMAL.
+      // Jangan kembalikan UNKNOWN_ERROR, kembalikan PERMISSION_NOT_ASKED agar user bisa klik tombol.
+      console.warn("Permission API query failed (expected on Safari/iOS).", e);
+      return {
+        code: "PERMISSION_NOT_ASKED",
+        message: isIOS() 
+          ? "Tekan tombol di bawah untuk mengaktifkan GPS. Pastikan Layanan Lokasi aktif di Pengaturan iPhone Anda."
+          : "Tekan tombol di bawah untuk mengaktifkan GPS."
+      };
     }
   }
 
+  // Jika navigator.permissions tidak tersedia sama sekali (browser sangat lama)
   return {
-    code: "UNKNOWN_ERROR",
-    message: "Status GPS tidak diketahui. Coba jalankan absen."
+    code: "PERMISSION_NOT_ASKED",
+    message: "Tekan tombol di bawah untuk mengaktifkan GPS."
   };
 }
 
@@ -75,73 +90,106 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-export function getReliablePosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    // Parameter
-    const ACCURACY_THRESHOLD_M = 150; // Jangan terima koordinat dengan akurasi lebih dari ini (Wifi/Cell tower sering >200m)
-    const MAX_WAIT_TIME_MS = 6000;    // Tunggu maksimal x ms untuk dapatkan posisi terbaik
-    const BEST_ACCURACY_THRESHOLD_M = 30; // Jika akurasi <= segini, langsung exit jangan nunggu lama
+// =====================================================================
+// LIVE GPS WATCHER — continuous tracking with accuracy & jump filtering
+// =====================================================================
+export type GpsPosition = {
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  timestamp: number;
+};
 
-    const readings: GeolocationPosition[] = [];
-    let prevPos: GeolocationPosition | null = null;
-    let watchId: number;
-    let timeoutId: NodeJS.Timeout;
+export type GpsWatcherCallbacks = {
+  onUpdate: (pos: GpsPosition) => void;
+  onError: (error: GeolocationPositionError) => void;
+};
 
-    const cleanup = () => {
-      if (watchId !== undefined) navigator.geolocation.clearWatch(watchId);
-      if (timeoutId) clearTimeout(timeoutId);
+export type GpsWatcherHandle = {
+  start: () => void;
+  stop: () => void;
+};
+
+const ACCURACY_THRESHOLD_M = 150;
+const JUMP_THRESHOLD_M = 500;
+
+export function createGpsWatcher(callbacks: GpsWatcherCallbacks): GpsWatcherHandle {
+  let watchId: number | null = null;
+  let lastAcceptedPos: GpsPosition | null = null;
+  let bestAccuracySeen = Infinity;
+
+  const handleSuccess = (pos: GeolocationPosition) => {
+    const newPos: GpsPosition = {
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      timestamp: pos.timestamp
     };
 
-    const handleSuccess = (pos: GeolocationPosition) => {
-      // 1. Jump detection: Jika posisi "mental" terlalu jauh dalam waktu singkat (contoh: fallback dari GPS ke Cell Tower)
-      if (prevPos) {
-        const distance = calculateDistance(prevPos.coords.latitude, prevPos.coords.longitude, pos.coords.latitude, pos.coords.longitude);
-        if (distance > 500) { // Lompat > 500 meter
-          console.warn(`GPS Jump detected: ${Math.round(distance)}m. Mengabaikan posisi ini.`);
-          return;
-        }
+    // 1. Filter: Accuracy harus di bawah threshold
+    if (newPos.accuracy > ACCURACY_THRESHOLD_M) {
+      return; // Terlalu tidak akurat, abaikan
+    }
+
+    // 2. Filter: Jump detection
+    if (lastAcceptedPos) {
+      const distance = calculateDistance(
+        lastAcceptedPos.latitude, lastAcceptedPos.longitude,
+        newPos.latitude, newPos.longitude
+      );
+      if (distance > JUMP_THRESHOLD_M) {
+        console.warn(`GPS Jump terdeteksi: ${Math.round(distance)}m. Mengabaikan.`);
+        return;
       }
-      prevPos = pos;
+    }
 
-      // 2. Accuracy check
-      if (pos.coords.accuracy <= ACCURACY_THRESHOLD_M) {
-        readings.push(pos);
-      } else {
-        console.warn(`Akurasi terlalu rendah: ${Math.round(pos.coords.accuracy)}m. Mengabaikan posisi ini.`);
-        return; // Jangan masuk ke pembacaan
+    // 3. Logika "Best Reading Wins":
+    //    - SELALU terima jika belum ada posisi sama sekali
+    //    - Terima jika akurasi LEBIH BAIK atau SAMA dengan yang sekarang
+    //    - Jika posisi sudah >10 detik, terima HANYA jika akurasi masih wajar
+    //      (max 2x dari akurasi terbaik yang pernah dilihat, atau max 80m)
+    //    - JANGAN PERNAH ganti posisi bagus (15m) dengan yang jelek (120m)
+    const timeSinceLastMs = lastAcceptedPos ? (newPos.timestamp - lastAcceptedPos.timestamp) : Infinity;
+    
+    if (!lastAcceptedPos) {
+      // Belum ada posisi → terima apapun yang lolos filter
+      lastAcceptedPos = newPos;
+      if (newPos.accuracy < bestAccuracySeen) bestAccuracySeen = newPos.accuracy;
+      callbacks.onUpdate(newPos);
+    } else if (newPos.accuracy <= lastAcceptedPos.accuracy) {
+      // Posisi baru LEBIH AKURAT → selalu terima
+      lastAcceptedPos = newPos;
+      if (newPos.accuracy < bestAccuracySeen) bestAccuracySeen = newPos.accuracy;
+      callbacks.onUpdate(newPos);
+    } else if (timeSinceLastMs > 10000) {
+      // Posisi sudah lama (>10 detik) → terima hanya jika masih wajar
+      const maxAllowedAccuracy = Math.min(bestAccuracySeen * 2, 80);
+      if (newPos.accuracy <= maxAllowedAccuracy) {
+        lastAcceptedPos = newPos;
+        callbacks.onUpdate(newPos);
       }
+      // Jika akurasi baru terlalu jelek → abaikan, tetap pakai posisi lama
+    }
+  };
 
-      // 3. Early exit
-      if (pos.coords.accuracy <= BEST_ACCURACY_THRESHOLD_M) {
-        cleanup();
-        resolve(pos);
+  const handleError = (error: GeolocationPositionError) => {
+    callbacks.onError(error);
+  };
+
+  return {
+    start: () => {
+      if (watchId !== null) return; // sudah berjalan
+      watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0
+      });
+    },
+    stop: () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
       }
-    };
-
-    const handleError = (err: GeolocationPositionError) => {
-      cleanup();
-      reject(err);
-    };
-
-    // Jalankan GPS Watch
-    watchId = navigator.geolocation.watchPosition(handleSuccess, handleError, {
-      enableHighAccuracy: true,
-      timeout: 20000, 
-      maximumAge: 0
-    });
-
-    // Timeout untuk memilah posisi
-    timeoutId = setTimeout(() => {
-      cleanup();
-      if (readings.length > 0) {
-        // Pilih yang akurasinya paling bagus (paling kecil)
-        readings.sort((a, b) => a.coords.accuracy - b.coords.accuracy);
-        resolve(readings[0]);
-      } else {
-        const err = new Error("NO_ACCURATE_READING");
-        (err as any).code = 999;
-        reject(err);
-      }
-    }, MAX_WAIT_TIME_MS);
-  });
+    }
+  };
 }

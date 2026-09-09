@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "react-hot-toast";
-import { MapPin, CheckCircle, Crosshair, AlertTriangle, Navigation, Wifi, WifiOff, RefreshCcw } from "lucide-react";
+import { MapPin, CheckCircle, Crosshair, AlertTriangle, Navigation, RefreshCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { getReliablePosition, diagnoseGpsIssue, getAccuracyLevel, GpsDiagnosis } from "@/lib/gps-utils";
+import { diagnoseGpsIssue, getAccuracyLevel, isIOS, createGpsWatcher, GpsPosition, GpsWatcherHandle } from "@/lib/gps-utils";
 
 export default function SantriAbsenMandiriPage() {
   const [kode, setKode] = useState("");
@@ -13,10 +13,18 @@ export default function SantriAbsenMandiriPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const router = useRouter();
 
-  // GPS States
+  // GPS States — LIVE TRACKING (selalu update posisi terbaru)
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "ready" | "denied" | "unavailable" | "error">("idle");
-  const [position, setPosition] = useState<GeolocationPosition | null>(null);
+  const [position, setPosition] = useState<GpsPosition | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const watcherRef = useRef<GpsWatcherHandle | null>(null);
+
+  // Cleanup watcher saat unmount
+  useEffect(() => {
+    return () => {
+      watcherRef.current?.stop();
+    };
+  }, []);
 
   // Cek Status GPS saat awal load
   useEffect(() => {
@@ -33,33 +41,41 @@ export default function SantriAbsenMandiriPage() {
       setGpsError(diagnostic.message);
     } else if (diagnostic.code === "PERMISSION_NOT_ASKED") {
       setGpsStatus("idle");
-      // Menunggu user menekan tombol untuk meminta izin (harus di-trigger oleh user interaction)
     } else if (diagnostic.code === "READY") {
-      // Jika izin sudah ada, langsung mulai cari posisi
-      acquireGps();
+      startGpsWatch();
     } else {
       setGpsStatus("idle");
     }
   };
 
-  const acquireGps = async () => {
+  const startGpsWatch = () => {
+    // Hentikan watcher lama jika ada
+    watcherRef.current?.stop();
+
     setGpsStatus("acquiring");
     setGpsError(null);
-    try {
-      const pos = await getReliablePosition();
-      setPosition(pos);
-      setGpsStatus("ready");
-    } catch (error: any) {
-      if (error.code === 1) { // PERMISSION_DENIED
-        setGpsStatus("denied");
-        setGpsError("Akses lokasi ditolak oleh browser. Silakan izinkan akses lokasi pada pengaturan browser (ikon gembok) dan refresh halaman ini.");
-      } else {
-        setGpsStatus("error");
-        setGpsError(error.message === "NO_ACCURATE_READING" 
-          ? "Gagal mendapatkan lokasi yang akurat. Pastikan GPS aktif dan Anda berada di area terbuka." 
-          : "Gagal menghubungkan ke satelit GPS. Coba beberapa saat lagi.");
+
+    const watcher = createGpsWatcher({
+      onUpdate: (pos) => {
+        setPosition(pos);
+        setGpsStatus("ready");
+      },
+      onError: (error) => {
+        if (error.code === 1) { // PERMISSION_DENIED
+          setGpsStatus("denied");
+          setGpsError(isIOS()
+            ? "Akses lokasi ditolak. Pastikan Layanan Lokasi untuk Safari aktif di Pengaturan iPhone Anda."
+            : "Akses lokasi ditolak oleh browser. Silakan izinkan akses lokasi pada pengaturan browser (ikon gembok) dan refresh halaman ini."
+          );
+        } else {
+          setGpsStatus("error");
+          setGpsError("Gagal mendapatkan lokasi GPS. Pastikan GPS aktif dan Anda berada di area terbuka.");
+        }
       }
-    }
+    });
+
+    watcherRef.current = watcher;
+    watcher.start();
   };
 
   const handleAbsen = () => {
@@ -73,17 +89,24 @@ export default function SantriAbsenMandiriPage() {
       return;
     }
 
+    // Cek umur posisi — jika sudah lebih dari 30 detik, peringatkan
+    const posAgeMs = Date.now() - position.timestamp;
+    if (posAgeMs > 30000) {
+      toast.error("Posisi GPS sudah lama tidak terupdate. Pastikan GPS aktif.");
+      return;
+    }
+
     setIsLoading(true);
     const toastId = toast.loading("Memvalidasi kode absen & lokasi...");
 
     fetch("/api/santri/absen-kegiatan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         kode: kode.toUpperCase(),
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracy: position.accuracy
       })
     })
       .then(res => res.json())
@@ -92,13 +115,10 @@ export default function SantriAbsenMandiriPage() {
           toast.success(data.message, { id: toastId });
           setIsSuccess(true);
           setSuccessMsg(data.message);
+          watcherRef.current?.stop(); // Hentikan tracking setelah berhasil
         } else {
           toast.error(data.detail || data.error, { id: toastId, duration: 5000 });
           setIsLoading(false);
-          // Jika gagal karena lokasi di luar radius, auto-retry GPS untuk next attempt
-          if (data.detail && data.detail.includes("meter dari titik")) {
-            acquireGps();
-          }
         }
       })
       .catch(() => {
@@ -149,27 +169,29 @@ export default function SantriAbsenMandiriPage() {
            gpsStatus === 'acquiring' ? <Crosshair size={24} className="text-blue-500 animate-spin" /> :
            <AlertTriangle size={24} className={gpsStatus === 'denied' || gpsStatus === 'unavailable' ? "text-red-500" : "text-yellow-500"} />}
         </div>
-        
+
         <div className="flex-1 space-y-1 w-full">
           <h3 className="font-bold text-sm text-[var(--color-text)] uppercase tracking-wider">
-            Status Lokasi Anda
+            {gpsStatus === 'ready' ? 'Lokasi GPS Aktif (Live)' : 'Status Lokasi Anda'}
           </h3>
-          
+
           {gpsStatus === 'acquiring' && (
             <p className="text-xs font-bold text-blue-600 animate-pulse">Sedang mengunci satelit GPS terbaik...</p>
           )}
 
           {gpsStatus === 'ready' && position && (
             <div>
-              <p className="text-[11px] font-bold text-emerald-700">GPS Terkunci.</p>
+              <p className="text-[11px] font-bold text-emerald-700">
+                GPS Terkunci — posisi diperbarui secara otomatis.
+              </p>
               <div className="flex items-center gap-2 mt-2 font-mono text-[10px] bg-white bg-opacity-60 p-2 rounded-lg text-emerald-800 border border-emerald-200">
-                <span>Lat: {position.coords.latitude.toFixed(5)}</span>
-                <span>Lng: {position.coords.longitude.toFixed(5)}</span>
+                <span>Lat: {position.latitude.toFixed(5)}</span>
+                <span>Lng: {position.longitude.toFixed(5)}</span>
                 <span className={`px-1.5 py-0.5 rounded text-white ${
-                  getAccuracyLevel(position.coords.accuracy) === 'good' ? 'bg-emerald-500' : 
-                  getAccuracyLevel(position.coords.accuracy) === 'fair' ? 'bg-yellow-500' : 'bg-red-500'
+                  getAccuracyLevel(position.accuracy) === 'good' ? 'bg-emerald-500' :
+                  getAccuracyLevel(position.accuracy) === 'fair' ? 'bg-yellow-500' : 'bg-red-500'
                 }`}>
-                  ±{Math.round(position.coords.accuracy)}m
+                  ±{Math.round(position.accuracy)}m
                 </span>
               </div>
             </div>
@@ -178,13 +200,26 @@ export default function SantriAbsenMandiriPage() {
           {(gpsStatus === 'denied' || gpsStatus === 'unavailable' || gpsStatus === 'error') && (
             <div className="space-y-3 pt-1">
               <p className="text-xs font-bold text-red-700 leading-relaxed">{gpsError}</p>
-              {gpsStatus === 'denied' && (
+              {gpsStatus === 'denied' && !isIOS() && (
                 <div className="bg-red-100 p-2 rounded text-[10px] text-red-800 font-semibold italic border border-red-200">
                   ⚠️ Tips: Klik ikon gembok pada address bar browser Anda, lalu set lokasi (Location) ke "Allow/Izinkan". Jika sudah, muat ulang halaman ini.
                 </div>
               )}
+              {gpsStatus === 'denied' && isIOS() && (
+                <div className="bg-red-100 p-3 rounded-lg text-[11px] text-red-800 font-semibold border border-red-200 space-y-2">
+                  <p className="font-bold">📱 Langkah untuk iPhone:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-[10px]">
+                    <li>Buka <b>Pengaturan</b> iPhone</li>
+                    <li>Pilih <b>Privasi & Keamanan</b> → <b>Layanan Lokasi</b></li>
+                    <li>Pastikan <b>Layanan Lokasi</b> aktif (hijau)</li>
+                    <li>Scroll ke bawah, cari <b>Safari</b> (atau browser yg digunakan)</li>
+                    <li>Pilih <b>"Saat Menggunakan App"</b></li>
+                    <li>Kembali ke sini dan <b>muat ulang halaman</b></li>
+                  </ol>
+                </div>
+              )}
               {gpsStatus === 'error' && (
-                <button onClick={acquireGps} className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold flex gap-2 items-center hover:bg-red-700 transition">
+                <button onClick={startGpsWatch} className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold flex gap-2 items-center hover:bg-red-700 transition">
                   <RefreshCcw size={14} /> Coba Lagi
                 </button>
               )}
@@ -196,7 +231,7 @@ export default function SantriAbsenMandiriPage() {
                <p className="text-xs font-semibold text-yellow-800">
                  Fitur absensi memerlukan akses lokasi perangkat Anda (GPS).
                </p>
-               <button onClick={acquireGps} className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-bold flex gap-2 items-center justify-center transition shadow-sm">
+               <button onClick={startGpsWatch} className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-xs font-bold flex gap-2 items-center justify-center transition shadow-sm">
                  <Navigation size={14} /> Aktifkan Akses Lokasi (GPS)
                </button>
             </div>

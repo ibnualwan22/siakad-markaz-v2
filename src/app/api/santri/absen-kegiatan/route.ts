@@ -91,7 +91,34 @@ export async function POST(request: Request) {
     const today = new Date(sesi.createdAt);
     today.setHours(0,0,0,0);
 
-    // 3. Cek absen existing
+    // 3. Validasi Lokasi (selalu cek GPS dulu sebelum apapun)
+    let isLocationValid = false;
+    let closestDistance = Infinity;
+    let closestLokasiNama = "";
+
+    for (const locRel of sesi.lokasiList) {
+      const { lokasi } = locRel;
+      const distance = haversineDistance(latitude, longitude, lokasi.latitude, lokasi.longitude);
+      
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestLokasiNama = lokasi.nama;
+      }
+      
+      if (distance <= lokasi.radius) {
+        isLocationValid = true;
+        break;
+      }
+    }
+
+    if (!isLocationValid) {
+      return NextResponse.json({ 
+        error: "Lokasi tidak valid", 
+        detail: `Anda terdeteksi berada ~${Math.round(closestDistance)} meter dari lokasi ${closestLokasiNama}. Mohon mendekat ke pusat letak kegiatan.` 
+      }, { status: 400 });
+    }
+
+    // 4. Cek absen existing
     const existingAbsen = await prisma.absenKegiatan.findUnique({
       where: {
         riwayatId_kategoriId_tanggal: {
@@ -118,37 +145,14 @@ export async function POST(request: Request) {
         },
         data: {
           status: "HADIR",
-          keterangan: (existingAbsen.keterangan ? existingAbsen.keterangan + " | " : "") + "Self-Attendance (Dari " + existingAbsen.status + ")"
+          keterangan: (existingAbsen.keterangan ? existingAbsen.keterangan + " | " : "") + "Self-Attendance (Dari " + existingAbsen.status + ")",
+          latitude: latitude,
+          longitude: longitude,
+          gpsAccuracy: accuracy
         }
       });
 
       return NextResponse.json({ success: true, message: `Berhasil mengubah status ${existingAbsen.status} menjadi HADIR untuk kegiatan ${sesi.kategori.nama}` });
-    }
-
-    let isLocationValid = false;
-    let closestDistance = Infinity;
-    let closestLokasiNama = "";
-
-    for (const locRel of sesi.lokasiList) {
-      const { lokasi } = locRel;
-      const distance = haversineDistance(latitude, longitude, lokasi.latitude, lokasi.longitude);
-      
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestLokasiNama = lokasi.nama;
-      }
-      
-      if (distance <= lokasi.radius) {
-        isLocationValid = true;
-        break; // Within at least one location radius
-      }
-    }
-
-    if (!isLocationValid) {
-      return NextResponse.json({ 
-        error: "Lokasi tidak valid", 
-        detail: `Anda terdeteksi berada ~${Math.round(closestDistance)} meter dari lokasi ${closestLokasiNama}. Mohon mendekat ke pusat letak kegiatan.` 
-      }, { status: 400 });
     }
 
     // 5. Success! Insert HADIR

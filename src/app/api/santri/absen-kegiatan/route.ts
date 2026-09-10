@@ -96,10 +96,22 @@ export async function POST(request: Request) {
     let closestDistance = Infinity;
     let closestLokasiNama = "";
 
+    // DEBUG: Log semua data untuk diagnosis
+    console.log(`[GEOFENCE] Santri ${session.santriId} | Sesi: ${sesi.kode} | Koordinat santri: (${latitude}, ${longitude}) accuracy: ${accuracy}m`);
+    console.log(`[GEOFENCE] Jumlah lokasi terkait sesi: ${sesi.lokasiList.length}`);
+
+    if (sesi.lokasiList.length === 0) {
+      console.warn(`[GEOFENCE] ⚠️ SESI ${sesi.kode} TIDAK PUNYA LOKASI! Geofencing ter-bypass.`);
+      // Jika sesi tidak punya lokasi (admin lupa assign), tetap izinkan absen
+      // Tapi catat sebagai warning
+    }
+
     for (const locRel of sesi.lokasiList) {
       const { lokasi } = locRel;
       const distance = haversineDistance(latitude, longitude, lokasi.latitude, lokasi.longitude);
       
+      console.log(`[GEOFENCE]   → Lokasi "${lokasi.nama}" (${lokasi.latitude}, ${lokasi.longitude}) radius: ${lokasi.radius}m | Jarak: ${Math.round(distance)}m | ${distance <= lokasi.radius ? '✅ DALAM RADIUS' : '❌ DI LUAR'}`);
+
       if (distance < closestDistance) {
         closestDistance = distance;
         closestLokasiNama = lokasi.nama;
@@ -111,12 +123,16 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!isLocationValid) {
+    // Jika ada lokasi tapi santri di luar semua radius
+    if (!isLocationValid && sesi.lokasiList.length > 0) {
+      console.log(`[GEOFENCE] ❌ DITOLAK: Jarak terdekat ${Math.round(closestDistance)}m dari "${closestLokasiNama}"`);
       return NextResponse.json({ 
         error: "Lokasi tidak valid", 
         detail: `Anda terdeteksi berada ~${Math.round(closestDistance)} meter dari lokasi ${closestLokasiNama}. Mohon mendekat ke pusat letak kegiatan.` 
       }, { status: 400 });
     }
+
+    console.log(`[GEOFENCE] ✅ LOLOS: ${sesi.lokasiList.length === 0 ? 'Sesi tanpa lokasi' : `Dalam radius ${closestLokasiNama}`}`);
 
     // 4. Cek absen existing
     const existingAbsen = await prisma.absenKegiatan.findUnique({

@@ -1014,3 +1014,17 @@ model TasmiConfig {
 
   @@unique([programId, mapelId, kolom])
 }
+
+// ===== DENAH LOKASI =====
+model LokasiDenah {
+  id        String   @id @default(cuid())
+  nama      String   @unique
+  deskripsi String?
+  latitude  Float
+  longitude Float
+  imageUrl  String?
+  publicId  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

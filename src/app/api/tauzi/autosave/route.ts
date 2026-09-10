@@ -9,6 +9,13 @@ export async function POST(request: Request) {
   }
 
   try {
+    const peserta = await prisma.pesertaTauzi.findUnique({
+      where: { id: session.pesertaId }
+    });
+    if (peserta?.sudahUjian) {
+      return NextResponse.json({ error: 'Ujian sudah selesai, tidak bisa menyimpan' }, { status: 403 });
+    }
+
     const { jawaban } = await request.json(); // format: { "soalId": { jawabanId: "id", ragu: true } }
     
     if (!jawaban || typeof jawaban !== 'object') {

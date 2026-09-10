@@ -77,8 +77,8 @@ export function getAccuracyLevel(accuracy: number): "good" | "fair" | "poor" {
   return "poor";
 }
 
-// Menghitung jarak antar dua titik (Haversine formula), digunakan untuk jump detection
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+// Menghitung jarak antar dua titik (Haversine formula)
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const toRadian = (angle: number) => (Math.PI / 180) * angle;
   const R = 6371e3; // Radius bumi dalam meter
   const dLat = toRadian(lat2 - lat1);

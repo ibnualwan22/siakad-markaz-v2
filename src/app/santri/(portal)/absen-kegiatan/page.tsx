@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "react-hot-toast";
-import { MapPin, CheckCircle, Crosshair, AlertTriangle, Navigation, RefreshCcw } from "lucide-react";
+import { MapPin, CheckCircle, Crosshair, AlertTriangle, Navigation, RefreshCcw, Target } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { diagnoseGpsIssue, getAccuracyLevel, isIOS, createGpsWatcher, GpsPosition, GpsWatcherHandle } from "@/lib/gps-utils";
+import { diagnoseGpsIssue, getAccuracyLevel, isIOS, createGpsWatcher, calculateDistance, GpsPosition, GpsWatcherHandle } from "@/lib/gps-utils";
+
+type LokasiAktif = {
+  id: string;
+  nama: string;
+  latitude: number;
+  longitude: number;
+  radius: number;
+};
 
 export default function SantriAbsenMandiriPage() {
   const [kode, setKode] = useState("");
@@ -13,11 +21,15 @@ export default function SantriAbsenMandiriPage() {
   const [successMsg, setSuccessMsg] = useState("");
   const router = useRouter();
 
-  // GPS States — LIVE TRACKING (selalu update posisi terbaru)
+  // GPS States
   const [gpsStatus, setGpsStatus] = useState<"idle" | "acquiring" | "ready" | "denied" | "unavailable" | "error">("idle");
   const [position, setPosition] = useState<GpsPosition | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const watcherRef = useRef<GpsWatcherHandle | null>(null);
+
+  // Lokasi aktif dari server
+  const [lokasiList, setLokasiList] = useState<LokasiAktif[]>([]);
+  const [hasSesiAktif, setHasSesiAktif] = useState(false);
 
   // Cleanup watcher saat unmount
   useEffect(() => {
@@ -26,10 +38,39 @@ export default function SantriAbsenMandiriPage() {
     };
   }, []);
 
+  // Fetch lokasi aktif dari server
+  useEffect(() => {
+    fetch("/api/santri/absen-kegiatan")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setLokasiList(data.lokasiAktif || []);
+          setHasSesiAktif(data.hasSesiAktif);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Cek Status GPS saat awal load
   useEffect(() => {
     checkGpsPermission();
   }, []);
+
+  // Hitung jarak ke setiap lokasi
+  const distances = useMemo(() => {
+    if (!position || lokasiList.length === 0) return [];
+    return lokasiList.map(lok => {
+      const dist = calculateDistance(position.latitude, position.longitude, lok.latitude, lok.longitude);
+      return {
+        ...lok,
+        distance: Math.round(dist),
+        isInRange: dist <= lok.radius,
+      };
+    }).sort((a, b) => a.distance - b.distance);
+  }, [position, lokasiList]);
+
+  const closestLokasi = distances[0] || null;
+  const isInAnyRange = distances.some(d => d.isInRange);
 
   const checkGpsPermission = async () => {
     const diagnostic = await diagnoseGpsIssue();
@@ -49,9 +90,7 @@ export default function SantriAbsenMandiriPage() {
   };
 
   const startGpsWatch = () => {
-    // Hentikan watcher lama jika ada
     watcherRef.current?.stop();
-
     setGpsStatus("acquiring");
     setGpsError(null);
 
@@ -61,7 +100,7 @@ export default function SantriAbsenMandiriPage() {
         setGpsStatus("ready");
       },
       onError: (error) => {
-        if (error.code === 1) { // PERMISSION_DENIED
+        if (error.code === 1) {
           setGpsStatus("denied");
           setGpsError(isIOS()
             ? "Akses lokasi ditolak. Pastikan Layanan Lokasi untuk Safari aktif di Pengaturan iPhone Anda."
@@ -83,13 +122,10 @@ export default function SantriAbsenMandiriPage() {
       toast.error("Kode harus terdiri dari 6 karakter");
       return;
     }
-
     if (gpsStatus !== "ready" || !position) {
       toast.error("Harap tunggu hingga lokasi GPS siap!");
       return;
     }
-
-    // Cek umur posisi — jika sudah lebih dari 30 detik, peringatkan
     const posAgeMs = Date.now() - position.timestamp;
     if (posAgeMs > 30000) {
       toast.error("Posisi GPS sudah lama tidak terupdate. Pastikan GPS aktif.");
@@ -115,7 +151,7 @@ export default function SantriAbsenMandiriPage() {
           toast.success(data.message, { id: toastId });
           setIsSuccess(true);
           setSuccessMsg(data.message);
-          watcherRef.current?.stop(); // Hentikan tracking setelah berhasil
+          watcherRef.current?.stop();
         } else {
           toast.error(data.detail || data.error, { id: toastId, duration: 5000 });
           setIsLoading(false);
@@ -180,20 +216,76 @@ export default function SantriAbsenMandiriPage() {
           )}
 
           {gpsStatus === 'ready' && position && (
-            <div>
-              <p className="text-[11px] font-bold text-emerald-700">
-                GPS Terkunci — posisi diperbarui secara otomatis.
-              </p>
-              <div className="flex items-center gap-2 mt-2 font-mono text-[10px] bg-white bg-opacity-60 p-2 rounded-lg text-emerald-800 border border-emerald-200">
+            <div className="space-y-3">
+              {/* Koordinat & Akurasi */}
+              <div className="flex items-center gap-2 font-mono text-[10px] bg-white bg-opacity-60 p-2 rounded-lg text-emerald-800 border border-emerald-200">
                 <span>Lat: {position.latitude.toFixed(5)}</span>
                 <span>Lng: {position.longitude.toFixed(5)}</span>
-                <span className={`px-1.5 py-0.5 rounded text-white ${
+              </div>
+
+              {/* Info Bar: Akurasi GPS */}
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="text-gray-500 font-semibold">Akurasi GPS:</span>
+                <span className={`px-2 py-0.5 rounded-full font-bold text-white ${
                   getAccuracyLevel(position.accuracy) === 'good' ? 'bg-emerald-500' :
                   getAccuracyLevel(position.accuracy) === 'fair' ? 'bg-yellow-500' : 'bg-red-500'
                 }`}>
                   ±{Math.round(position.accuracy)}m
                 </span>
+                <span className="text-gray-400 text-[10px]">
+                  ({getAccuracyLevel(position.accuracy) === 'good' ? 'Sangat Baik' :
+                    getAccuracyLevel(position.accuracy) === 'fair' ? 'Cukup' : 'Kurang'})
+                </span>
               </div>
+
+              {/* Jarak ke Lokasi Absen */}
+              {distances.length > 0 && (
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Jarak ke Lokasi Absen</span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {distances.map(d => (
+                      <div key={d.id} className="px-3 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Target size={14} className={d.isInRange ? "text-emerald-500" : "text-red-400"} />
+                          <span className="text-xs font-bold text-gray-700">{d.nama}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-black ${d.isInRange ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {d.distance >= 1000 ? `${(d.distance / 1000).toFixed(1)} km` : `${d.distance} m`}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                            d.isInRange
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-red-100 text-red-600'
+                          }`}>
+                            {d.isInRange ? '✓ Dalam Radius' : `Radius ${d.radius}m`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Ringkasan Status */}
+              {distances.length > 0 && (
+                <div className={`text-[11px] font-bold px-3 py-2 rounded-lg ${
+                  isInAnyRange
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-red-100 text-red-700 border border-red-300'
+                }`}>
+                  {isInAnyRange
+                    ? '✅ Anda berada dalam jangkauan — siap untuk absen!'
+                    : `⚠️ Anda di luar jangkauan semua lokasi. Mendekatlah ke lokasi kegiatan (min. ${closestLokasi ? closestLokasi.distance - closestLokasi.radius : '?'}m lagi).`
+                  }
+                </div>
+              )}
+
+              {distances.length === 0 && !hasSesiAktif && (
+                <p className="text-[11px] font-semibold text-gray-400 italic">Tidak ada sesi absen aktif saat ini.</p>
+              )}
             </div>
           )}
 

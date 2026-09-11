@@ -154,6 +154,20 @@ export function DataSantriClient({
     }
   }
 
+  async function handleReactivate(id: string, nama: string) {
+    if (!confirm(`Apakah Anda yakin ingin mengaktifkan kembali santri ${nama}?`)) return;
+    const toastId = toast.loading("Memproses Pengaktifan...");
+    try {
+      const res = await fetch(`/api/admin/checkout/${id}/reactivate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal mengaktifkan kembali");
+      toast.success("Santri berhasil diaktifkan", { id: toastId });
+      window.location.reload();
+    } catch (e: any) {
+      toast.error(e.message, { id: toastId });
+    }
+  }
+
   function toggleSort(field: SortField) {
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -399,12 +413,19 @@ export function DataSantriClient({
                     </td>
                     <td className="px-4 py-3"><GenderBadge gender={r.gender} /></td>
                     <td className="px-4 py-3 text-center">
-                      {!r.isCheckedOut && (
+                      {!r.isCheckedOut ? (
                         <button 
                           onClick={() => handleForceCheckout(r.id, r.nama)} 
                           className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 font-bold text-[10px] transition shrink-0 whitespace-nowrap"
                         >
                           Checkout
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleReactivate(r.id, r.nama)} 
+                          className="px-3 py-1.5 rounded-lg border border-green-200 bg-green-50 text-green-600 hover:bg-green-100 hover:border-green-300 font-bold text-[10px] transition shrink-0 whitespace-nowrap"
+                        >
+                          Aktifkan
                         </button>
                       )}
                     </td>

@@ -99,32 +99,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_radacct_acctuniqueid
     ON radacct(acctuniqueid);
 
 -- =============================================
--- Default group untuk santri
+-- Default group policies & bandwidth
+-- FreeRADIUS uses WISPr-Bandwidth-Max-Down/Up for speed limits (bits/sec)
 -- =============================================
 INSERT INTO radgroupcheck (groupname, attribute, op, value)
-VALUES ('santri', 'Simultaneous-Use', ':=', '1')
-ON CONFLICT DO NOTHING;
--- ^ Batasi 1 device per akun (opsional, bisa dihapus)
-
--- =============================================
--- POPULASI AWAL: Sync semua santri aktif
--- Password default = NIS masing-masing
--- =============================================
-INSERT INTO radcheck (username, attribute, op, value)
-SELECT id, 'Cleartext-Password', ':=', id
-FROM "SantriInternal"
-WHERE "isAktif" = true
-ON CONFLICT (username, attribute)
-DO UPDATE SET value = EXCLUDED.value;
-
--- Masukkan semua santri aktif ke group "santri"
-INSERT INTO radusergroup (username, groupname, priority)
-SELECT id, 'santri', 1
-FROM "SantriInternal"
-WHERE "isAktif" = true
+VALUES 
+  ('wifi-santri', 'Simultaneous-Use', ':=', '1'),
+  ('wifi-civitas', 'Simultaneous-Use', ':=', '3'),
+  ('wifi-tamu', 'Simultaneous-Use', ':=', '1')
 ON CONFLICT DO NOTHING;
 
--- =============================================
--- SELESAI!
+INSERT INTO radgroupreply (groupname, attribute, op, value)
+VALUES 
+  ('wifi-santri', 'WISPr-Bandwidth-Max-Down', ':=', '2048000'),
+  ('wifi-santri', 'WISPr-Bandwidth-Max-Up', ':=', '1024000'),
+  ('wifi-civitas', 'WISPr-Bandwidth-Max-Down', ':=', '10240000'),
+  ('wifi-civitas', 'WISPr-Bandwidth-Max-Up', ':=', '10240000'),
+  ('wifi-tamu', 'WISPr-Bandwidth-Max-Down', ':=', '1024000'),
+  ('wifi-tamu', 'WISPr-Bandwidth-Max-Up', ':=', '512000')
+ON CONFLICT DO NOTHING;
+
+-- Catatan: Sinkronisasi santri/civitas/voucher dilakukan otomatis melalui Siakad API.
 -- Jalankan: psql -h localhost -U postgres -d siakad -f setup-radius-tables.sql
--- =============================================

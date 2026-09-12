@@ -1,6 +1,7 @@
 import { requirePermission } from "@/lib/permission";
 import { getDashboardSantriRows, getProgramCatalog } from "@/lib/app-data";
 import { DashboardCharts } from "@/components/admin/dashboard-charts";
+import { WifiAccountWidget } from "@/components/admin/wifi-account-widget";
 import { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
         </p>
       </div>
 
+      <WifiAccountWidget />
       <DashboardCharts santriRows={santriRows} programList={programList} />
     </div>
   );

@@ -89,6 +89,7 @@ model SantriInternal {
   noWaSantri            String?
   noWaWali              String?
   kabupaten             String?
+  passwordHash          String?
   bulanKe               Int                 @default(0)
   isAktif               Boolean             @default(true)
   isCheckedOut          Boolean             @default(false)
@@ -104,6 +105,7 @@ model SantriInternal {
   pelanggarMukholifList PelanggarMukholif[] @relation("PelanggarMukholif")
   anggotaLajnahList     AnggotaLajnah[]
   anggotaJasusList      AnggotaJasus[]
+  wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
 }
 
 model Dufah {
@@ -373,6 +375,7 @@ model User {
   reminderLogs            ReminderLog[]
   checkoutApproverConfigs CheckoutApproverConfig[]
   checkoutApprovals       CheckoutApproval[]
+  wifiAccount             WifiAccount?
 }
 
 model RolePermission {
@@ -1027,4 +1030,59 @@ model LokasiDenah {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// =============================================
+// WIFI MANAGEMENT (RADIUS & EXTERNAL PORTAL)
+// =============================================
+
+model WifiProfile {
+  id            String        @id @default(cuid())
+  name          String        @unique   // "Santri", "Civitas", "Tamu 2 Jam"
+  radiusGroup   String        @unique   // "wifi-santri", "wifi-civitas"
+  downloadKbps  Int           @default(2048)
+  uploadKbps    Int           @default(1024)
+  maxDevices    Int           @default(1)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  vouchers      WifiVoucher[]
+  accounts      WifiAccount[]
+}
+
+model WifiVoucher {
+  id          String      @id @default(cuid())
+  code        String      @unique   // Kode numerik acak (6-8 digit)
+  profileId   String
+  durasiMenit Int                   // 120=2jam, 1440=24jam, dll
+  expiresAt   DateTime?             // Tanggal kedaluwarsa absolut (opsional)
+  usedAt      DateTime?
+  usedByMac   String?
+  note        String?
+  createdById String
+  createdAt   DateTime    @default(now())
+  
+  profile     WifiProfile @relation(fields: [profileId], references: [id])
+}
+
+model WifiAccount {
+  id         String       @id @default(cuid())
+  userId     String       @unique    // 1 akun per user
+  username   String       @unique    // Dipilih sendiri, harus ada huruf
+  password   String                  // Plaintext (khusus WiFi, bukan pw Siakad)
+  profileId  String?
+  isActive   Boolean      @default(true)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile    WifiProfile? @relation(fields: [profileId], references: [id])
+}
+
+model WifiSakanConfig {
+  id        String   @id @default(cuid())
+  sakan     String   @unique  // Nama sakan, cocok dengan SantriInternal.sakan
+  enabled   Boolean  @default(false)
+  profileId String?  // Profil default untuk sakan ini
 }

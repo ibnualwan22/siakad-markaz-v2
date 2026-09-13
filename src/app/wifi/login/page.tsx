@@ -20,14 +20,19 @@ function WifiLoginForm() {
   const userIp = searchParams.get("ip") || searchParams.get("client_ip") || "";
   const redirectUrl = searchParams.get("url") || searchParams.get("redirect") || "";
 
-  const gatewayAuthUrl = gwAddress ? `http://${gwAddress}:${gwPort}/wifidog/auth` : "";
+  // WiFiDog gateway auth URL: http://{gw_address}:{gw_port}/wifidog/auth?token={token}
+  const buildGatewayUrl = (token: string) => {
+    if (!gwAddress) return "";
+    const protocol = gwPort === "443" ? "https" : "http";
+    return `${protocol}://${gwAddress}:${gwPort}/wifidog/auth?token=${encodeURIComponent(token)}`;
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setInput(val);
     setError("");
     
-    // Auto-detect mode jika belum dimatikan explicit
+    // Auto-detect mode
     const hasLetters = /[a-zA-Z]/.test(val);
     if (val.length >= 3 && hasLetters) {
       if (!isCivitasMode) setIsCivitasMode(true);
@@ -36,37 +41,15 @@ function WifiLoginForm() {
     }
   };
 
-  const executeSubmit = (usernameParam: string, passwordParam: string) => {
-    if (!gatewayAuthUrl) {
-      setError("Halaman ini harus diakses melalui jaringan WiFi Markaz");
+  const redirectToGateway = (token: string) => {
+    const gwUrl = buildGatewayUrl(token);
+    if (!gwUrl) {
+      setError("Halaman ini harus diakses melalui jaringan WiFi Markaz.");
       setStatus("idle");
       return;
     }
-
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = gatewayAuthUrl;
-
-    const fields: Record<string, string> = {
-      username: usernameParam,
-      password: passwordParam,
-    };
-
-    if (gwId) fields.gw_id = gwId;
-    if (userMac) fields.mac = userMac;
-    if (userIp) fields.ip = userIp;
-    if (redirectUrl) fields.url = redirectUrl;
-
-    Object.entries(fields).forEach(([key, value]) => {
-      const inputEl = document.createElement("input");
-      inputEl.type = "hidden";
-      inputEl.name = key;
-      inputEl.value = value;
-      form.appendChild(inputEl);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
+    // Redirect ke gateway Ruijie dgn token, gateway akan memanggil /wifi/auth?token=xxx utk validasi
+    window.location.href = gwUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,13 +65,33 @@ function WifiLoginForm() {
         setError("Password harus diisi");
         return;
       }
-      setStatus("loading");
-      // Jika mode Civitas, langsung submit via RADIUS (tidak perlu cek DB dulu, RADIUS yg akan nolak kalau salah)
-      executeSubmit(trimmed, password);
+      setStatus("checking");
+      setError("");
+
+      try {
+        // Verifikasi civitas credentials via API server-side
+        const res = await fetch("/api/wifi/verify-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: trimmed, password: password }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          setStatus("loading");
+          redirectToGateway(trimmed);
+        } else {
+          setError(data.message || "Username atau password salah.");
+          setStatus("idle");
+        }
+      } catch {
+        setError("Gagal terhubung ke server.");
+        setStatus("idle");
+      }
       return;
     }
 
-    // Jika mode Santri/Voucher, lakukan optimisasi pengecekan
+    // Mode Santri/Voucher
     setStatus("checking");
     setError("");
 
@@ -102,9 +105,9 @@ function WifiLoginForm() {
 
       if (data.type === "santri" || data.type === "voucher") {
         setStatus("loading");
-        executeSubmit(trimmed, trimmed); // NIS/Voucher password pakenya input itu sendiri
+        // Token = NIS/Voucher code. Gateway akan call /wifi/auth?token=NIS utk cek ulang
+        redirectToGateway(trimmed);
       } else if (data.type === "civitas") {
-        // Ternyata ini civitas tapi usernya tidak ketik huruf (walau admin nyuruh pakai huruf, jaga-jaga)
         setIsCivitasMode(true);
         setError("Mohon masukkan password WiFi Anda");
         setStatus("idle");
@@ -112,10 +115,9 @@ function WifiLoginForm() {
         setError("NIS atau Voucher tidak valid/kadaluarsa.");
         setStatus("idle");
       }
-    } catch (err) {
-      // Fallback jika API gagal, tempak langsung ke RADIUS
-      setStatus("loading");
-      executeSubmit(trimmed, trimmed);
+    } catch {
+      setError("Gagal terhubung ke server. Coba lagi.");
+      setStatus("idle");
     }
   };
 

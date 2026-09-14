@@ -126,9 +126,14 @@ export function createGpsWatcher(callbacks: GpsWatcherCallbacks): GpsWatcherHand
       timestamp: pos.timestamp
     };
 
-    // 1. Filter: Accuracy harus di bawah threshold
+    // 1. Filter: Akurasi harus di bawah threshold.
+    // TAPI jika ini adalah pertama kali (belum ada lastAcceptedPos), 
+    // kita kirimkan ke UI agar loading tidak berputar terus.
     if (newPos.accuracy > ACCURACY_THRESHOLD_M) {
-      return; // Terlalu tidak akurat, abaikan
+      if (!lastAcceptedPos) {
+        callbacks.onUpdate(newPos); // Kirim ke UI untuk ditampilkan status "akurasi lemah"
+      }
+      return; // Kembalikan tanpa mengupdate lastAcceptedPos agar tidak merusak perhitungan loncatan (jump)
     }
 
     // 2. Filter: Jump detection
@@ -152,7 +157,7 @@ export function createGpsWatcher(callbacks: GpsWatcherCallbacks): GpsWatcherHand
     const timeSinceLastMs = lastAcceptedPos ? (newPos.timestamp - lastAcceptedPos.timestamp) : Infinity;
     
     if (!lastAcceptedPos) {
-      // Belum ada posisi → terima apapun yang lolos filter
+      // Belum ada posisi valid sebelumnya
       lastAcceptedPos = newPos;
       if (newPos.accuracy < bestAccuracySeen) bestAccuracySeen = newPos.accuracy;
       callbacks.onUpdate(newPos);

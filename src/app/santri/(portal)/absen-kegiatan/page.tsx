@@ -126,6 +126,14 @@ export default function SantriAbsenMandiriPage() {
       toast.error("Harap tunggu hingga lokasi GPS siap!");
       return;
     }
+
+    // Validasi tambahan: Cegah absen jika akurasi belum memenuhi syarat (e.g., > 150m)
+    // Walaupun GPS sudah tampil di UI, sensor belum cukup akurat untuk absen.
+    if (position.accuracy > 150) {
+      toast.error(`Akurasi GPS (±${Math.round(position.accuracy)}m) masih kurang baik. Harap cari tempat yang terbuka atau tunggu sejenak.`);
+      return;
+    }
+
     const posAgeMs = Date.now() - position.timestamp;
     if (posAgeMs > 30000) {
       toast.error("Posisi GPS sudah lama tidak terupdate. Pastikan GPS aktif.");

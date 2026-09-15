@@ -5,10 +5,10 @@ export async function GET() {
   try {
     // Data dummy untuk guide format
     const ws_data = [
-      ["Pertanyaan", "Bobot", "Pilihan A", "Pilihan B", "Pilihan C", "Pilihan D", "Jawaban Benar"],
-      ["Siapakah rasul terakhir penutup para nabi?", 10, "Nabi Musa AS", "Nabi Isa AS", "Nabi Muhammad SAW", "Nabi Ibrahim AS", "C"],
-      ["Rukun Islam yang pertama adalah?", 15, "Sholat", "Zakat", "Puasa", "Syahadat", "D"],
-      ["(Contoh Soal 3 - Silakan ditimpa)", 10, "Opsi A", "Opsi B", "Opsi C", "Opsi D", "A"]
+      ["Pertanyaan", "Bobot", "Pilihan A", "Pilihan B", "Pilihan C", "Pilihan D", "Pilihan E", "Jawaban Benar"],
+      ["Siapakah rasul terakhir penutup para nabi?", 10, "Nabi Musa AS", "Nabi Isa AS", "Nabi Muhammad SAW", "Nabi Ibrahim AS", "Nabi Nuh AS", "C"],
+      ["Rukun Islam yang pertama adalah?", 15, "Sholat", "Zakat", "Puasa", "Syahadat", "Haji", "D"],
+      ["(Contoh Soal 3 - Silakan ditimpa)", 10, "Opsi A", "Opsi B", "Opsi C", "Opsi D", "Opsi E", "A"]
     ];
 
     const ws = xlsx.utils.aoa_to_sheet(ws_data);
@@ -21,6 +21,7 @@ export async function GET() {
       { wch: 25 }, // Pilihan B
       { wch: 25 }, // Pilihan C
       { wch: 25 }, // Pilihan D
+      { wch: 25 }, // Pilihan E
       { wch: 15 }, // Jawaban Benar
     ];
 

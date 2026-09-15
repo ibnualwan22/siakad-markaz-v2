@@ -371,7 +371,8 @@ export default function BankSoalPage() {
         { id: `opt-${Date.now()}-1`, teks: "", gambarUrl: "", isCorrect: true },
         { id: `opt-${Date.now()}-2`, teks: "", gambarUrl: "", isCorrect: false },
         { id: `opt-${Date.now()}-3`, teks: "", gambarUrl: "", isCorrect: false },
-        { id: `opt-${Date.now()}-4`, teks: "", gambarUrl: "", isCorrect: false }
+        { id: `opt-${Date.now()}-4`, teks: "", gambarUrl: "", isCorrect: false },
+        { id: `opt-${Date.now()}-5`, teks: "", gambarUrl: "", isCorrect: false }
       ]
     });
     setManualDir(null);
@@ -396,7 +397,7 @@ export default function BankSoalPage() {
           perintah: fullSoal.perintah || "",
           kunciJawaban: fullSoal.kunciJawaban || "",
           dataTambahan: fullSoal.dataTambahan || {},
-          jawabanList: [...(fullSoal.opsiList || []), ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+          jawabanList: [...(fullSoal.opsiList || []), ...Array(5).fill(null)].slice(0, 5).map((j: any, i: number) =>
             j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
           )
         });
@@ -413,7 +414,7 @@ export default function BankSoalPage() {
           perintah: soal.perintah || "",
           kunciJawaban: soal.kunciJawaban || "",
           dataTambahan: soal.dataTambahan || {},
-          jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+          jawabanList: [...soal.opsiList, ...Array(5).fill(null)].slice(0, 5).map((j: any, i: number) =>
             j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
           )
         });
@@ -430,7 +431,7 @@ export default function BankSoalPage() {
         perintah: soal.perintah || "",
         kunciJawaban: soal.kunciJawaban || "",
         dataTambahan: soal.dataTambahan || {},
-        jawabanList: [...soal.opsiList, ...Array(4).fill(null)].slice(0, 4).map((j: any, i: number) =>
+        jawabanList: [...soal.opsiList, ...Array(5).fill(null)].slice(0, 5).map((j: any, i: number) =>
           j ? { id: j.id || `opt-${i}`, teks: j.teks, gambarUrl: j.gambarUrl || "", isCorrect: j.isCorrect } : { id: `opt-new-${i}`, teks: "", gambarUrl: "", isCorrect: false }
         )
       });

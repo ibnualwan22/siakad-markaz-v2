@@ -126,6 +126,7 @@ export async function POST(req: Request) {
     const colPilihanB = getCol(["Pilihan B", "pilihan_b"]);
     const colPilihanC = getCol(["Pilihan C", "pilihan_c"]);
     const colPilihanD = getCol(["Pilihan D", "pilihan_d"]);
+    const colPilihanE = getCol(["Pilihan E", "pilihan_e"]);
     const colJawabanBenar = getCol(["Jawaban Benar", "jawaban_benar"]);
 
     if (colPertanyaan === -1) {
@@ -160,6 +161,7 @@ export async function POST(req: Request) {
           { col: colPilihanB, letter: "B", urutan: 2 },
           { col: colPilihanC, letter: "C", urutan: 3 },
           { col: colPilihanD, letter: "D", urutan: 4 },
+          { col: colPilihanE, letter: "E", urutan: 5 },
         ];
 
         for (const opsi of opsiCols) {

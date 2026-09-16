@@ -135,6 +135,20 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
+    // 1b. Block ALL paste & drop at document level (catches Samsung/Gboard clipboard)
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+    };
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    // Catch IME-injected paste (Samsung Keyboard "Papan Klip", Gboard clipboard)
+    const handleBeforeInput = (e: InputEvent) => {
+      if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+        e.preventDefault();
+      }
+    };
+
     // 2. Disable Context Menu
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -279,6 +293,9 @@ export default function ClientMengerjakanUjian() {
     window.addEventListener("orientationchange", handleOrientationChange);
 
     window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("paste", handlePaste as any, true);
+    document.addEventListener("drop", handleDrop as any, true);
+    document.addEventListener("beforeinput", handleBeforeInput as any, true);
     window.addEventListener("contextmenu", handleContextMenu);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -289,6 +306,9 @@ export default function ClientMengerjakanUjian() {
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("paste", handlePaste as any, true);
+      document.removeEventListener("drop", handleDrop as any, true);
+      document.removeEventListener("beforeinput", handleBeforeInput as any, true);
       window.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);

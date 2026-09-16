@@ -717,6 +717,7 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                    setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
                 }}
                 onPaste={(e) => e.preventDefault()}
+                onDrop={(e) => e.preventDefault()}
                 className="mx-2 px-3 py-1 bg-gray-50 border-b-2 border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none transition-colors w-24 md:w-32 text-center text-blue-700 font-bold font-sans"
               />
             );
@@ -922,6 +923,7 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                                     if (e.key === 'Enter') e.preventDefault();
                                   }}
                                   onPaste={(e) => e.preventDefault()}
+                                  onDrop={(e) => e.preventDefault()}
                                   onFocus={(e) => {
                                      setTimeout(() => {
                                        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1319,6 +1321,7 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
           setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
         }}
         onPaste={(e) => e.preventDefault()}
+        onDrop={(e) => e.preventDefault()}
         placeholder={placeholder}
         className={className}
         dir="auto"
@@ -1339,6 +1342,7 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
         setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
       }}
       onPaste={(e) => e.preventDefault()}
+      onDrop={(e) => e.preventDefault()}
       placeholder={placeholder}
       className={className}
       dir="auto"

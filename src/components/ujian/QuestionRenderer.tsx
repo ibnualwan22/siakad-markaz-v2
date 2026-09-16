@@ -711,6 +711,8 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                 dir="auto"
                 value={answers[idxStr] || ""}
                 onChange={(e) => {
+                   const nativeEvt = (e.nativeEvent as InputEvent);
+                   if (nativeEvt?.inputType === 'insertFromPaste' || nativeEvt?.inputType === 'insertFromDrop' || nativeEvt?.inputType === 'insertReplacementText' || (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) return;
                    onAnswer({ jawabanData: { ...jawabanData, answers: { ...answers, [idxStr]: e.target.value } } });
                 }}
                 onFocus={(e) => {
@@ -915,6 +917,8 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                                   name={`tasrif_${rIdx}_${cIdx}`}
                                   value={answers[key] || ""}
                                   onChange={(e) => {
+                                     const nativeEvt = (e.nativeEvent as InputEvent);
+                                     if (nativeEvt?.inputType === 'insertFromPaste' || nativeEvt?.inputType === 'insertFromDrop' || nativeEvt?.inputType === 'insertReplacementText' || (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) return;
                                      // Hapus newline agar tetap 1 baris
                                      const val = e.target.value.replace(/\n/g, '');
                                      onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: val } } });
@@ -1290,6 +1294,14 @@ function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTe
   }, [initialValue]);
 
   const handleChange = (e: any) => {
+    // Anti-paste backup: cek inputType dari nativeEvent
+    const nativeEvt = e.nativeEvent as InputEvent;
+    if (nativeEvt?.inputType === 'insertFromPaste' || 
+        nativeEvt?.inputType === 'insertFromDrop' ||
+        nativeEvt?.inputType === 'insertReplacementText' ||
+        (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) {
+      return; // Tolak — bukan ketikan manual
+    }
     const newVal = e.target.value;
     setVal(newVal);
     if (saveTimeout.current) clearTimeout(saveTimeout.current);

@@ -143,8 +143,15 @@ export default function ClientMengerjakanUjian() {
       e.preventDefault();
     };
     // Catch IME-injected paste (Samsung Keyboard "Papan Klip", Gboard clipboard)
+    // Samsung Keyboard menyuntik clipboard sebagai 'insertText' (bukan 'insertFromPaste'),
+    // sehingga perlu dicek panjang data: ketikan manual selalu 1 karakter per event.
     const handleBeforeInput = (e: InputEvent) => {
-      if (e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') {
+      if (
+        e.inputType === 'insertFromPaste' || 
+        e.inputType === 'insertFromDrop' ||
+        e.inputType === 'insertReplacementText' ||
+        (e.inputType === 'insertText' && e.data && e.data.length > 2)
+      ) {
         e.preventDefault();
       }
     };

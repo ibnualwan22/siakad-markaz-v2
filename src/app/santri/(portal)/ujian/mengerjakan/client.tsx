@@ -773,7 +773,9 @@ export default function ClientMengerjakanUjian() {
              </div>
              <div>
                 <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
-                <p className="text-[9px] md:text-xs font-semibold text-gray-400 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">Mata Pelajaran</p>
+                <p className="text-[9px] md:text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">
+                  {soal.namaMapel || "Mata Pelajaran"}
+                </p>
              </div>
            </div>
            
@@ -830,7 +832,9 @@ export default function ClientMengerjakanUjian() {
                     }, {});
                     return Object.entries(grouped).map(([type, list]: [string, any]) => (
                        <div key={type}>
-                          <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">{type.replace(/_/g, ' ')}</h4>
+                          <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">
+                            {list[0].namaMapel ? `${list[0].namaMapel} — ` : ''}{type.replace(/_/g, ' ')}
+                          </h4>
                           <div className="grid grid-cols-5 gap-2">
                             {list.map((s:any, idx:number) => {
                               const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);

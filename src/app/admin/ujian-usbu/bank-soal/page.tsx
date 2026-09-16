@@ -867,19 +867,45 @@ export default function BankSoalPage() {
       {selectedJenisSoal && (
         <div className="flex flex-wrap gap-2 mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm items-center">
           <span className="text-xs font-bold text-gray-500 uppercase mr-2">Tampilan Usbu':</span>
-          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "UNASSIGNED"].map(tab => (
-            <button
-              key={tab}
-              onClick={() => { setActiveUsbuTab(tab); setCurrentPage(0); }}
-              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors border ${
-                activeUsbuTab === tab
-                  ? "bg-[var(--color-primary)] text-white shadow-md border-transparent"
-                  : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-              }`}
-            >
-              {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Ditugaskan" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
-            </button>
-          ))}
+          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "UNASSIGNED"].map(tab => {
+            let stats = null;
+            if (tab !== "ALL" && tab !== "UNASSIGNED") {
+               const targetU = tab.includes("-") ? Number(tab.split("-")[1]) : Number(tab);
+               const targetB = tab.includes("-") ? Number(tab.split("-")[0]) : null;
+               
+               const soalInTab = soalList.filter(s => {
+                  if (isAkbarnas && targetB) return s.bulanKe === targetB && s.usbuKe === targetU;
+                  return s.usbuKe === targetU;
+               });
+               
+               const assignedSoal = soalInTab.filter(s => s.usbuAssignments?.some((ua: any) => ua.usbuKe === targetU));
+               const totalPoin = assignedSoal.reduce((sum, s) => sum + s.bobot, 0);
+               stats = { count: assignedSoal.length, points: totalPoin };
+            }
+
+            return (
+              <button
+                key={tab}
+                onClick={() => { setActiveUsbuTab(tab); setCurrentPage(0); }}
+                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors border ${
+                  activeUsbuTab === tab
+                    ? "bg-[var(--color-primary)] text-white shadow-md border-transparent"
+                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span>
+                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Ditugaskan" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
+                  </span>
+                  {stats && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${activeUsbuTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                      {stats.count} ☑️ • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 

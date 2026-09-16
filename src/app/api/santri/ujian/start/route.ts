@@ -32,7 +32,8 @@ export async function POST(req: Request) {
             soal: {
               include: {
                 opsiList: true,
-                jenisSoal: { select: { instruksi: true } }
+                jenisSoal: { select: { instruksi: true } },
+                mapel: { select: { nama_arab: true } }
               }
             }
           }
@@ -113,6 +114,7 @@ export async function POST(req: Request) {
       return {
         soalId: sp.soal.id,
         mapelId: sp.soal.mapelId,
+        namaMapel: sp.soal.mapel.nama_arab,
         jenisSoalId: sp.soal.jenisSoalId,
         pertanyaan: sp.soal.pertanyaan,
         gambarUrl: sp.soal.gambarUrl,

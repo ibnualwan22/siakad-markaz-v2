@@ -1087,3 +1087,99 @@ model WifiSakanConfig {
   enabled   Boolean  @default(false)
   profileId String?  // Profil default untuk sakan ini
 }
+
+// ============================================
+// RADIUS / EXTERNAL CAPTIVE PORTAL MODELS (FROM PROD)
+// ============================================
+
+model radacct {
+  radacctid           BigInt    @id @default(autoincrement())
+  acctsessionid       String    @default("") @db.VarChar(64)
+  acctuniqueid        String    @unique(map: "idx_radacct_acctuniqueid") @default("") @db.VarChar(32)
+  username            String?   @db.VarChar(253)
+  groupname           String?   @db.VarChar(253)
+  realm               String?   @db.VarChar(64)
+  nasipaddress        String    @db.Inet
+  nasportid           String?   @db.VarChar(15)
+  nasporttype         String?   @db.VarChar(32)
+  acctstarttime       DateTime? @db.Timestamptz(6)
+  acctupdatetime      DateTime? @db.Timestamptz(6)
+  acctstoptime        DateTime? @db.Timestamptz(6)
+  acctinterval        BigInt?
+  acctsessiontime     BigInt?
+  acctauthentic       String?   @db.VarChar(32)
+  connectinfo_start   String?   @db.VarChar(50)
+  connectinfo_stop    String?   @db.VarChar(50)
+  acctinputoctets     BigInt?
+  acctoutputoctets    BigInt?
+  calledstationid     String?   @db.VarChar(50)
+  callingstationid    String?   @db.VarChar(50)
+  acctterminatecause  String?   @db.VarChar(32)
+  servicetype         String?   @db.VarChar(32)
+  framedprotocol      String?   @db.VarChar(32)
+  framedipaddress     String?   @db.Inet
+  framedipv6address   String?   @db.Inet
+  framedipv6prefix    String?   @db.Inet
+  framedinterfaceid   String?   @db.VarChar(44)
+  delegatedipv6prefix String?   @db.Inet
+
+  @@index([acctsessionid], map: "idx_radacct_acctsessionid")
+  @@index([username], map: "idx_radacct_username")
+}
+
+model radcheck {
+  id        Int    @id @default(autoincrement())
+  username  String @db.VarChar(64)
+  attribute String @default("Cleartext-Password") @db.VarChar(64)
+  op        String @default(":=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+
+  @@unique([username, attribute], map: "idx_radcheck_username_attr")
+  @@index([username], map: "idx_radcheck_username")
+}
+
+model radgroupcheck {
+  id        Int    @id @default(autoincrement())
+  groupname String @db.VarChar(64)
+  attribute String @db.VarChar(64)
+  op        String @default(":=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+}
+
+model radgroupreply {
+  id        Int    @id @default(autoincrement())
+  groupname String @db.VarChar(64)
+  attribute String @db.VarChar(64)
+  op        String @default(":=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+}
+
+model radpostauth {
+  id       BigInt   @id @default(autoincrement())
+  username String   @db.VarChar(64)
+  pass     String?  @db.VarChar(64)
+  reply    String?  @db.VarChar(32)
+  authdate DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([authdate], map: "idx_radpostauth_authdate")
+  @@index([username], map: "idx_radpostauth_username")
+}
+
+model radreply {
+  id        Int    @id @default(autoincrement())
+  username  String @db.VarChar(64)
+  attribute String @db.VarChar(64)
+  op        String @default(":=") @db.VarChar(2)
+  value     String @db.VarChar(253)
+
+  @@index([username], map: "idx_radreply_username")
+}
+
+model radusergroup {
+  id        Int    @id @default(autoincrement())
+  username  String @db.VarChar(64)
+  groupname String @db.VarChar(64)
+  priority  Int    @default(1)
+
+  @@index([username], map: "idx_radusergroup_username")
+}

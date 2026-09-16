@@ -43,6 +43,8 @@ export async function GET(req: Request) {
           programId: true,
           jenisSoalId: true,
           tipeSoal: true,
+          usbuKe: true,
+          bulanKe: true,
           pertanyaan: true,
           gambarUrl: true,
           bobot: true,
@@ -98,7 +100,7 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { mapelId, programId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
+    const { mapelId, programId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan, usbuKe, bulanKe } = await req.json();
 
     if (!mapelId || !programId) {
       return NextResponse.json({ error: "Mapel atau Program tidak boleh kosong" }, { status: 400 });
@@ -110,6 +112,8 @@ export async function POST(req: Request) {
         programId,
         jenisSoalId,
         tipeSoal: tipeSoal || "PG",
+        usbuKe: Number(usbuKe) || 1,
+        bulanKe: Number(bulanKe) || 1,
         pertanyaan: pertanyaan || "",
         gambarUrl: gambarUrl || null,
         grupSoalId: grupSoalId || null,

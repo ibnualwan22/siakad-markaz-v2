@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
+    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, bulanKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
     // Update soal and re-create opsi
     const updatedSoal = await prisma.bankSoalUsbu.update({
@@ -33,6 +33,7 @@ export async function PUT(
         dataTambahan: dataTambahan !== undefined ? (dataTambahan || null) : undefined,
         bobot: Number(bobot) || 10,
         ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
+        ...(bulanKe !== undefined && { bulanKe: Number(bulanKe) }),
         ...(paketSoal !== undefined && { paketSoal }),
         ...(jenisSoalId !== undefined && { jenisSoalId }),
         opsiList: {

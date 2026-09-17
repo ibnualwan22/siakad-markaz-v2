@@ -846,6 +846,7 @@ model SesiUjianGlobal {
   acakOpsi      Boolean   @default(true)
   isActive      Boolean   @default(false)
   isSimulasi    Boolean   @default(false) // Flag ujian simulasi universal
+  showReview    Boolean   @default(false) // Flag untuk menampilkan hasil scan kepada santri
   waktuMulai    DateTime?
   waktuSelesai  DateTime?
   createdAt     DateTime  @default(now())

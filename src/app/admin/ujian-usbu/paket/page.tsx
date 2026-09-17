@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, KeyRound, MonitorCheck, Save, Users, Clock, Play, ServerCog, CheckSquare, RefreshCw } from "lucide-react";
+import { Plus, Trash2, KeyRound, MonitorCheck, Save, Users, Clock, Play, ServerCog, CheckSquare, RefreshCw, Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function SesiUjianPage() {
@@ -133,6 +133,44 @@ export default function SesiUjianPage() {
     }
   };
 
+  const handleToggleReviewGlobal = async () => {
+    // Check if any session is active. If all are false, we turn them on. If any are true, we turn them all off.
+    const anyActive = sesiList.some(s => s.showReview);
+    const targetState = !anyActive;
+    
+    if (!confirm(`Ubah hak akses review jawaban santri secara global menjadi ${targetState ? 'DIBUKA' : 'DITUTUP'}?`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/sesi`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showReview: targetState })
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      fetchSesiList();
+      toast.success(targetState ? "Review dibuka untuk semua sesi" : "Review ditutup untuk semua sesi");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleToggleReviewSesi = async (id: string, currentState: boolean) => {
+    if (!confirm(`Ubah hak akses review jawaban santri untuk sesi ini menjadi ${!currentState ? 'DIBUKA' : 'DITUTUP'}?`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/sesi/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "TOGGLE_REVIEW" })
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      fetchSesiList();
+      toast.success(!currentState ? "Hak akses review dibuka" : "Hak akses review ditutup");
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   const handleRefreshKode = async (id: string) => {
     if (!confirm("Generate kode akses baru? Sandi lama tidak akan bisa digunakan lagi.")) return;
     try {
@@ -187,9 +225,17 @@ export default function SesiUjianPage() {
           <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text)" }}>Sesi Ujian Global</h1>
           <p className="text-sm mt-1" style={{ color: "var(--color-text-subtle)" }}>Kelola ujian serentak, generator 1 kode akses untuk semua kelompok.</p>
         </div>
-        <button onClick={handleCreateNew} className="neu-button-primary px-5 py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-md hover:-translate-y-1 transition-all">
-          <Plus size={16}/> Buat Sesi Serentak
-        </button>
+        <div className="flex items-center gap-3 w-full md:w-auto flex-col sm:flex-row">
+          {sesiList.length > 0 && (
+            <button onClick={handleToggleReviewGlobal} className={`px-5 py-2.5 flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-sm hover:-translate-y-1 transition-all border-2 ${sesiList.some(s => s.showReview) ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:border-indigo-300' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`} title="Buka/Tutup Hak Review Jawaban Santri secara Seri">
+              {sesiList.some(s => s.showReview) ? <Eye size={16}/> : <EyeOff size={16}/>} 
+              {sesiList.some(s => s.showReview) ? "Tutup Semua Review" : "Buka Semua Review"}
+            </button>
+          )}
+          <button onClick={handleCreateNew} className="w-full sm:w-auto neu-button-primary px-5 py-2.5 flex items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-md hover:-translate-y-1 transition-all">
+            <Plus size={16}/> Buat Sesi Serentak
+          </button>
+        </div>
       </div>
 
       {sesiList.length === 0 ? (
@@ -288,6 +334,16 @@ export default function SesiUjianPage() {
                      <Trash2 size={20}/>
                    </button>
                  )}
+               </div>
+               
+               <div className={`p-3 px-4 flex gap-3 text-xs items-center justify-between border-t ${sesi.showReview ? 'bg-indigo-50 border-indigo-100 text-indigo-800' : 'bg-white border-gray-100 text-gray-500'}`}>
+                 <div className="flex items-center gap-2 font-medium">
+                   {sesi.showReview ? <Eye size={14} className="text-indigo-600"/> : <EyeOff size={14} className="text-gray-400"/>}
+                   Hak Review Santri: <strong>{sesi.showReview ? 'Terbuka' : 'Tertutup'}</strong>
+                 </div>
+                 <button onClick={() => handleToggleReviewSesi(sesi.id, sesi.showReview)} className={`px-3 py-1.5 rounded-lg font-bold border transition-colors ${sesi.showReview ? 'bg-white border-indigo-200 hover:bg-indigo-100 text-indigo-700' : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-700'}`}>
+                   Toggle Review
+                 </button>
                </div>
              </div>
           ))}

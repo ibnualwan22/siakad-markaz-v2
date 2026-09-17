@@ -94,6 +94,11 @@ export async function PUT(
         sesi: updatedSesi, 
         message: `Berhasil refresh soal! Total ${totalSoalBaru} soal di-link ke ${paketList.length} paket.` 
       });
+    } else if (action === "TOGGLE_REVIEW") {
+      updatedSesi = await prisma.sesiUjianGlobal.update({
+        where: { id },
+        data: { showReview: !sesi.showReview }
+      });
     } else if (action === "REFRESH_CODE") {
       updatedSesi = await prisma.sesiUjianGlobal.update({
         where: { id },

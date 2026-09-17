@@ -147,23 +147,32 @@ export default function DaftarUjianSantriPage() {
                    >
                      Belum Dibuka <Lock size={16} />
                    </button>
-                ) : ujian.status === 'SELESAI' || ujian.status === 'AUTO_SUBMIT' ? (
-                  <div className="text-center w-full py-3 bg-green-50 rounded-xl border border-green-100 divide-y divide-green-100/50">
-                     <div className="text-[10px] font-bold uppercase text-green-600 mb-2 tracking-wider">Hasil Nilai Per Mapel</div>
-                     <div className="pt-2 space-y-1.5 px-3">
-                        {ujian.mapelScores?.map((m: any, idx: number) => (
-                           <div key={idx} className="flex justify-between items-center text-sm">
-                              <span className="font-semibold text-gray-700">{m.mapelName}</span>
-                              <span className="font-black text-green-700">{m.score !== null ? m.score : '-'}</span>
-                           </div>
-                        ))}
+                 ) : ujian.status === 'SELESAI' || ujian.status === 'AUTO_SUBMIT' ? (
+                  <div className="text-center w-full py-3 bg-green-50 rounded-xl border border-green-100 flex flex-col gap-2">
+                     <div className="divide-y divide-green-100/50 w-full">
+                       <div className="text-[10px] font-bold uppercase text-green-600 mb-2 tracking-wider">Hasil Nilai Per Mapel</div>
+                       <div className="pt-2 space-y-1.5 px-4 mb-2">
+                          {ujian.mapelScores?.map((m: any, idx: number) => (
+                             <div key={idx} className="flex justify-between items-center text-sm">
+                                <span className="font-semibold text-gray-700 text-left">{m.mapelName}</span>
+                                <span className="font-black text-green-700">{m.score !== null ? m.score : '-'}</span>
+                             </div>
+                          ))}
+                       </div>
                      </div>
                      {ujian.waktuMulaiSantri && ujian.waktuSelesaiSantri && (
-                       <div className="text-[10px] text-gray-500 font-semibold pt-2 mt-2">
-                         <span className="bg-white/50 px-2 py-1 rounded">Durasi: {(() => {
+                       <div className="text-[10px] text-gray-500 font-semibold px-4">
+                         <span className="bg-white px-2 py-1.5 rounded-lg border shadow-sm block w-full">Durasi: {(() => {
                            const d = Math.floor((new Date(ujian.waktuSelesaiSantri).getTime() - new Date(ujian.waktuMulaiSantri).getTime()) / 1000);
                            return `${Math.floor(d / 60)} menit ${(d % 60).toString().padStart(2, '0')} detik`;
                          })()}</span>
+                       </div>
+                     )}
+                     {ujian.showReview && (
+                       <div className="mt-2 px-3 pb-1 w-full">
+                         <button onClick={() => router.push(`/santri/ujian/review?s=${ujian.sesiId}`)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm transition-all transform active:scale-95 text-xs tracking-wide">
+                            <BookOpen size={16} fill="currentColor" fillOpacity={0.2} /> Lihat Review Jawaban
+                         </button>
                        </div>
                      )}
                   </div>

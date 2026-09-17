@@ -95,6 +95,7 @@ export async function GET() {
         durasiMenit: p.sesiGlobal.durasiMenit,
         jumlahSoal: p.soalPaketList.length,
         status: finalStatus,
+        showReview: p.sesiGlobal.showReview,
         sesiId: sesi ? sesi.id : null,
         nilaiTotal: sesi ? sesi.nilaiTotal : null,
         tanggalBuka: p.sesiGlobal.waktuMulai,

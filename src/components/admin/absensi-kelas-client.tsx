@@ -869,10 +869,19 @@ export function AbsensiKelasClient({
 
   // State animasi refresh button
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // State animasi klik hadir semua
+  const [isSetSemua, setIsSetSemua] = useState(false);
 
   const handleFloatingRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => window.location.reload(), 300);
+  };
+
+  const handleSetSemuaHadir = () => {
+    setAllStatus("HADIR");
+    setIsSetSemua(true);
+    setTimeout(() => setIsSetSemua(false), 2000);
   };
 
   const groupedSantri = useMemo(() => {
@@ -1120,11 +1129,15 @@ export function AbsensiKelasClient({
               </button>
             )}
             <button
-              onClick={() => setAllStatus("HADIR")}
+              onClick={handleSetSemuaHadir}
               disabled={isLiburSesi}
-              className="rounded-full bg-[var(--color-surface-dark)] px-4 py-2 text-xs font-bold text-[var(--color-text)] transition hover:bg-[var(--color-surface-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                isSetSemua 
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" 
+                  : "bg-[var(--color-surface-dark)] text-[var(--color-text)] hover:bg-[var(--color-surface-dark)]"
+              }`}
             >
-              Hadirkan Semua
+              {isSetSemua ? "✓ Semua Hadir" : "Hadirkan Semua"}
             </button>
             {userRole === "ADMIN" && (
               <button

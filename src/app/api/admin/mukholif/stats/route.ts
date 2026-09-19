@@ -45,8 +45,9 @@ export async function GET(request: Request) {
         endDate = dufah.usbu3EndDate || dufah.usbu2EndDate || dufah.usbu1EndDate;
       }
 
+      let queryEndDate: Date | null = null;
       if (startDate && endDate) {
-        const queryEndDate = new Date(endDate);
+        queryEndDate = new Date(endDate);
         queryEndDate.setHours(23, 59, 59, 999);
 
         const pelanggarRecords = await prisma.pelanggarMukholif.findMany({
@@ -105,15 +106,28 @@ export async function GET(request: Request) {
       }
     }
 
-    // Top Jasus (All time)
-    const topJasusQuery = await prisma.laporanMukholif.findMany({
-      where: {
-        pelanggarList: {
-          some: {
-            statusTabayun: "PELANGGAR"
-          }
+    // Top Jasus (Current Dufah)
+    const topJasusWhere: any = {
+      jasusId: { not: "ADMIN" },
+      pelanggarList: {
+        some: {
+          statusTabayun: "PELANGGAR"
         }
-      },
+      }
+    };
+
+    if (dufah) {
+       const sd = dufah.usbu1StartDate;
+       const ed = dufah.usbu3EndDate || dufah.usbu2EndDate || dufah.usbu1EndDate;
+       if (sd && ed) {
+          const qEd = new Date(ed);
+          qEd.setHours(23, 59, 59, 999);
+          topJasusWhere.waktuMelanggar = { gte: sd, lte: qEd };
+       }
+    }
+
+    const topJasusQuery = await prisma.laporanMukholif.findMany({
+      where: topJasusWhere,
       select: {
         jasusNama: true,
         jasus: {

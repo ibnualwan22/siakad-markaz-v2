@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { getActiveDufahName } from "@/lib/absensi";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -10,10 +11,28 @@ export async function GET(request: Request) {
   const statusEks = searchParams.get("statusEks") || "ALL"; // ALL, BELUM, MENUNGGU_VERIF, TUNTAS
   const q = searchParams.get("q") || "";
 
+  const activeDufahName = await getActiveDufahName();
+  let dufah = null;
+  if (activeDufahName) {
+    dufah = await prisma.dufah.findUnique({ where: { nama: activeDufahName } });
+  }
+
   try {
     const whereClause: any = {
       statusTabayun: "PELANGGAR"
     };
+
+    if (dufah) {
+      const startDate = dufah.usbu1StartDate;
+      const endDate = dufah.usbu3EndDate || dufah.usbu2EndDate || dufah.usbu1EndDate;
+      if (startDate && endDate) {
+        const queryEndDate = new Date(endDate);
+        queryEndDate.setHours(23, 59, 59, 999);
+        whereClause.laporan = {
+          waktuMelanggar: { gte: startDate, lte: queryEndDate }
+        };
+      }
+    }
 
     if (q) {
       whereClause.santriNama = { contains: q, mode: 'insensitive' };

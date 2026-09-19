@@ -47,7 +47,7 @@ export async function processAutoAbsensiIzin(
   // Juga ambil sesi tambahan dari program santri
   const riwayat = await prisma.riwayatSantri.findUnique({
     where: { id: riwayatId },
-    select: { programId: true }
+    select: { programId: true, santriId: true }
   });
   if (riwayat?.programId) {
     const sesiTambahan = await prisma.sesiTambahanProgram.findMany({
@@ -136,6 +136,32 @@ export async function processAutoAbsensiIzin(
               where: { riwayatId_kategoriId_tanggal: { riwayatId, kategoriId: kSesi.kategoriId, tanggal: date } },
               update: { status: statusAbsen, keterangan },
               create: { riwayatId, kategoriId: kSesi.kategoriId, tanggal: date, status: statusAbsen, keterangan }
+            });
+         }
+       }
+    }
+
+    // 4. Absen Ta'birot (Eager inject, khusus TABIROT/HARIAN/BERHARI_HARI/KELUAR_PARE)
+    if (riwayat?.santriId && (tipeIzin === "BERHARI_HARI" || tipeIzin === "HARIAN" || (tipeIzin as any) === "TABIROT" || tipeIzin === "KELUAR_PARE")) {
+       const activeTabirot = await prisma.kelompokTabirot.findMany({
+         where: { 
+            isActive: true,
+            anggotaList: {
+              some: { santriId: riwayat.santriId }
+            }
+         }
+       });
+
+       for (const kTab of activeTabirot) {
+         const existingTab = await prisma.absenTabirot.findUnique({
+           where: { kelompokId_santriId_tanggal: { kelompokId: kTab.id, santriId: riwayat.santriId, tanggal: date } }
+         });
+         
+         if (!existingTab || existingTab.status === "ALPHA") {
+            await prisma.absenTabirot.upsert({
+              where: { kelompokId_santriId_tanggal: { kelompokId: kTab.id, santriId: riwayat.santriId, tanggal: date } },
+              update: { status: statusAbsen, keterangan },
+              create: { kelompokId: kTab.id, santriId: riwayat.santriId, tanggal: date, status: statusAbsen as any, keterangan }
             });
          }
        }

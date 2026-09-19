@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { AlertTriangle, Clock, MapPin, MessageSquare, Image as ImageIcon, Users, CheckCircle2, ChevronRight, X, Loader2, BarChart3, Filter, Award, Search } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { AlertTriangle, Clock, MapPin, MessageSquare, Image as ImageIcon, Users, CheckCircle2, ChevronRight, X, Loader2, BarChart3, Filter, Award, Search, Copy, Plus, FileText } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Pelanggar = {
@@ -53,6 +53,26 @@ export default function TabayunMukholifPage() {
   // Stats State
   const [statsData, setStatsData] = useState<any>(null);
   const [statsUsbu, setStatsUsbu] = useState("ALL");
+
+  // Tambah Laporan Admin State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [pelanggarSearchQuery, setPelanggarSearchQuery] = useState("");
+  const [pelanggarSearchResults, setPelanggarSearchResults] = useState<any[]>([]);
+  const [isSearchingPelanggar, setIsSearchingPelanggar] = useState(false);
+  const [addFormSelectedPelanggar, setAddFormSelectedPelanggar] = useState<any[]>([]);
+  const [addForm, setAddForm] = useState({
+    tanggalKejadian: "",
+    jamKejadian: "12",
+    menitKejadian: "00",
+    tempatMelanggar: "",
+    perkataan: "",
+    detailKejadian: "",
+    pencatat: "ADMIN",
+    jasusId: "",
+    jasusNama: ""
+  });
+  const searchTimeoutRef = useRef<any>(null);
+  const [isSubmittingLaporan, setIsSubmittingLaporan] = useState(false);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -136,6 +156,130 @@ export default function TabayunMukholifPage() {
     }));
   };
 
+  const handleCopyPanggilan = () => {
+    const grupMahkamah: any = {};
+    const grupBaru: any = {};
+    const formatter = new Intl.DateTimeFormat('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    laporanList.forEach(laporan => {
+      const d = new Date(laporan.waktuMelanggar);
+      const dateLabel = formatter.format(d);
+      const unverified = laporan.pelanggarList.filter(p => !p.statusTabayun || p.statusTabayun === "TIDAK_HADIR");
+      
+      unverified.forEach(p => {
+        if (p.jumlahTidakHadir > 0) {
+          if (!grupMahkamah[dateLabel]) grupMahkamah[dateLabel] = [];
+          grupMahkamah[dateLabel].push(p);
+        } else {
+          if (!grupBaru[dateLabel]) grupBaru[dateLabel] = [];
+          grupBaru[dateLabel].push(p);
+        }
+      });
+    });
+
+    if (Object.keys(grupMahkamah).length === 0 && Object.keys(grupBaru).length === 0) {
+       toast.error("Tidak ada yang menunggu panggilan");
+       return;
+    }
+    
+    let output = "📍 *تنبيه*\nيرجى من الأسماء التالية الاتجاه إلى الرواق التنفيذي في قسم اللغة، الساعة حتى الساعة الواحدة نهارا اليوم\nDiharapkan nama-nama dibawah ini, untuk menghadap ke ruang pengurus dibagian kebahasaan sampai pukul 13.00 hari ini\n\n";
+    
+    if (Object.keys(grupMahkamah).length > 0) {
+      output += "*Tidak Mahkamah⚠️*\n";
+      Object.keys(grupMahkamah).forEach(dateStr => {
+        output += `♦️*${dateStr}*\n\n`;
+        grupMahkamah[dateStr].forEach((p: any) => {
+           const nama = p.santriNama || p.santri?.nama || "Tanpa Nama";
+           const kelasAsrama = [p.santriKelas, p.santriAsrama].filter(Boolean).join(" • ");
+           const suffix = kelasAsrama ? `_${kelasAsrama}` : "";
+           let mark = p.jumlahTidakHadir > 0 ? ` *${p.jumlahTidakHadir}x*` : "";
+           output += `- ${nama}${suffix}${mark}\n`;
+        });
+        output += "\n";
+      });
+    }
+
+    if (Object.keys(grupBaru).length > 0) {
+      output += "*Panggilan Baru (Belum Tabayun)*\n";
+      Object.keys(grupBaru).forEach(dateStr => {
+        output += `♦️*${dateStr}*\n\n`;
+        grupBaru[dateStr].forEach((p: any) => {
+           const nama = p.santriNama || p.santri?.nama || "Tanpa Nama";
+           const kelasAsrama = [p.santriKelas, p.santriAsrama].filter(Boolean).join(" • ");
+           const suffix = kelasAsrama ? `_${kelasAsrama}` : "";
+           output += `- ${nama}${suffix}\n`;
+        });
+        output += "\n";
+      });
+    }
+    
+    output += "NB : berlaku sanksi tambahan bagi yang telat ataupun tidak hadir.\n";
+    navigator.clipboard.writeText(output);
+    toast.success("Berhasil dicopy ke clipboard!");
+  };
+
+  const handlePelanggarSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const q = e.target.value;
+    setPelanggarSearchQuery(q);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    if (q.length < 2) { setPelanggarSearchResults([]); return; }
+    setIsSearchingPelanggar(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/santri/mukholif/search-santri?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+           const fetched = await res.json();
+           const filtered = fetched.filter((s: any) => !addFormSelectedPelanggar.some(p => p.id === s.id));
+           setPelanggarSearchResults(filtered);
+        }
+      } catch (err) {} finally { setIsSearchingPelanggar(false); }
+    }, 400);
+  };
+
+  const handleCreateLaporanAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addFormSelectedPelanggar.length === 0) {
+      toast.error("Pilih minimal 1 nama pelanggar"); return;
+    }
+    if (!addForm.tanggalKejadian || !addForm.jamKejadian || !addForm.menitKejadian) {
+      toast.error("Waktu kejadian wajib diisi lengkap"); return;
+    }
+    if (addForm.pencatat === "SANTRI" && (!addForm.jasusId || !addForm.jasusNama)) {
+      toast.error("Nama Jasus Santri harus diisi"); return;
+    }
+
+    const payload = {
+      waktuMelanggar: new Date(`${addForm.tanggalKejadian}T${addForm.jamKejadian}:${addForm.menitKejadian}:00`).toISOString(),
+      tempatMelanggar: addForm.tempatMelanggar,
+      perkataanYgDiucapkan: addForm.perkataan,
+      detailKejadian: addForm.detailKejadian,
+      pelanggarIds: addFormSelectedPelanggar.map(p => p.id),
+      pelaporKustomId: addForm.pencatat === "SANTRI" ? addForm.jasusId : undefined,
+      pelaporKustomNama: addForm.pencatat === "SANTRI" ? addForm.jasusNama : undefined,
+    };
+
+    setIsSubmittingLaporan(true);
+    try {
+      const res = await fetch("/api/admin/mukholif", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ laporan: [payload] })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan laporan");
+      toast.success("Laporan berhasil dibuat");
+      
+      setShowAddForm(false);
+      setAddFormSelectedPelanggar([]);
+      setAddForm({ ...addForm, tanggalKejadian: "", tempatMelanggar: "", perkataan: "", detailKejadian: "", jasusId: "", jasusNama: "" });
+      fetchLaporan();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmittingLaporan(false);
+    }
+  };
+
   const submitTabayun = async () => {
     if (!selectedLaporan) return;
     
@@ -177,19 +321,27 @@ export default function TabayunMukholifPage() {
           <p className="text-[var(--color-text-muted)] text-sm mt-1">Verifikasi laporan pelanggaran bahasa dari Jasus.</p>
         </div>
         
-        <div className="flex bg-[var(--color-surface)] p-1 rounded-xl shadow-inner border border-slate-200">
+        <div className="flex gap-2">
           <button
-            onClick={() => setActiveTab("daftar")}
-            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === "daftar" ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-gray-500 hover:text-slate-700 hover:bg-slate-50/50"}`}
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-2 px-4 py-2 font-bold text-sm bg-emerald-600 text-white rounded-xl shadow-md hover:bg-emerald-700 transition-all"
           >
-            <AlertTriangle size={16} /> Daftar Laporan
+            <Plus size={16} /> Tambah Laporan
           </button>
-          <button
-            onClick={() => setActiveTab("statistik")}
-            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === "statistik" ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-gray-500 hover:text-slate-700 hover:bg-slate-50/50"}`}
-          >
-            <BarChart3 size={16} /> Statistik
-          </button>
+          <div className="flex bg-[var(--color-surface)] p-1 rounded-xl shadow-inner border border-slate-200">
+            <button
+              onClick={() => setActiveTab("daftar")}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === "daftar" ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-gray-500 hover:text-slate-700 hover:bg-slate-50/50"}`}
+            >
+              <AlertTriangle size={16} /> Daftar Laporan
+            </button>
+            <button
+              onClick={() => setActiveTab("statistik")}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${activeTab === "statistik" ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-gray-500 hover:text-slate-700 hover:bg-slate-50/50"}`}
+            >
+              <BarChart3 size={16} /> Statistik
+            </button>
+          </div>
         </div>
       </div>
 
@@ -213,7 +365,14 @@ export default function TabayunMukholifPage() {
 
               {/* Status Filter */}
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <Filter className="w-4 h-4 text-gray-400" />
+                {/* Copy Button */}
+                <button 
+                  onClick={handleCopyPanggilan}
+                  className="px-4 py-1.5 flex items-center gap-2 text-sm font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 rounded-xl transition border border-amber-200 shadow-sm whitespace-nowrap"
+                >
+                  <Copy size={16} /> <span className="hidden sm:inline">Copy Panggilan</span>
+                </button>
+                <Filter className="w-4 h-4 text-gray-400 ml-2" />
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value as any)}
@@ -351,6 +510,164 @@ export default function TabayunMukholifPage() {
               })()}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal Tambah Laporan Admin */}
+      {showAddForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-[2rem] w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-slate-50 relative overflow-hidden">
+               <div className="absolute top-0 right-0 -mr-8 -mt-8 opacity-10"><FileText className="w-32 h-32" /></div>
+               <div className="relative">
+                 <h3 className="text-xl font-bold text-slate-800">Tambah Laporan Pelanggaran</h3>
+                 <p className="text-xs text-gray-500 mt-1">Buat laporan baru atas nama Admin atau Jasus Santri.</p>
+               </div>
+               <button onClick={() => setShowAddForm(false)} className="p-2 bg-white rounded-full text-gray-500 hover:text-red-500 shadow-sm border border-gray-200 transition-colors z-10">
+                 <X className="w-5 h-5" />
+               </button>
+            </div>
+            
+            <form onSubmit={handleCreateLaporanAdmin} className="flex-1 flex flex-col overflow-hidden">
+              <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-white">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Nama Pelanggar *</label>
+                  <div className="relative">
+                    <input type="text" placeholder="Ketik nama santri/pelanggar (min 2 huruf)..." value={pelanggarSearchQuery} onChange={handlePelanggarSearch}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm" />
+                    {isSearchingPelanggar && <Loader2 className="absolute right-4 top-3.5 h-5 w-5 animate-spin text-gray-400" />}
+                    {pelanggarSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                        {pelanggarSearchResults.map(santri => (
+                          <button type="button" key={santri.id}
+                            onClick={() => { setAddFormSelectedPelanggar([...addFormSelectedPelanggar, santri]); setPelanggarSearchQuery(""); setPelanggarSearchResults([]); }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-gray-50 flex justify-between items-center group">
+                            <div>
+                              <p className="font-bold text-sm text-slate-800 group-hover:text-emerald-600 transition-colors">{santri.nama}</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{santri.kelas} • {santri.asrama}</p>
+                            </div>
+                            <Plus className="h-5 w-5 text-gray-300 group-hover:text-emerald-600" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {addFormSelectedPelanggar.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {addFormSelectedPelanggar.map(p => (
+                        <div key={p.id} className="bg-red-50 text-red-700 border border-red-100 px-3 py-2 rounded-xl flex items-center justify-between gap-2 text-sm font-semibold">
+                          <AlertTriangle size={14} className="text-red-500" />
+                          {p.nama}
+                          <button type="button" onClick={() => setAddFormSelectedPelanggar(addFormSelectedPelanggar.filter(x => x.id !== p.id))} className="p-1 hover:bg-red-100 rounded-lg ml-1">
+                            <X size={14} className="text-red-500 hover:text-red-900" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Tanggal & Waktu Kejadian *</label>
+                    <div className="flex gap-2">
+                       <input type="date" required value={addForm.tanggalKejadian} onChange={e => setAddForm({...addForm, tanggalKejadian: e.target.value})}
+                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm font-medium text-slate-700" />
+                       <div className="flex items-center gap-1 shrink-0">
+                         <select value={addForm.jamKejadian} onChange={e => setAddForm({...addForm, jamKejadian: e.target.value})} className="w-[60px] px-2 py-3 rounded-xl border border-gray-200 text-sm font-bold bg-slate-50 relative outline-none focus:ring-2 focus:ring-[var(--color-primary-100)]">
+                            {Array.from({ length: 24 }).map((_, i) => <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>)}
+                         </select>
+                         <span className="font-bold text-slate-400">:</span>
+                         <select value={addForm.menitKejadian} onChange={e => setAddForm({...addForm, menitKejadian: e.target.value})} className="w-[60px] px-2 py-3 rounded-xl border border-gray-200 text-sm font-bold bg-slate-50 relative outline-none focus:ring-2 focus:ring-[var(--color-primary-100)]">
+                            {Array.from({ length: 60 }).map((_, i) => <option key={i} value={i.toString().padStart(2, '0')}>{i.toString().padStart(2, '0')}</option>)}
+                         </select>
+                       </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">Tempat Melanggar *</label>
+                    <input type="text" required placeholder="Contoh: Depan Mat'am" value={addForm.tempatMelanggar} onChange={e => setAddForm({...addForm, tempatMelanggar: e.target.value})}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Perkataan yang diucapkan *</label>
+                  <textarea required rows={2} placeholder="Tuliskan ucapan yang melanggar..." value={addForm.perkataan} onChange={e => setAddForm({...addForm, perkataan: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm resize-none" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Detail Keterangan</label>
+                  <textarea rows={2} value={addForm.detailKejadian} onChange={e => setAddForm({...addForm, detailKejadian: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[var(--color-primary)] outline-none text-sm resize-none" />
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 pb-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Status Pencatat Laporan</label>
+                  <div className="flex gap-4 mb-4">
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-sm text-slate-700">
+                      <input type="radio" name="pencatat" value="ADMIN" checked={addForm.pencatat === "ADMIN"} onChange={() => setAddForm({...addForm, pencatat: "ADMIN", jasusId: "", jasusNama: ""})} className="hidden" />
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${addForm.pencatat === "ADMIN" ? "border-[var(--color-primary)]" : "border-slate-300"}`}>
+                         {addForm.pencatat === "ADMIN" && <div className="w-2 h-2 rounded-full bg-[var(--color-primary)]" />}
+                      </div> Admin Sendiri
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer font-semibold text-sm text-slate-700">
+                      <input type="radio" name="pencatat" value="SANTRI" checked={addForm.pencatat === "SANTRI"} onChange={() => setAddForm({...addForm, pencatat: "SANTRI"})} className="hidden" />
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${addForm.pencatat === "SANTRI" ? "border-[var(--color-primary)]" : "border-slate-300"}`}>
+                         {addForm.pencatat === "SANTRI" && <div className="w-2 h-2 rounded-full bg-[var(--color-primary)]" />}
+                      </div> Santri (Jasus)
+                    </label>
+                  </div>
+                  
+                  {addForm.pencatat === "SANTRI" && (
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 relative">
+                       <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">Ketik Nama Jasus Asli</label>
+                       {addForm.jasusId ? (
+                         <div className="flex items-center gap-2">
+                            <div className="bg-white border px-3 py-2 rounded-lg flex items-center gap-2 flex-1 shadow-sm"><CheckCircle2 size={16} className="text-[var(--color-primary)]" /> <span className="text-sm font-bold text-slate-800">{addForm.jasusNama}</span></div>
+                            <button type="button" onClick={() => setAddForm({...addForm, jasusId: "", jasusNama: ""})} className="p-2 text-rose-500 bg-white border rounded-lg hover:bg-rose-50"><X size={16} /></button>
+                         </div>
+                       ) : (
+                         <div className="relative">
+                            <input type="text" placeholder="Ketik nama Jasus asli di sini..." id="custom_jasus_search" onChange={async (e) => {
+                               const q = e.target.value;
+                               if(q.length < 2) return;
+                               const res = await fetch(`/api/santri/mukholif/search-santri?q=${encodeURIComponent(q)}`);
+                               if (res.ok) {
+                                 const f = await res.json();
+                                 const c = document.getElementById("jasus_res");
+                                 const escapeHtml = (unsafe: string) => unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                                 if (c) c.innerHTML = f.map((x:any) => `<div class="p-3 border-b hover:bg-slate-50 cursor-pointer font-bold text-sm" data-id="${escapeHtml(x.id)}" data-name="${escapeHtml(x.nama)}">${escapeHtml(x.nama)} <span class="font-normal text-xs text-gray-500">${escapeHtml(x.kelas)}</span></div>`).join('');
+                               }
+                            }} className="w-full px-4 py-2.5 rounded-lg border border-gray-200 outline-none text-sm bg-white" />
+                            <div id="jasus_res" className="absolute z-10 w-full bg-white shadow-xl max-h-40 overflow-y-auto border border-gray-100 rounded-lg mt-1" onClick={(e: any) => {
+                               const t = e.target.closest("div[data-id]");
+                               if (t) {
+                                  setAddForm({...addForm, jasusId: t.dataset.id, jasusNama: t.dataset.name});
+                                  const searchInp = document.getElementById("custom_jasus_search") as HTMLInputElement;
+                                  if (searchInp) searchInp.value = "";
+                                  const c = document.getElementById("jasus_res");
+                                  if (c) c.innerHTML = "";
+                               }
+                            }}></div>
+                         </div>
+                       )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              <div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3">
+                <button type="button" onClick={() => setShowAddForm(false)} className="px-5 py-2 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-200">
+                  Batal
+                </button>
+                <button type="submit" disabled={isSubmittingLaporan} className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 transition-all text-sm disabled:opacity-50">
+                  {isSubmittingLaporan ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Tambahkan Laporan
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

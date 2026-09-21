@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     const sesiTauzi = activeSesiList[0];
     let programId = undefined;
-    
+
     // Cek apakah sudah pernah membuat peserta tauzi di database
     let peserta = await prisma.pesertaTauzi.findUnique({
       where: {
@@ -55,32 +55,32 @@ export async function POST(request: Request) {
     } else {
       // AMBIL DARI PPDB
       try {
-        const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.com';
+        const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
         const PPDB_API_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
-        
+
         const ppdbRes = await fetch(`${PPDB_BASE_URL}/api/integrasi/siakad/status?nis=${santri.id}`, {
           method: 'GET',
           headers: { 'x-api-key': PPDB_API_KEY, 'Accept': 'application/json' },
         });
-        
+
         if (ppdbRes.ok) {
           const ppdbData = await ppdbRes.json();
           // Cek apakah ada program aktif dari PPDB (menggunakan array dari meta programTersedia yang ditandai atau info masaAktif)
           // Secara default integrasi status memberitahu sisa durasi. Jika tidak ada durasi, mungkin dia santri baru di SIAKAD.
           // Fallback: kita gunakan riwayat terbaru dari DB siakad jika dia pernah punya (Kategori Lama).
           if (ppdbData?.data?.masaAktif?.sisaKoutaBulan > 0) {
-             // old santri
-             const latestRiwayat = santri.riwayatRecords[0];
-             if (latestRiwayat?.programId) {
-                programId = latestRiwayat.programId;
-             }
+            // old santri
+            const latestRiwayat = santri.riwayatRecords[0];
+            if (latestRiwayat?.programId) {
+              programId = latestRiwayat.programId;
+            }
           }
         }
       } catch (e) {
         // Fallback jika API down
         console.error("Gagal konek PPDB", e);
       }
-      
+
       // Fallback santri lama yg API PPDB nya mem-bypass imunify tapi riwayat ada
       if (!programId && santri.riwayatRecords[0]?.programId) {
         programId = santri.riwayatRecords[0].programId;

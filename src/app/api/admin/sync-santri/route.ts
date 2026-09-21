@@ -42,10 +42,19 @@ type ApiSantriResponse = {
 export async function POST() {
   try {
     const apiKey = process.env.PPDB_API_KEY || "markaz-siakad-api-2026";
-    const response = await fetch(
-      `${PPDB_URL}/api/santri/siakad?key=${apiKey}&filter=AKTIF`,
-      { cache: "no-store" }
-    );
+    let response: Response;
+    try {
+      response = await fetch(
+        `${PPDB_URL}/api/santri/siakad?key=${apiKey}&filter=AKTIF`,
+        { cache: "no-store", signal: AbortSignal.timeout(8000) }
+      );
+    } catch (fetchErr: any) {
+      console.warn('[sync-santri] Tidak dapat menjangkau server PPDB:', fetchErr?.message);
+      return NextResponse.json(
+        { error: 'Server PPDB tidak dapat dijangkau saat ini. Sinkronisasi dilewati — coba lagi nanti.' },
+        { status: 503 }
+      );
+    }
 
     if (!response.ok) {
       return NextResponse.json(
@@ -107,7 +116,7 @@ export async function POST() {
       // Prioritaskan ASSIGNED. Tapi jika tidak ada ASSIGNED di riwayat TERBARU,
       // kita perbolehkan PRE_LIST untuk kasus Akbarnas B2 (dimana lemari blm di-assign ulang).
       let targetRiwayat = santri.riwayat?.find((r: any) => r.status === "ASSIGNED");
-      
+
       // Jika riwayat terbaru di PPDB (index 0) adalah PRE_LIST, gunakan itu sbg ganti
       if (santri.riwayat && santri.riwayat[0]?.status === "PRE_LIST") {
         targetRiwayat = santri.riwayat[0];
@@ -185,7 +194,7 @@ export async function POST() {
     // ValidSantri berisi semua santri yang masih aktif di PPDB.
     // Jika ada santri di lokal yang isAktif = true, tapi ID-nya tidak ada di validSantri, berarti dia sudah nonaktif.
     const activeSantriIdsInPpdb = new Set(validSantri.map(s => s.nis as string));
-    
+
     const localActiveSantri = await prisma.santriInternal.findMany({
       where: { isAktif: true },
       select: { id: true }
@@ -199,9 +208,9 @@ export async function POST() {
     if (santriToDeactivate.length > 0) {
       const updateResult = await prisma.santriInternal.updateMany({
         where: { id: { in: santriToDeactivate } },
-        data: { 
+        data: {
           isAktif: false,
-          lastSyncedAt: now 
+          lastSyncedAt: now
         }
       });
       deactivatedCount = updateResult.count;
@@ -255,7 +264,7 @@ export async function POST() {
           pr.program &&
           pr.program.nama_indo.toLowerCase().includes("akbarnas")
         ) {
-           // We keep the old akbarnas logic to auto carry over if needed
+          // We keep the old akbarnas logic to auto carry over if needed
           const wasBulan2 = pr.kelas?.is_akbarnas_b2;
           if (pr.kelasId && pr.programId && !wasBulan2) {
             santriToAkbarnasClass.set(pr.santriId, {
@@ -270,21 +279,21 @@ export async function POST() {
       const allPrograms = await prisma.program.findMany({ select: { id: true, nama_indo: true } });
       const programMap = new Map<string, string>();
       allPrograms.forEach(p => {
-         programMap.set(p.nama_indo.toLowerCase().trim(), p.id);
+        programMap.set(p.nama_indo.toLowerCase().trim(), p.id);
       });
 
       // ===== Fetch programAktif dari PPDB per-santri status endpoint =====
       // API bulk PPDB hanya mengembalikan programId (UUID PPDB, bukan SIAKAD).
       // Endpoint /api/integrasi/siakad/status?nis=xxx mengembalikan "programAktif" sebagai NAMA string.
-      const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.com';
+      const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
       const PPDB_SIAKAD_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
-      
+
       const santriProgramMap = new Map<string, string>();
-      
+
       // Ambil santri yang programnya masih null (baik yang sudah ada riwayat maupun yang baru)
       const santriNeedingProgram = activeSantriWithDufah.filter(s => {
-         const existingRec = existingRiwayat.find(r => r.santriId === s.id);
-         return !existingRec?.programId && !santriToAkbarnasClass.has(s.id);
+        const existingRec = existingRiwayat.find(r => r.santriId === s.id);
+        return !existingRec?.programId && !santriToAkbarnasClass.has(s.id);
       });
 
       // Fetch data per-santri secara paralel (batch 10)
@@ -301,6 +310,7 @@ export async function POST() {
                   'Accept': 'application/json',
                   'User-Agent': 'Mozilla/5.0',
                 },
+                signal: AbortSignal.timeout(5000),
               });
               if (res.ok) {
                 const data = await res.json();
@@ -329,7 +339,7 @@ export async function POST() {
           data: missingRiwayat.map((s) => {
             const pastAkbarnas = santriToAkbarnasClass.get(s.id);
             const activeProgramId = santriProgramMap.get(s.id) || null;
-            
+
             if (pastAkbarnas) continuingAkbarnasCount++;
             return {
               santriId: s.id,

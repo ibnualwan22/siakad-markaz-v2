@@ -34,7 +34,7 @@ export async function GET() {
     }
 
     const data = await res.json();
-    
+
     // Imunify360 returns HTTP 200 but without data/meta (usually `{ message: "Access denied..." }`)
     if (!data.meta && data.message) {
       return NextResponse.json(
@@ -42,7 +42,7 @@ export async function GET() {
         { status: 502 }
       );
     }
-    
+
     if (data.meta && data.meta.programTersedia) {
       console.log("DEBUG_PROGRAM_0:", data.meta.programTersedia[0]);
     }

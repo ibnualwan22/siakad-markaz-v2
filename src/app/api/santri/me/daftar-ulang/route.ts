@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSantriSession } from '@/lib/santri-auth';
 
-const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.com';
+const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
 const PPDB_API_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
 
 export async function POST(request: Request) {

@@ -9,12 +9,12 @@ export async function POST(req: NextRequest) {
     // 1. Validasi Autentikasi
     const authHeader = req.headers.get("authorization");
     const customHeader = req.headers.get("x-webhook-secret");
-    
+
     let token = customHeader;
     if (!token && authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.substring(7);
     }
-    
+
     if (token !== WEBHOOK_SECRET) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -38,9 +38,9 @@ export async function POST(req: NextRequest) {
       }
 
       const validDufahNames = new Set<string>();
-      
+
       let targetRiwayat = santri.riwayat?.find((r: any) => r.status === "ASSIGNED");
-      
+
       // Fallback PRE_LIST
       if (santri.riwayat && santri.riwayat[0]?.status === "PRE_LIST") {
         targetRiwayat = santri.riwayat[0];
@@ -74,33 +74,33 @@ export async function POST(req: NextRequest) {
       if (dufahNama !== "-") {
         const d = await prisma.dufah.findUnique({ where: { nama: dufahNama } });
         if (!d) {
-          await prisma.dufah.create({ data: { nama: dufahNama } }).catch(() => {});
+          await prisma.dufah.create({ data: { nama: dufahNama } }).catch(() => { });
         }
       }
 
       // Opsional: fetch programAktif ke PPDB jika dibutuhkan
       let mappedProgId = null;
       try {
-        const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.com';
+        const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
         const PPDB_SIAKAD_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
         if (PPDB_SIAKAD_KEY && santri.nis) {
           const resProg = await fetch(`${PPDB_BASE_URL}/api/integrasi/siakad/status?nis=${santri.nis}`, {
-             method: 'GET',
-             headers: { 'x-api-key': PPDB_SIAKAD_KEY, 'Accept': 'application/json' },
+            method: 'GET',
+            headers: { 'x-api-key': PPDB_SIAKAD_KEY, 'Accept': 'application/json' },
           });
           if (resProg.ok) {
-             const progData = await resProg.json();
-             const progName = progData?.data?.programAktif;
-             if (progName) {
-                const program = await prisma.program.findFirst({
-                    where: { nama_indo: { equals: progName, mode: 'insensitive' } }
-                });
-                if (program) mappedProgId = program.id;
-             }
+            const progData = await resProg.json();
+            const progName = progData?.data?.programAktif;
+            if (progName) {
+              const program = await prisma.program.findFirst({
+                where: { nama_indo: { equals: progName, mode: 'insensitive' } }
+              });
+              if (program) mappedProgId = program.id;
+            }
           }
         }
       } catch (e) {
-          // ignore error
+        // ignore error
       }
 
       const upsertedSantri = await prisma.santriInternal.upsert({
@@ -146,43 +146,43 @@ export async function POST(req: NextRequest) {
 
       // Update / Create RiwayatSantri if aktif
       if (isActive && dufahNama !== "-" && sakanName !== "-") {
-         const riwayat = await prisma.riwayatSantri.findFirst({
-             where: { santriId: santri.nis, dufahNama: dufahNama }
-         });
+        const riwayat = await prisma.riwayatSantri.findFirst({
+          where: { santriId: santri.nis, dufahNama: dufahNama }
+        });
 
-         if (!riwayat) {
-             const santriRiwayats = await prisma.riwayatSantri.findMany({
-                 where: { santriId: santri.nis },
-                 include: { program: true, kelas: true },
-                 orderBy: { id: 'desc' }
-             });
-             
-             let programId = mappedProgId;
-             let kelasId = null;
+        if (!riwayat) {
+          const santriRiwayats = await prisma.riwayatSantri.findMany({
+            where: { santriId: santri.nis },
+            include: { program: true, kelas: true },
+            orderBy: { id: 'desc' }
+          });
 
-             const pastAkbarnas = santriRiwayats.find(r => r.program?.nama_indo.toLowerCase().includes("akbarnas"));
-             if (pastAkbarnas && !pastAkbarnas.kelas?.is_akbarnas_b2) {
-                 // carry over
-                 programId = pastAkbarnas.programId;
-                 kelasId = pastAkbarnas.kelasId;
-             }
+          let programId = mappedProgId;
+          let kelasId = null;
 
-             await prisma.riwayatSantri.create({
-                 data: {
-                     santriId: santri.nis,
-                     dufahNama: dufahNama,
-                     programId: programId,
-                     kelasId: kelasId,
-                     is_tasmi: false,
-                     status_kelulusan: "TIDAK_LULUS"
-                 }
-             });
-         } else if (mappedProgId && !riwayat.programId) {
-            await prisma.riwayatSantri.update({
-                where: { id: riwayat.id },
-                data: { programId: mappedProgId }
-            });
-         }
+          const pastAkbarnas = santriRiwayats.find(r => r.program?.nama_indo.toLowerCase().includes("akbarnas"));
+          if (pastAkbarnas && !pastAkbarnas.kelas?.is_akbarnas_b2) {
+            // carry over
+            programId = pastAkbarnas.programId;
+            kelasId = pastAkbarnas.kelasId;
+          }
+
+          await prisma.riwayatSantri.create({
+            data: {
+              santriId: santri.nis,
+              dufahNama: dufahNama,
+              programId: programId,
+              kelasId: kelasId,
+              is_tasmi: false,
+              status_kelulusan: "TIDAK_LULUS"
+            }
+          });
+        } else if (mappedProgId && !riwayat.programId) {
+          await prisma.riwayatSantri.update({
+            where: { id: riwayat.id },
+            data: { programId: mappedProgId }
+          });
+        }
       }
 
       return NextResponse.json({

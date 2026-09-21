@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     // ====== LANGKAH 2: Kirim update ke PPDB (best-effort, tidak menghalangi) ======
     let ppdbSynced = false;
     try {
-      const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.com';
+      const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
       const PPDB_SIAKAD_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
 
       if (PPDB_SIAKAD_KEY) {

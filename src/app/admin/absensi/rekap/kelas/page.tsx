@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/permission";
+import { requirePermission, checkPermission } from "@/lib/permission";
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { RekapFilterClient } from "@/components/admin/rekap-filter-client";
@@ -14,7 +14,11 @@ export const dynamic = "force-dynamic";
 export default async function RekapKelasPage() {
   await requirePermission("rekap_kelas");
   const session = await getSession();
-  const isAdmin = session?.role === "ADMIN";
+  
+  const hasRekapKelasEdit = await checkPermission("rekap_kelas_edit");
+  
+  // Jika mereka punya rekap_kelas_edit, mereka bisa melihat semua kelas
+  const isAdmin = session?.role === "ADMIN" || hasRekapKelasEdit;
   const allowedKelasId = session?.kelasId ?? null;
   const isRestricted = !isAdmin && !!allowedKelasId;
 

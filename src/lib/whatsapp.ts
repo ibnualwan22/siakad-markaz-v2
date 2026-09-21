@@ -3,7 +3,7 @@
  * Utility untuk mengirim laporan absensi ke grup WhatsApp .
  */
 
-const WA_API_URL = "https://wa-multi-session.amtsilatipusat.com/api/v1";
+const WA_API_URL = "http://165.22.106.176:8988/api/v1";
 
 /**
  * Mengirim pesan WhatsApp via WA Multi Session API.

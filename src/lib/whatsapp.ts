@@ -3,7 +3,7 @@
  * Utility untuk mengirim laporan absensi ke grup WhatsApp .
  */
 
-const WA_API_URL = "http://165.22.106.176:8988/api/v1";
+const WA_API_URL = "https://wa-multi-session.amtsilatipusat.com/api/v1";
 
 /**
  * Mengirim pesan WhatsApp via WA Multi Session API.
@@ -18,7 +18,7 @@ export async function sendWhatsAppMessage(target: string, message: string, force
 
   // Handle multiple targets if passed comma-separated targets
   const targets = target.split(",").map(t => t.trim()).filter(t => t.length > 0);
-  
+
   if (targets.length === 0) {
     return { success: false, detail: "Target penerima kosong" };
   }
@@ -325,7 +325,7 @@ export function formatCheckoutWaliMessage(data: {
   tanggalCheckout: string;
 }): string {
   const lines: string[] = [];
-  
+
   lines.push(`Assalamu'alaikum Warahmatullahi Wabarakatuh,`);
   lines.push("");
   lines.push(`Pemberitahuan dari SIAKAD Markaz Arabiyah.`);
@@ -361,13 +361,13 @@ export function formatKonfirmasiKeamananMessage(
   lines.push(`🚨 *LAPORAN SANTRI BELUM KONFIRMASI KEHADIRAN* 🚨`);
   lines.push(`Berikut adalah daftar santri dengan status izin *Keluar Pare / Berhari-hari* yang sudah melewati batas waktu izin namun *belum konfirmasi kehadiran* (belum kembali):`);
   lines.push("");
-  
+
   santriList.forEach((s, i) => {
     lines.push(`${i + 1}. *${s.nama}*`);
     lines.push(`   • Sakan: ${s.sakan || "-"}`);
     lines.push(`   • Batas Izin: ${formatTanggalWa(s.tanggalSelesai)}`);
   });
-  
+
   lines.push("");
   lines.push(`Mohon kerjasamanya untuk ditindaklanjuti.`);
   lines.push(`ℹ️ _Sistem Pemantauan Perizinan SIAKAD_`);

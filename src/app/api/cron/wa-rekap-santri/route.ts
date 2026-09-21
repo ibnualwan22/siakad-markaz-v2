@@ -71,14 +71,16 @@ export async function GET(request: NextRequest) {
       usbuLabel = activeUsbu.label;
     }
 
-    const origin = request.nextUrl.origin;
-    // Panggil API rekap detail yang sudah ada untuk santri
-    const fetchUrl = `${origin}/api/admin/absensi/rekap/detail?type=kelas&dari=${dari}&sampai=${sampai}`;
-    
+    // Gunakan localhost untuk self-fetch agar tidak SSL error di dalam Docker container
+    // request.nextUrl.origin bisa mengembalikan URL publik HTTPS yang tidak bisa di-reach dari dalam container
+    const internalOrigin = `http://localhost:${process.env.PORT || 3000}`;
+    const fetchUrl = `${internalOrigin}/api/admin/absensi/rekap/detail?type=kelas&dari=${dari}&sampai=${sampai}`;
+
     const res = await fetch(fetchUrl, {
       headers: {
         cookie: request.headers.get("cookie") || "",
         "x-cron-secret": process.env.CRON_SECRET || "",
+        "x-forwarded-host": request.headers.get("host") || "",
       }
     });
     

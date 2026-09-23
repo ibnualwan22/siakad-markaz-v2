@@ -69,18 +69,18 @@ export async function GET(req: Request) {
       select: {
         id: true,
         status: true,
+        riwayatId: true,
         waktuMulai: true,
         waktuSelesai: true,
         nilaiTotal: true,
         tabCloseCount: true,
         alasanSubmit: true,
-        riwayat: { select: { id: true, santriId: true } },
+        unsavedClient: true,
         _count: {
           select: {
             jawabanList: true  // total jawaban (termasuk kosong)
           }
         },
-        unsavedClient: true,
       }
     });
 
@@ -114,7 +114,7 @@ export async function GET(req: Request) {
     // Indekskan sesi berdasarkan riwayatId
     const sesiMap = new Map();
     for (const sesi of sesiList) {
-      sesiMap.set((sesi as any).riwayat ? (sesi as any).riwayat.id : sesi.riwayatId, sesi);
+      sesiMap.set(sesi.riwayatId, sesi);
     }
 
     const data = activeSantri.map(riwayat => {

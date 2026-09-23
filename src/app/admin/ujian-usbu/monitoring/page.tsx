@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useDeferredValue } from "react";
-import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAlert, Info, Timer, Play, RotateCcw } from "lucide-react";
+import { Monitor, RefreshCw, ShieldAlert, CheckCircle2, LayoutTemplate, ClockAlert, Info, Timer, Play, RotateCcw, WifiOff } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function MonitoringPengejaanPage() {
@@ -250,9 +250,10 @@ export default function MonitoringPengejaanPage() {
                   <th className="px-6 py-4">No</th>
                   <th className="px-6 py-4">Nama Santri</th>
                   <th className="px-6 py-4">Kelas</th>
-                  <th className="px-6 py-4">Status & Waktu</th>
+                  <th className="px-6 py-4">Status &amp; Waktu</th>
                   <th className="px-6 py-4">Progress Pengerjaan</th>
                   <th className="px-6 py-4">Durasi</th>
+                  <th className="px-6 py-4 text-center">Belum Tersimpan</th>
                   <th className="px-6 py-4 text-center">Deteksi Cheat Tab</th>
                   <th className="px-6 py-4 text-right">Aksi</th>
                 </tr>
@@ -302,6 +303,20 @@ export default function MonitoringPengejaanPage() {
                           <Timer size={14} className="text-blue-500"/>
                           {mounted && formatDurasi(d.waktuMulai, d.waktuSelesai, d.status)}
                         </div>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {d.status === "MENGERJAKAN" && d.unsavedClient > 0 ? (
+                        <div
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-600 border border-red-100 animate-pulse"
+                          title={`${d.unsavedClient} jawaban sudah diisi santri tapi belum berhasil tersimpan ke server (sinyal/jaringan bermasalah). Data terakhir diperbarui setiap 30 detik.`}
+                        >
+                          <WifiOff size={12}/> {d.unsavedClient} Jawaban
+                        </div>
+                      ) : d.status === "MENGERJAKAN" ? (
+                        <span className="text-green-500 text-xs font-bold">✓ Aman</span>
                       ) : (
                         <span className="text-gray-300">-</span>
                       )}

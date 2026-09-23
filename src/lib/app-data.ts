@@ -768,10 +768,28 @@ export async function syncStatusKelulusanByProgramIds(programIds: string[]) {
   );
 }
 
-export async function getRiwayatSantriRows() {
+export async function getRiwayatSantriRows(targetDufah?: string) {
+  if (!targetDufah) {
+    return [];
+  }
+
+  const santriInternalList = await prisma.santriInternal.findMany({
+    where: { dufahNama: targetDufah },
+    select: { id: true }
+  });
+
+  const santriIds = santriInternalList.map(s => s.id);
+
+  if (santriIds.length === 0) {
+    return [];
+  }
+
   const [masterSantriList, riwayatList] = await Promise.all([
     getMasterSantriList(),
     prisma.riwayatSantri.findMany({
+      where: {
+        santriId: { in: santriIds },
+      },
       include: {
         santri: true,
         program: {

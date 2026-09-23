@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -13,6 +13,12 @@ export default function ClientMengerjakanUjian() {
   const sesiId = searchParams.get("s");
 
   const [examData, setExamData] = useState<any>(null);
+  const examDataRef = useRef<any>(null); // Ref utk avoid stale closure di handleAnswerSubmit
+  const setExamDataSynced = useCallback((data: any) => {
+    examDataRef.current = data;
+    setExamData(data);
+  }, []);
+
   const [currentIdx, setCurrentIdx] = useState(0);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [hasStarted, setHasStarted] = useState(false);
@@ -31,43 +37,48 @@ export default function ClientMengerjakanUjian() {
 
   useEffect(() => {
     if (!sesiId) return router.replace("/santri/ujian");
-    
-    // Attempt to load from sessionStorage
-    const stored = sessionStorage.getItem(`exam_${sesiId}`);
-    if (!stored) {
-      toast.error("Data ujian tidak ditemukan. Harap login kembali.");
+
+    const initializeData = async () => {
+      // 1. Coba ambil dari localStorage
+      const stored = localStorage.getItem(`exam_${sesiId}`);
+
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.sisaWaktuDetik === undefined && !parsed.predictedEndTime) {
+          localStorage.removeItem(`exam_${sesiId}`);
+          localStorage.removeItem(`exam_versions_${sesiId}`);
+        } else {
+          let remaining = 0;
+          if (parsed.predictedEndTime) {
+            remaining = Math.max(0, Math.floor((parsed.predictedEndTime - Date.now()) / 1000));
+          } else {
+            parsed.predictedEndTime = Date.now() + (parsed.sisaWaktuDetik * 1000);
+            localStorage.setItem(`exam_${sesiId}`, JSON.stringify(parsed));
+            remaining = parsed.sisaWaktuDetik;
+          }
+
+          const storedVers = localStorage.getItem(`exam_versions_${sesiId}`);
+          if (storedVers) {
+            try {
+              const parsedVers = JSON.parse(storedVers);
+              currentVersions.current = new Map(Object.entries(parsedVers.current || {}));
+              savedVersions.current = new Map(Object.entries(parsedVers.saved || {}));
+            } catch(e) {}
+          }
+
+          setExamDataSynced(parsed);
+          setTimeLeft(remaining);
+          return;
+        }
+      }
+
+      // 2. Jika tidak ada di localStorage, jangan langsung tendang. 
+      // Minta user ke halaman utama untuk klik "Meneruskan Ujian" (ini otomatis me-restore data dari server)
+      toast.error("Sesi lokal terhapus. Anda akan dialihkan untuk memuat ulang data ujian dari server.");
       router.replace("/santri/ujian");
-      return;
-    }
+    };
 
-    const parsed = JSON.parse(stored);
-    
-    // Validasi: data harus punya sisaWaktuDetik atau predictedEndTime (format baru)
-    // Jika tidak ada keduanya, berarti data cache lama/rusak — hapus dan minta login ulang
-    if (parsed.sisaWaktuDetik === undefined && !parsed.predictedEndTime) {
-      sessionStorage.removeItem(`exam_${sesiId}`);
-      toast.error("Sesi ujian kedaluwarsa. Silakan masuk ujian kembali dari menu Ujian.");
-      router.replace("/santri/ujian");
-      return;
-    }
-
-    // Hitung sisa waktu
-    let remaining = 0;
-    if (parsed.predictedEndTime) {
-       // Resume: hitung dari prediksi absolute yang sudah disimpan
-       remaining = Math.max(0, Math.floor((parsed.predictedEndTime - Date.now()) / 1000));
-    } else {
-       // Pertama kali di-load dari start API — simpan prediksi absolute
-       parsed.predictedEndTime = Date.now() + (parsed.sisaWaktuDetik * 1000);
-       sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(parsed));
-       remaining = parsed.sisaWaktuDetik;
-    }
-
-    setExamData(parsed);
-    setTimeLeft(remaining);
-
-    // Jangan auto-submit di sini saat mount — biarkan timer effect yang menanganinya
-    // setelah user benar-benar menekan tombol "Mulai Ujian"
+    initializeData();
   }, [sesiId, router]);
 
   // Grace period 2.5s before strict anti-cheat activates 
@@ -98,20 +109,20 @@ export default function ClientMengerjakanUjian() {
   useEffect(() => {
     if (hasStarted && !hasSubmitted.current) {
       requestWakeLock();
-      
+
       // Re-request if visibility changes back to visible (though our anti-cheat usually handles tab switches)
       const handleVisChange = () => {
         if (document.visibilityState === 'visible') {
           requestWakeLock();
         }
       };
-      
+
       document.addEventListener("visibilitychange", handleVisChange);
-      
+
       return () => {
         document.removeEventListener("visibilitychange", handleVisChange);
         if (wakeLockRef.current) {
-          wakeLockRef.current.release().catch(() => {});
+          wakeLockRef.current.release().catch(() => { });
           wakeLockRef.current = null;
         }
       };
@@ -147,7 +158,7 @@ export default function ClientMengerjakanUjian() {
     // sehingga perlu dicek panjang data: ketikan manual selalu 1 karakter per event.
     const handleBeforeInput = (e: InputEvent) => {
       if (
-        e.inputType === 'insertFromPaste' || 
+        e.inputType === 'insertFromPaste' ||
         e.inputType === 'insertFromDrop' ||
         e.inputType === 'insertReplacementText' ||
         (e.inputType === 'insertText' && e.data && e.data.length > 2)
@@ -210,7 +221,7 @@ export default function ClientMengerjakanUjian() {
 
     const handleVisualViewportChange = () => {
       const kbOpen = isVirtualKeyboardOpen();
-      
+
       // Keyboard baru saja DITUTUP (dulu terbuka, sekarang tertutup)
       if (wasKeyboardOpen && !kbOpen) {
         keyboardDismissGraceRef.active = true;
@@ -219,7 +230,7 @@ export default function ClientMengerjakanUjian() {
           keyboardDismissGraceRef.active = false;
         }, 3000); // 3 detik grace period setelah keyboard hilang
       }
-      
+
       wasKeyboardOpen = kbOpen;
 
       // Keyboard-Aware Auto-Scroll
@@ -265,7 +276,7 @@ export default function ClientMengerjakanUjian() {
     //    Jika menyusut >35% tanpa keyboard → split-screen terdeteksi
     //    PENTING: Skip saat orientasi berubah (auto-rotate)
     const orientationGraceRef = { active: false };
-    
+
     const handleOrientationChange = () => {
       // Saat rotasi layar, update baseline dan beri grace period 1.5s
       orientationGraceRef.active = true;
@@ -361,14 +372,15 @@ export default function ClientMengerjakanUjian() {
 
     const pullStatus = async () => {
       try {
-        const res = await fetch(`/api/santri/ujian/status?sesiId=${sesiId}`);
+        const currentFailed = updateFailedCount();
+        const res = await fetch(`/api/santri/ujian/status?sesiId=${sesiId}&unsaved=${currentFailed}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.status && data.status !== "MENGERJAKAN" && !hasSubmitted.current) {
           hasSubmitted.current = true;
           // Keluar fullscreen
           if (document.fullscreenElement && document.exitFullscreen) {
-            document.exitFullscreen().catch(() => {});
+            document.exitFullscreen().catch(() => { });
           }
           toast.error("Ujian telah diakhiri oleh Pengawas/Admin.");
           router.replace(`/santri/ujian/hasil?s=${sesiId}`);
@@ -405,16 +417,44 @@ export default function ClientMengerjakanUjian() {
     setHasStarted(true);
   };
 
-  // ===== SIMPLE BUFFERED SAVE =====
-  // Seperti logika asli: 1 request in-flight pada satu waktu.
-  // Perbedaan kunci: jika ada save baru saat sedang saving, SIMPAN (buffer),
-  // bukan BUANG. Setelah save selesai, buffer langsung diproses.
+  // ===== ROBUST SAVE SYSTEM =====
+  // Perbaikan dari bug jawaban hilang:
+  // 1. savedVersions: track VERSI jawaban (bukan hanya "pernah save") — jika jawaban berubah, versi naik
+  // 2. pendingQueue: Map (bukan single slot) — tidak ada jawaban yang ke-drop
+  // 3. Periodic sync setiap 45 detik — retry otomatis untuk jawaban gagal save
   const isSaving = useRef(false);
-  const pendingSave = useRef<{ soalId: string; payload: any } | null>(null);
-  const savedSoalIds = useRef<Set<string>>(new Set()); // Track soal yang sudah tersimpan di DB
+  const pendingQueue = useRef<Map<string, any>>(new Map()); // Map<soalId, payload> — SEMUA pending disimpan
+  const savedVersions = useRef<Map<string, number>>(new Map()); // Map<soalId, version> — versi terakhir yang berhasil di-save
+  const currentVersions = useRef<Map<string, number>>(new Map()); // Map<soalId, version> — versi terbaru di client
   const [unsavedCount, setUnsavedCount] = useState(0);
+  const [failedSaveCount, setFailedSaveCount] = useState(0);
 
-  const processSave = async (soalId: string, payload: any) => {
+  const persistVersions = useCallback(() => {
+    localStorage.setItem(`exam_versions_${sesiId}`, JSON.stringify({
+      current: Object.fromEntries(currentVersions.current),
+      saved: Object.fromEntries(savedVersions.current)
+    }));
+  }, [sesiId]);
+
+  const updateFailedCount = useCallback(() => {
+    let failed = 0;
+    currentVersions.current.forEach((curVer, soalId) => {
+      const savedVer = savedVersions.current.get(soalId) || 0;
+      if (savedVer < curVer) failed++;
+    });
+    setFailedSaveCount(failed);
+    return failed;
+  }, []);
+
+  const processSave = async (soalId: string, payload: any, version: number) => {
+    // Timeout paksa 15 detik — jika network hang terlalu lama, jangan block queue selamanya
+    const safetyTimer = setTimeout(() => {
+      if (isSaving.current) {
+        isSaving.current = false;
+        updateFailedCount();
+      }
+    }, 15000);
+
     try {
       const res = await fetch("/api/santri/ujian/jawab", {
         method: "POST",
@@ -422,61 +462,137 @@ export default function ClientMengerjakanUjian() {
         body: JSON.stringify({ sesiId, soalId, ...payload })
       });
       if (res.ok) {
-        savedSoalIds.current.add(soalId);
+        // Hanya tandai berhasil jika VERSI yang di-save masih cocok (belum berubah lagi)
+        const curVer = currentVersions.current.get(soalId) || 0;
+        if (version >= curVer) {
+          savedVersions.current.set(soalId, version);
+          persistVersions();
+        }
       }
     } catch (error) {
       console.error("Gagal auto-save:", error);
+      // Jawaban gagal → TIDAK ditandai saved, akan di-retry oleh periodic sync
+    } finally {
+      clearTimeout(safetyTimer);
     }
 
-    // Proses pending save jika ada
-    if (pendingSave.current) {
-      const next = pendingSave.current;
-      pendingSave.current = null;
-      setUnsavedCount(0);
-      await processSave(next.soalId, next.payload);
+    // Proses antrian pending berikutnya (FIFO dari Map)
+    if (pendingQueue.current.size > 0) {
+      const entry = pendingQueue.current.entries().next().value as [string, any];
+      const nextSoalId = entry[0];
+      const nextPayload = entry[1];
+      pendingQueue.current.delete(nextSoalId);
+      setUnsavedCount(pendingQueue.current.size);
+      const nextVer = currentVersions.current.get(nextSoalId) || 0;
+      await processSave(nextSoalId, nextPayload, nextVer);
     } else {
       isSaving.current = false;
       setUnsavedCount(0);
+      updateFailedCount();
     }
   };
 
-  // Flush sebelum submit: hanya kirim jawaban yang BELUM ter-confirm di DB
+  // Periodic Batch Sync — setiap 45 detik, kirim ulang jawaban yang belum tersimpan di DB
+  useEffect(() => {
+    if (!hasStarted || hasSubmitted.current || !sesiId) return;
+
+    const syncInterval = setInterval(async () => {
+      if (hasSubmitted.current || isSaving.current) return;
+
+      const stored = localStorage.getItem(`exam_${sesiId}`);
+      if (!stored) return;
+
+      try {
+        const parsed = JSON.parse(stored);
+        if (!parsed.soal) return;
+
+        // Cari jawaban yang: (a) sudah diisi, DAN (b) versi di DB belum cocok versi terbaru
+        const needSync = parsed.soal.filter((s: any) => {
+          const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
+          if (!hasAnswer) return false;
+          const savedVer = savedVersions.current.get(s.soalId) || 0;
+          const curVer = currentVersions.current.get(s.soalId) || 0;
+          return savedVer < curVer; // Belum tersimpan atau sudah berubah sejak terakhir disimpan
+        });
+
+        if (needSync.length === 0) return;
+
+        // Kirim serial, max 10 per batch agar tidak membanjiri server
+        const batch = needSync.slice(0, 10);
+        for (const s of batch) {
+          if (hasSubmitted.current) break;
+          const p: any = {};
+          if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
+          if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
+          if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
+          if (s.rpiId) p.rpiId = s.rpiId;
+          try {
+            const res = await fetch("/api/santri/ujian/jawab", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
+            });
+            if (res.ok) {
+              const curVer = currentVersions.current.get(s.soalId) || 0;
+              savedVersions.current.set(s.soalId, curVer);
+            }
+          } catch (e) { }
+        }
+        
+        updateFailedCount();
+      } catch (e) {
+        console.error("[SYNC] Error:", e);
+      }
+    }, 45000); // Setiap 45 detik
+
+    return () => clearInterval(syncInterval);
+  }, [hasStarted, sesiId]);
+
+  // Flush sebelum submit: kirim SEMUA jawaban yang belum ter-confirm di DB
   const flushUnsavedAnswers = async () => {
     // Tunggu save yang sedang berjalan selesai
     const start = Date.now();
-    while (isSaving.current && Date.now() - start < 10000) {
+    while (isSaving.current && Date.now() - start < 15000) {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    const stored = sessionStorage.getItem(`exam_${sesiId}`);
+    const stored = localStorage.getItem(`exam_${sesiId}`);
     if (!stored) return;
 
     try {
       const parsed = JSON.parse(stored);
       if (!parsed.soal) return;
 
-      // Hanya kirim jawaban yang sudah diisi DAN belum ter-confirm saved
-      const unsaved = parsed.soal.filter((s: any) =>
-        !savedSoalIds.current.has(s.soalId) &&
-        (s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0))
-      );
+      // Kirim SEMUA jawaban yang sudah diisi dan versinya belum cocok
+      const unsaved = parsed.soal.filter((s: any) => {
+        const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
+        if (!hasAnswer) return false;
+        const savedVer = savedVersions.current.get(s.soalId) || 0;
+        const curVer = currentVersions.current.get(s.soalId) || 0;
+        return savedVer < curVer;
+      });
 
       if (unsaved.length === 0) return;
 
-      // Kirim secara serial (1 per 1, tidak membanjiri server)
+      // Kirim secara serial dengan retry
       for (const s of unsaved) {
         const p: any = {};
         if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
         if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
         if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
         if (s.rpiId) p.rpiId = s.rpiId;
-        try {
-          await fetch("/api/santri/ujian/jawab", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
-          });
-        } catch (e) {}
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await fetch("/api/santri/ujian/jawab", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
+            });
+            if (res.ok) break; // Berhasil, lanjut ke soal berikutnya
+          } catch (e) {
+            if (attempt === 0) await new Promise(r => setTimeout(r, 500)); // Tunggu 500ms sebelum retry
+          }
+        }
       }
     } catch (e) {
       console.error("[FLUSH] Error:", e);
@@ -490,13 +606,16 @@ export default function ClientMengerjakanUjian() {
 
     // PENTING: Flush semua jawaban ke DB sebelum submit
     await flushUnsavedAnswers();
-    
+
     // Hapus local storage
-    if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
-    
+    if (sesiId) {
+      localStorage.removeItem(`exam_${sesiId}`);
+      localStorage.removeItem(`exam_versions_${sesiId}`);
+    }
+
     // Keluar fullscreen
     if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
 
     try {
@@ -510,7 +629,7 @@ export default function ClientMengerjakanUjian() {
         router.replace(`/santri/ujian/hasil?s=${sesiId}`);
       }
     } catch {
-       router.replace("/santri/ujian");
+      router.replace("/santri/ujian");
     }
   };
 
@@ -521,11 +640,14 @@ export default function ClientMengerjakanUjian() {
 
     // PENTING: Flush semua jawaban ke DB sebelum submit
     await flushUnsavedAnswers();
-    
-    if (sesiId) sessionStorage.removeItem(`exam_${sesiId}`);
-    
+
+    if (sesiId) {
+      localStorage.removeItem(`exam_${sesiId}`);
+      localStorage.removeItem(`exam_versions_${sesiId}`);
+    }
+
     if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
+      document.exitFullscreen().catch(() => { });
     }
 
     try {
@@ -541,60 +663,77 @@ export default function ClientMengerjakanUjian() {
         throw new Error("Failed");
       }
     } catch (err) {
-       toast.error("Gagal submit. Server tidak merespon.");
-       router.replace("/santri/ujian");
+      toast.error("Gagal submit. Server tidak merespon.");
+      router.replace("/santri/ujian");
     }
   };
 
-  const handleAnswerSubmit = async (soalId: string, payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => {
+  const handleAnswerSubmit = useCallback((soalId: string, payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => {
     if (hasSubmitted.current) return;
-    
-    // Optimistic UI + SessionStorage (selalu berhasil)
-    const newExamData = { ...examData };
-    const curSoal = newExamData.soal.find((s:any) => s.soalId === soalId);
+    // Gunakan REF — bukan state — agar selalu dapat data terbaru (hindari stale closure)
+    const latestExamData = examDataRef.current;
+    if (!latestExamData) return;
+
+    // Naikkan versi jawaban untuk soal ini
+    const newVersion = (currentVersions.current.get(soalId) || 0) + 1;
+    currentVersions.current.set(soalId, newVersion);
+
+    // Optimistic UI + localStorage (selalu berhasil, deep copy soal array)
+    const newSoalArr = latestExamData.soal.map((s: any) => s.soalId === soalId ? { ...s } : s);
+    const curSoal = newSoalArr.find((s: any) => s.soalId === soalId);
     if (!curSoal) return;
-    
+
     if (payload.opsiId !== undefined) curSoal.opsiTerpilih = payload.opsiId;
     if (payload.jawabanTeks !== undefined) curSoal.jawabanTeks = payload.jawabanTeks;
     if (payload.jawabanData !== undefined) curSoal.jawabanData = payload.jawabanData;
 
-    setExamData(newExamData);
-    sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
-    
-    // Kirim ke DB (1 request at a time, tidak drop)
+    const newExamData = { ...latestExamData, soal: newSoalArr };
+    setExamDataSynced(newExamData);
+    localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
+    persistVersions();
+
+    // Kirim ke DB — gunakan antrian Map (tidak pernah drop)
     if (isSaving.current) {
-      pendingSave.current = { soalId, payload };
-      setUnsavedCount(1);
+      pendingQueue.current.set(soalId, payload);
+      setUnsavedCount(pendingQueue.current.size);
     } else {
       isSaving.current = true;
-      processSave(soalId, payload);
+      processSave(soalId, payload, newVersion);
     }
-  };
+  }, [sesiId, persistVersions]);
 
-  const toggleRagu = async () => {
+  const toggleRagu = useCallback(() => {
     if (hasSubmitted.current) return;
-    const curSoal = examData.soal[currentIdx];
+    const latestExamData = examDataRef.current;
+    if (!latestExamData) return;
+    const curSoal = latestExamData.soal[currentIdx];
+    if (!curSoal) return;
     const newRagu = (curSoal.rpiId === "RAGU") ? null : "RAGU";
-    
-    const newExamData = { ...examData };
-    newExamData.soal[currentIdx].rpiId = newRagu;
-    setExamData(newExamData);
-    sessionStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
-    
-    // Kirim melalui buffered save — termasuk semua field
+
+    // Deep copy soal array untuk React re-render yang benar
+    const newSoalArr = latestExamData.soal.map((s: any, i: number) => i === currentIdx ? { ...s, rpiId: newRagu } : s);
+    const newExamData = { ...latestExamData, soal: newSoalArr };
+    setExamDataSynced(newExamData);
+    localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
+    persistVersions();
+
+    // Naikkan versi dan kirim melalui robust save
+    const newVersion = (currentVersions.current.get(curSoal.soalId) || 0) + 1;
+    currentVersions.current.set(curSoal.soalId, newVersion);
+
     const payload: any = { rpiId: newRagu };
     if (curSoal.opsiTerpilih) payload.opsiId = curSoal.opsiTerpilih;
     if (curSoal.jawabanTeks) payload.jawabanTeks = curSoal.jawabanTeks;
     if (curSoal.jawabanData && Object.keys(curSoal.jawabanData).length > 0) payload.jawabanData = curSoal.jawabanData;
-    
+
     if (isSaving.current) {
-      pendingSave.current = { soalId: curSoal.soalId, payload };
-      setUnsavedCount(1);
+      pendingQueue.current.set(curSoal.soalId, payload);
+      setUnsavedCount(pendingQueue.current.size);
     } else {
       isSaving.current = true;
-      processSave(curSoal.soalId, payload);
+      processSave(curSoal.soalId, payload, newVersion);
     }
-  };
+  }, [currentIdx, sesiId, persistVersions]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -625,7 +764,7 @@ export default function ClientMengerjakanUjian() {
           <div className="bg-orange-50 text-orange-800 border border-orange-100 rounded-xl p-4 text-sm text-left mb-8 shadow-inner">
             <strong>PERINGATAN:</strong> Segala bentuk perpindahan jendela, notifikasi yang menggeser fokus browser, membuka layar belah dua (split-screen), atau keluar dari Fullscreen akan otomatis menyelesaikan (Submit) ujian Anda.
           </div>
-          <button 
+          <button
             onClick={handleMulai}
             className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl text-lg hover:bg-blue-700 transition shadow-md shadow-blue-200"
           >
@@ -648,8 +787,8 @@ export default function ClientMengerjakanUjian() {
 
   // Failsafe jika currentIdx di luar batas (misal dari cache lama saat mapel ditambah admin)
   const soal = examData.soal[currentIdx];
-  const sameTypeSoals = examData.soal.filter((s:any) => s.tipeSoal === soal.tipeSoal);
-  const currentTypeIdx = sameTypeSoals.findIndex((s:any) => s.soalId === soal.soalId) + 1;
+  const sameTypeSoals = examData.soal.filter((s: any) => s.tipeSoal === soal.tipeSoal);
+  const currentTypeIdx = sameTypeSoals.findIndex((s: any) => s.soalId === soal.soalId) + 1;
   const currentTypeTotal = sameTypeSoals.length;
   const readableType = (soal.tipeSoal || "Soal").replace(/_/g, ' ');
 
@@ -657,14 +796,21 @@ export default function ClientMengerjakanUjian() {
   const answeredCount = examData.soal.filter(isAnswered).length;
   const isLastQuestion = currentIdx === examData.soal.length - 1;
 
-  const raguList = examData.soal.filter((s:any) => s.rpiId === "RAGU");
-  const unansweredList = examData.soal.filter((s:any) => !isAnswered(s));
-  const canSubmit = raguList.length === 0 && unansweredList.length === 0;
+  const raguList = examData.soal.filter((s: any) => s.rpiId === "RAGU");
+  const unansweredList = examData.soal.filter((s: any) => !isAnswered(s));
+  const unsavedList = examData.soal.filter((s: any) => {
+    const Answered = isAnswered(s);
+    const curVer = currentVersions.current.get(s.soalId) || 0;
+    const savedVer = savedVersions.current.get(s.soalId) || 0;
+    return Answered && (savedVer < curVer);
+  });
+  const canSubmit = raguList.length === 0 && unansweredList.length === 0 && unsavedList.length === 0;
 
   if (showSummary) {
     return (
       <div className="fixed inset-0 bg-gray-50 flex flex-col font-sans z-50 overflow-hidden">
-        <style dangerouslySetInnerHTML={{__html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           aside { display: none !important; }
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
@@ -672,104 +818,124 @@ export default function ClientMengerjakanUjian() {
           body { overflow: hidden !important; overscroll-behavior: none; }
         `}} />
         <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center">
-        <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
-          <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
-          
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            <div className="bg-green-50 p-3 md:p-4 rounded-2xl text-center border border-green-100">
-               <div className="text-2xl md:text-3xl font-black text-green-700 mb-1">{answeredCount - raguList.filter(isAnswered).length}</div>
-               <div className="text-[10px] md:text-xs font-bold text-green-600 uppercase tracking-wider">Terjawab</div>
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
+            <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
+
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-green-50 p-3 md:p-4 rounded-2xl text-center border border-green-100">
+                <div className="text-2xl md:text-3xl font-black text-green-700 mb-1">{answeredCount - raguList.filter(isAnswered).length}</div>
+                <div className="text-[10px] md:text-xs font-bold text-green-600 uppercase tracking-wider">Terjawab</div>
+              </div>
+              <div className="bg-orange-50 p-3 md:p-4 rounded-2xl text-center border border-orange-100">
+                <div className="text-2xl md:text-3xl font-black text-orange-600 mb-1">{raguList.length}</div>
+                <div className="text-[10px] md:text-xs font-bold text-orange-500 uppercase tracking-wider">Ragu-Ragu</div>
+              </div>
+              <div className="bg-gray-50 p-3 md:p-4 rounded-2xl text-center border border-gray-200">
+                <div className="text-2xl md:text-3xl font-black text-gray-700 mb-1">{unansweredList.length}</div>
+                <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Belum Dijawab</div>
+              </div>
             </div>
-            <div className="bg-orange-50 p-3 md:p-4 rounded-2xl text-center border border-orange-100">
-               <div className="text-2xl md:text-3xl font-black text-orange-600 mb-1">{raguList.length}</div>
-               <div className="text-[10px] md:text-xs font-bold text-orange-500 uppercase tracking-wider">Ragu-Ragu</div>
-            </div>
-            <div className="bg-gray-50 p-3 md:p-4 rounded-2xl text-center border border-gray-200">
-               <div className="text-2xl md:text-3xl font-black text-gray-700 mb-1">{unansweredList.length}</div>
-               <div className="text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider">Belum Dijawab</div>
+
+            {/* Daftar soal bermasalah */}
+            {(raguList.length > 0 || unansweredList.length > 0 || unsavedList.length > 0) && (
+              <div className="mb-6 space-y-4">
+                {unsavedList.length > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                    <h3 className="text-sm font-bold text-yellow-800 mb-2 flex items-center gap-2">
+                      <AlertTriangle size={16} /> Jawaban Belum Tersimpan ({unsavedList.length})
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {unsavedList.map((s: any) => {
+                        const idx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);
+                        return (
+                          <button
+                            key={s.soalId}
+                            onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
+                            className="w-10 h-10 rounded-lg bg-yellow-400 text-yellow-900 font-bold text-sm flex items-center justify-center hover:bg-yellow-500 border border-yellow-500 transition-all shadow-sm active:scale-95"
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {raguList.length > 0 && (
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                    <h3 className="text-sm font-bold text-orange-700 mb-2 flex items-center gap-2">
+                      <AlertTriangle size={16} /> Soal Ragu-Ragu ({raguList.length})
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {raguList.map((s: any) => {
+                        const idx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);
+                        return (
+                          <button
+                            key={s.soalId}
+                            onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
+                            className="w-10 h-10 rounded-lg bg-orange-400 text-white font-bold text-sm flex items-center justify-center hover:bg-orange-500 transition-all shadow-sm active:scale-95"
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {unansweredList.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <h3 className="text-sm font-bold text-red-700 mb-2 flex items-center gap-2">
+                      <ShieldAlert size={16} /> Soal Belum Dijawab ({unansweredList.length})
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {unansweredList.map((s: any) => {
+                        const idx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);
+                        return (
+                          <button
+                            key={s.soalId}
+                            onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
+                            className="w-10 h-10 rounded-lg bg-red-400 text-white font-bold text-sm flex items-center justify-center hover:bg-red-500 transition-all shadow-sm active:scale-95"
+                          >
+                            {idx + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-xs text-center text-gray-500 font-medium">
+                  Klik nomor soal di atas untuk menuju soal tersebut.
+                </p>
+              </div>
+            )}
+
+            {!canSubmit && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-center">
+                <p className="text-sm font-bold text-red-800">
+                  ⚠️ Anda belum bisa mengumpulkan jawaban.
+                </p>
+                <p className="text-xs text-red-700 mt-1">
+                  Pastikan semua soal sudah dijawab, tidak ada yang ditandai ragu-ragu, dan semua jawaban sudah tersimpan.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={() => setShowSummary(false)} className="flex-1 py-3 md:py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition text-sm">
+                Kembali ke Soal
+              </button>
+              <button
+                onClick={handleManualSubmit}
+                disabled={isSubmitting || !canSubmit}
+                className={`flex-1 py-3 md:py-3.5 font-bold rounded-xl shadow-md transition flex justify-center items-center gap-2 text-sm ${canSubmit
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                  }`}
+              >
+                {isSubmitting ? "Mengirim..." : <><Send size={16} /> Kumpulkan Jawaban</>}
+              </button>
             </div>
           </div>
-
-          {/* Daftar soal bermasalah */}
-          {(raguList.length > 0 || unansweredList.length > 0) && (
-            <div className="mb-6 space-y-4">
-              {raguList.length > 0 && (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-orange-700 mb-2 flex items-center gap-2">
-                    <AlertTriangle size={16}/> Soal Ragu-Ragu ({raguList.length})
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {raguList.map((s:any) => {
-                      const idx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
-                      return (
-                        <button
-                          key={s.soalId}
-                          onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
-                          className="w-10 h-10 rounded-lg bg-orange-400 text-white font-bold text-sm flex items-center justify-center hover:bg-orange-500 transition-all shadow-sm active:scale-95"
-                        >
-                          {idx + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {unansweredList.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                  <h3 className="text-sm font-bold text-red-700 mb-2 flex items-center gap-2">
-                    <ShieldAlert size={16}/> Soal Belum Dijawab ({unansweredList.length})
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {unansweredList.map((s:any) => {
-                      const idx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
-                      return (
-                        <button
-                          key={s.soalId}
-                          onClick={() => { setCurrentIdx(idx); setShowSummary(false); }}
-                          className="w-10 h-10 rounded-lg bg-red-400 text-white font-bold text-sm flex items-center justify-center hover:bg-red-500 transition-all shadow-sm active:scale-95"
-                        >
-                          {idx + 1}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <p className="text-xs text-center text-gray-500 font-medium">
-                Klik nomor soal di atas untuk menuju soal tersebut.
-              </p>
-            </div>
-          )}
-
-          {!canSubmit && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-center">
-              <p className="text-sm font-bold text-yellow-800">
-                ⚠️ Anda belum bisa mengumpulkan jawaban.
-              </p>
-              <p className="text-xs text-yellow-700 mt-1">
-                Pastikan semua soal sudah dijawab dan tidak ada yang ditandai ragu-ragu.
-              </p>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-             <button onClick={() => setShowSummary(false)} className="flex-1 py-3 md:py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition text-sm">
-               Kembali ke Soal
-             </button>
-             <button 
-               onClick={handleManualSubmit}
-               disabled={isSubmitting || !canSubmit}
-               className={`flex-1 py-3 md:py-3.5 font-bold rounded-xl shadow-md transition flex justify-center items-center gap-2 text-sm ${
-                 canSubmit 
-                   ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200' 
-                   : 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-               }`}
-             >
-               {isSubmitting ? "Mengirim..." : <><Send size={16}/> Kumpulkan Jawaban</>}
-             </button>
-          </div>
-        </div>
         </div>
       </div>
     );
@@ -777,10 +943,11 @@ export default function ClientMengerjakanUjian() {
 
   return (
     <div className="fixed inset-0 bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 overflow-hidden z-50">
-      
+
       {/* Hide Global Navigasi Saat CBT */}
       {hasStarted && !hasSubmitted.current && !showSummary && (
-        <style dangerouslySetInnerHTML={{__html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           aside { display: none !important; }
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
@@ -788,52 +955,52 @@ export default function ClientMengerjakanUjian() {
           body { overscroll-behavior: none; }
         `}} />
       )}
-      
+
       {/* LEFT: Soal Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden px-0 bg-white">
-        
+
         {/* Header - Timer */}
         <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
-           <div className="flex items-center gap-2 md:gap-3">
-             <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
-               {currentTypeIdx}
-             </div>
-             <div>
-                <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
-                <p className="text-[9px] md:text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">
-                  {soal.namaMapel || "Mata Pelajaran"}
-                </p>
-             </div>
-           </div>
-           
-           <div className="flex items-center gap-2">
-             {/* Fullscreen Fallback Toggle */}
-             {!isFullscreen && hasStarted && !hasSubmitted.current && (
-               <button 
-                 onClick={enterFullscreen}
-                 className="px-3 py-1.5 md:py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition font-bold text-xs"
-               >
-                 Abaikan ini dan Kembali ke Fullscreen
-               </button>
-             )}
-             
-             {/* Mobile Nav Toggle */}
-             <button 
-               onClick={() => setShowMobileNav(!showMobileNav)}
-               className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-             >
-               <Grid3X3 size={18} />
-             </button>
-             {unsavedCount > 0 && (
-               <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold animate-pulse" title={`${unsavedCount} jawaban sedang disimpan...`}>
-                 ⏳ {unsavedCount}
-               </div>
-             )}
-             <div className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r rounded-lg md:rounded-xl shadow-inner font-mono font-bold text-base md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
-               <Clock size={16} className="md:w-5 md:h-5" />
-               {formatTime(timeLeft)}
-             </div>
-           </div>
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
+              {currentTypeIdx}
+            </div>
+            <div>
+              <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
+              <p className="text-[9px] md:text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">
+                {soal.namaMapel || "Mata Pelajaran"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Fullscreen Fallback Toggle */}
+            {!isFullscreen && hasStarted && !hasSubmitted.current && (
+              <button
+                onClick={enterFullscreen}
+                className="px-3 py-1.5 md:py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition font-bold text-xs"
+              >
+                Abaikan ini dan Kembali ke Fullscreen
+              </button>
+            )}
+
+            {/* Mobile Nav Toggle */}
+            <button
+              onClick={() => setShowMobileNav(!showMobileNav)}
+              className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+            >
+              <Grid3X3 size={18} />
+            </button>
+            {unsavedCount > 0 && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold animate-pulse" title={`${unsavedCount} jawaban sedang disimpan...`}>
+                ⏳ {unsavedCount}
+              </div>
+            )}
+            <div className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r rounded-lg md:rounded-xl shadow-inner font-mono font-bold text-base md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
+              <Clock size={16} className="md:w-5 md:h-5" />
+              {formatTime(timeLeft)}
+            </div>
+          </div>
         </div>
 
         {/* Mobile Navigator Overlay */}
@@ -842,7 +1009,7 @@ export default function ClientMengerjakanUjian() {
             <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-gray-800">Navigasi Soal</h3>
-                <button onClick={() => setShowMobileNav(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={18}/></button>
+                <button onClick={() => setShowMobileNav(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={18} /></button>
               </div>
               <div className="flex items-center gap-2 mb-4">
                 <div className="flex-1 bg-gray-200 h-2 rounded-full overflow-hidden">
@@ -851,37 +1018,43 @@ export default function ClientMengerjakanUjian() {
                 <span className="text-xs font-bold text-gray-500">{answeredCount}/{examData.soal.length}</span>
               </div>
               <div className="flex flex-col gap-4 mb-4">
-                 {(() => {
-                    const grouped = examData.soal.reduce((acc: any, s:any) => {
-                       if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
-                       acc[s.tipeSoal].push(s);
-                       return acc;
-                    }, {});
-                    return Object.entries(grouped).map(([type, list]: [string, any]) => (
-                       <div key={type}>
-                          <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">
-                            {list[0].namaMapel ? `${list[0].namaMapel} — ` : ''}{type.replace(/_/g, ' ')}
-                          </h4>
-                          <div className="grid grid-cols-5 gap-2">
-                            {list.map((s:any, idx:number) => {
-                              const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
-                              const Active = currentIdx === globalIdx;
-                              const Answered = isAnswered(s);
-                              const Ragu = s.rpiId === "RAGU";
-                              let cls = "h-12 w-full rounded-xl font-bold text-base flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
-                              if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
-                              else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
-                              else if (Answered) cls += "bg-green-500 border-green-600 text-white";
-                              else cls += "bg-white border-gray-200 text-gray-500";
-                              return <button key={s.soalId} onClick={() => { setCurrentIdx(globalIdx); setShowMobileNav(false); }} className={cls}>{idx+1}</button>;
-                            })}
-                          </div>
-                       </div>
-                    ));
-                 })()}
+                {(() => {
+                  const grouped = examData.soal.reduce((acc: any, s: any) => {
+                    if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
+                    acc[s.tipeSoal].push(s);
+                    return acc;
+                  }, {});
+                  return Object.entries(grouped).map(([type, list]: [string, any]) => (
+                    <div key={type}>
+                      <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">
+                        {list[0].namaMapel ? `${list[0].namaMapel} — ` : ''}{type.replace(/_/g, ' ')}
+                      </h4>
+                      <div className="grid grid-cols-5 gap-2">
+                        {list.map((s: any, idx: number) => {
+                          const globalIdx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);
+                          const Active = currentIdx === globalIdx;
+                          const Answered = isAnswered(s);
+                          const Ragu = s.rpiId === "RAGU";
+                          const curVer = currentVersions.current.get(s.soalId) || 0;
+                          const savedVer = savedVersions.current.get(s.soalId) || 0;
+                          const Unsaved = Answered && (savedVer < curVer);
+                          
+                          let cls = "h-12 w-full rounded-xl font-bold text-base flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 ";
+                          if (Active) cls += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
+                          else if (Ragu) cls += "bg-orange-400 border-orange-500 text-white";
+                          else if (Unsaved) cls += "bg-yellow-400 border-yellow-500 text-yellow-900 shadow-inner";
+                          else if (Answered) cls += "bg-green-500 border-green-600 text-white";
+                          else cls += "bg-white border-gray-200 text-gray-500";
+                          return <button key={s.soalId} onClick={() => { setCurrentIdx(globalIdx); setShowMobileNav(false); }} className={cls}>{idx + 1}</button>;
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
               <div className="flex gap-3 text-[10px] font-semibold text-gray-500 justify-center">
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded border border-green-600"></div> Terjawab</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded border border-green-600"></div> Tersimpan</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-400 rounded border border-yellow-500"></div> Belum Save</div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-orange-400 rounded border border-orange-500"></div> Ragu</div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-white rounded border-2 border-gray-200"></div> Belum</div>
               </div>
@@ -891,89 +1064,100 @@ export default function ClientMengerjakanUjian() {
 
         {/* Soal Content */}
         <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-8">
-           
-           {soal.perintah && (
-             <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 md:mb-6 rounded-r-xl shadow-sm">
-                <h3 className="font-bold text-sm text-blue-900 mb-1 flex items-center gap-2">
-                   <Grid3X3 size={16} /> Arah Pengerjaan Bagian {readableType}
-                </h3>
-                <SoalText html={soal.perintah} className="text-sm text-blue-800 prose prose-sm max-w-none" />
-             </div>
-           )}
+          
+          {failedSaveCount > 0 && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 md:mb-6 rounded-r-xl shadow-sm animate-pulse">
+              <h3 className="font-bold text-sm text-red-700 mb-1 flex items-center gap-2">
+                <AlertTriangle size={16} /> {failedSaveCount} jawaban belum tersimpan ke server.
+              </h3>
+              <p className="text-xs text-red-600">
+                Sistem sedang mencoba mengirim ulang secara otomatis. Mohon periksa koneksi internet Anda atau pindah ke lokasi dengan sinyal yang lebih baik. Anda tidak bisa mengumpulkan jawaban sebelum semua tersimpan.
+              </p>
+            </div>
+          )}
 
-           {/* Qiro'ah Parent Passage — ditampilkan jika soal ini adalah anak grup */}
-           {soal.grupSoalId && (() => {
-             const parentSoal = examData.soal.find((s:any) => s.soalId === soal.grupSoalId);
-             if (!parentSoal) return null;
-             return (
-               <div className="bg-purple-50/50 rounded-3xl p-6 md:p-8 shadow-sm border-2 border-purple-200 mb-4">
-                 <div className="flex items-center gap-2 mb-3">
-                   <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md bg-purple-100 text-purple-600">Bacaan Qiro&apos;ah</span>
-                 </div>
-                 {parentSoal.gambarUrl && (
-                   <div className="mb-4 flex justify-center">
-                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                     <img src={parentSoal.gambarUrl} alt="Bacaan" className="max-w-full max-h-[300px] rounded-xl border border-purple-200 shadow-sm" />
-                   </div>
-                 )}
-                 <SoalText 
-                   html={parentSoal.pertanyaan}
-                   className="text-base md:text-lg font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" 
-                 />
-               </div>
-             );
-           })()}
+          {soal.perintah && (
+            <div className="bg-blue-50 border-l-4 border-blue-600 p-4 mb-4 md:mb-6 rounded-r-xl shadow-sm">
+              <h3 className="font-bold text-sm text-blue-900 mb-1 flex items-center gap-2">
+                <Grid3X3 size={16} /> Arah Pengerjaan Bagian {readableType}
+              </h3>
+              <SoalText html={soal.perintah} className="text-sm text-blue-800 prose prose-sm max-w-none" />
+            </div>
+          )}
 
-           <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
-              {soal.gambarUrl && (
-                <div className="mb-6 flex justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full max-h-[300px] rounded-xl border border-gray-200 shadow-sm" />
+          {/* Qiro'ah Parent Passage — ditampilkan jika soal ini adalah anak grup */}
+          {soal.grupSoalId && (() => {
+            const parentSoal = examData.soal.find((s: any) => s.soalId === soal.grupSoalId);
+            if (!parentSoal) return null;
+            return (
+              <div className="bg-purple-50/50 rounded-3xl p-6 md:p-8 shadow-sm border-2 border-purple-200 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-md bg-purple-100 text-purple-600">Bacaan Qiro&apos;ah</span>
                 </div>
-              )}
-              <SoalText 
-                html={soal.pertanyaan}
-                className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block" 
-              />
-           </div>
+                {parentSoal.gambarUrl && (
+                  <div className="mb-4 flex justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={parentSoal.gambarUrl} alt="Bacaan" className="max-w-full max-h-[300px] rounded-xl border border-purple-200 shadow-sm" />
+                  </div>
+                )}
+                <SoalText
+                  html={parentSoal.pertanyaan}
+                  className="text-base md:text-lg font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block"
+                />
+              </div>
+            );
+          })()}
 
-           <QuestionRenderer 
-             soal={soal}
-             onAnswer={(payload) => handleAnswerSubmit(soal.soalId, payload)}
-           />
+          <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
+            {soal.gambarUrl && (
+              <div className="mb-6 flex justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={soal.gambarUrl} alt="Soal Image" className="max-w-full max-h-[300px] rounded-xl border border-gray-200 shadow-sm" />
+              </div>
+            )}
+            <SoalText
+              html={soal.pertanyaan}
+              className="text-base md:text-xl font-medium text-gray-800 leading-relaxed font-serif prose max-w-none block"
+            />
+          </div>
+
+          <QuestionRenderer
+            soal={soal}
+            onAnswer={(payload) => handleAnswerSubmit(soal.soalId, payload)}
+          />
         </div>
 
         {/* Footer Navigation Area */}
         <div className="w-full shrink-0 bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]">
-           <button 
-             onClick={() => setCurrentIdx(Math.max(0, currentIdx - 1))}
-             disabled={currentIdx === 0}
-             className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-gray-100 font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm"
-           >
-             <ChevronLeft size={18}/> <span className="hidden sm:inline">Soal</span> Sebelumnya
-           </button>
-           
-           <button 
-             onClick={toggleRagu}
-             className={`px-3 md:px-5 py-2.5 sm:py-3 rounded-xl font-bold flex gap-1 sm:gap-2 items-center transition border flex-1 sm:flex-none justify-center text-[11px] sm:text-sm ${soal.rpiId === 'RAGU' ? 'bg-orange-50 border-orange-300 text-orange-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-           >
-             {soal.rpiId === 'RAGU' ? <CheckCircle2 size={16}/> : <AlertTriangle size={16}/>} 
-             Ragu<span className="hidden sm:inline">-Ragu</span>
-           </button>
-           
-           <button 
-             onClick={() => {
-               if (isLastQuestion) setShowSummary(true);
-               else setCurrentIdx(Math.min(examData.soal.length - 1, currentIdx + 1));
-             }}
-             className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 shadow-md shadow-blue-200 transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm"
-           >
-             {isLastQuestion ? (
-               <><span className="hidden sm:inline">Selesai</span> Akhiri <CheckCircle2 size={18}/></>
-             ) : (
-               <><span className="hidden sm:inline">Soal</span> Berikutnya <ChevronRight size={18}/></>
-             )}
-           </button>
+          <button
+            onClick={() => setCurrentIdx(Math.max(0, currentIdx - 1))}
+            disabled={currentIdx === 0}
+            className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-gray-100 font-bold text-gray-700 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm"
+          >
+            <ChevronLeft size={18} /> <span className="hidden sm:inline">Soal</span> Sebelumnya
+          </button>
+
+          <button
+            onClick={toggleRagu}
+            className={`px-3 md:px-5 py-2.5 sm:py-3 rounded-xl font-bold flex gap-1 sm:gap-2 items-center transition border flex-1 sm:flex-none justify-center text-[11px] sm:text-sm ${soal.rpiId === 'RAGU' ? 'bg-orange-50 border-orange-300 text-orange-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            {soal.rpiId === 'RAGU' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+            Ragu<span className="hidden sm:inline">-Ragu</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (isLastQuestion) setShowSummary(true);
+              else setCurrentIdx(Math.min(examData.soal.length - 1, currentIdx + 1));
+            }}
+            className="px-2 md:px-5 py-2.5 sm:py-3 rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 shadow-md shadow-blue-200 transition flex gap-1 sm:gap-2 items-center flex-1 sm:flex-none justify-center text-[11px] sm:text-sm"
+          >
+            {isLastQuestion ? (
+              <><span className="hidden sm:inline">Selesai</span> Akhiri <CheckCircle2 size={18} /></>
+            ) : (
+              <><span className="hidden sm:inline">Soal</span> Berikutnya <ChevronRight size={18} /></>
+            )}
+          </button>
         </div>
       </div>
 
@@ -983,60 +1167,65 @@ export default function ClientMengerjakanUjian() {
           <h3 className="font-bold font-display text-gray-800">Navigasi Pengerjaan</h3>
           <div className="flex items-center gap-2 mt-2 pt-2 border-t">
             <div className="flex-1 bg-gray-200 h-2 rounded-full overflow-hidden">
-               <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${(answeredCount / examData.soal.length) * 100}%` }}></div>
+              <div className="bg-green-500 h-full rounded-full transition-all" style={{ width: `${(answeredCount / examData.soal.length) * 100}%` }}></div>
             </div>
             <span className="text-xs font-bold text-gray-500">{answeredCount}/{examData.soal.length}</span>
           </div>
         </div>
-        
-        <div className="p-5 overflow-y-auto flex-1">
-           <div className="flex flex-col gap-6">
-             {(() => {
-                const grouped = examData.soal.reduce((acc: any, s:any) => {
-                   if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
-                   acc[s.tipeSoal].push(s);
-                   return acc;
-                }, {});
-                return Object.entries(grouped).map(([type, list]: [string, any]) => (
-                   <div key={type}>
-                      <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">{type.replace(/_/g, ' ')}</h4>
-                      <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
-                         {list.map((s:any, idx:number) => {
-                           const globalIdx = examData.soal.findIndex((x:any) => x.soalId === s.soalId);
-                           const Active = currentIdx === globalIdx;
-                           const Answered = isAnswered(s);
-                           const Ragu = s.rpiId === "RAGU";
-                           
-                           let classes = "h-10 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 text-center ";
-                           if (Active) classes += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
-                           else if (Ragu) classes += "bg-orange-400 border-orange-500 text-white";
-                           else if (Answered) classes += "bg-green-500 border-green-600 text-white";
-                           else classes += "bg-white border-gray-200 text-gray-500 hover:border-gray-300";
 
-                           return (
-                             <button key={s.soalId} onClick={() => setCurrentIdx(globalIdx)} className={classes}>
-                               {idx + 1}
-                             </button>
-                           );
-                         })}
-                      </div>
-                   </div>
-                ));
-             })()}
-           </div>
+        <div className="p-5 overflow-y-auto flex-1">
+          <div className="flex flex-col gap-6">
+            {(() => {
+              const grouped = examData.soal.reduce((acc: any, s: any) => {
+                if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
+                acc[s.tipeSoal].push(s);
+                return acc;
+              }, {});
+              return Object.entries(grouped).map(([type, list]: [string, any]) => (
+                <div key={type}>
+                  <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">{type.replace(/_/g, ' ')}</h4>
+                  <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
+                    {list.map((s: any, idx: number) => {
+                      const globalIdx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);
+                      const Active = currentIdx === globalIdx;
+                      const Answered = isAnswered(s);
+                      const Ragu = s.rpiId === "RAGU";
+                      const curVer = currentVersions.current.get(s.soalId) || 0;
+                      const savedVer = savedVersions.current.get(s.soalId) || 0;
+                      const Unsaved = Answered && (savedVer < curVer);
+
+                      let classes = "h-10 w-full rounded-lg font-bold text-sm flex items-center justify-center transition-all border-2 cursor-pointer shadow-sm active:scale-95 text-center ";
+                      if (Active) classes += "border-blue-600 ring-2 ring-blue-200 bg-white text-blue-700";
+                      else if (Ragu) classes += "bg-orange-400 border-orange-500 text-white";
+                      else if (Unsaved) classes += "bg-yellow-400 border-yellow-500 text-yellow-900 shadow-inner";
+                      else if (Answered) classes += "bg-green-500 border-green-600 text-white";
+                      else classes += "bg-white border-gray-200 text-gray-500 hover:border-gray-300";
+
+                      return (
+                        <button key={s.soalId} onClick={() => setCurrentIdx(globalIdx)} className={classes}>
+                          {idx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
         </div>
 
         <div className="p-4 border-t bg-gray-50 shrink-0">
           <div className="flex flex-col gap-2 mb-4">
-             <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-green-500 rounded border border-green-600 shrink-0"></div> Terjawab</div>
-             <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-orange-400 rounded border border-orange-500 shrink-0"></div> Ragu-ragu</div>
-             <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-white rounded border-2 border-gray-200 shrink-0"></div> Belum Dijawab</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-green-500 rounded border border-green-600 shrink-0"></div> Tersimpan di Server</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-yellow-400 rounded border border-yellow-500 shrink-0"></div> Belum Tersimpan</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-orange-400 rounded border border-orange-500 shrink-0"></div> Ragu-ragu</div>
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-600"><div className="w-4 h-4 bg-white rounded border-2 border-gray-200 shrink-0"></div> Belum Dijawab</div>
           </div>
-          <button 
-             onClick={() => setShowSummary(true)} 
-             className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md transition-colors"
+          <button
+            onClick={() => setShowSummary(true)}
+            className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 shadow-md transition-colors"
           >
-             Selesai Ujian
+            Selesai Ujian
           </button>
         </div>
       </div>

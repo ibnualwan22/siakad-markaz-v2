@@ -80,6 +80,7 @@ export async function GET(req: Request) {
             jawabanList: true  // total jawaban (termasuk kosong)
           }
         },
+        unsavedClient: true,
       }
     });
 
@@ -113,7 +114,7 @@ export async function GET(req: Request) {
     // Indekskan sesi berdasarkan riwayatId
     const sesiMap = new Map();
     for (const sesi of sesiList) {
-      sesiMap.set(sesi.riwayat.id, sesi);
+      sesiMap.set((sesi as any).riwayat ? (sesi as any).riwayat.id : sesi.riwayatId, sesi);
     }
 
     const data = activeSantri.map(riwayat => {
@@ -148,7 +149,8 @@ export async function GET(req: Request) {
         progress: totalSoal > 0 ? Math.round((dijawab / totalSoal) * 100) : 0,
         nilaiTotal: sesiInfo ? sesiInfo.nilaiTotal : 0,
         tabCloseCount: sesiInfo ? sesiInfo.tabCloseCount : 0,
-        alasanSubmit: sesiInfo ? sesiInfo.alasanSubmit : null
+        alasanSubmit: sesiInfo ? sesiInfo.alasanSubmit : null,
+        unsavedClient: sesiInfo ? sesiInfo.unsavedClient : 0
       };
     });
 

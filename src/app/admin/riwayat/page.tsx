@@ -2,6 +2,7 @@ import { getRiwayatSantriRows } from "@/lib/app-data";
 import { RiwayatClient } from "@/components/admin/riwayat-client";
 import { Metadata } from "next";
 import { requirePermission } from "@/lib/permission";
+import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +10,16 @@ export const metadata: Metadata = {
   title: "Riwayat Santri - Admin Panel",
 };
 
-export default async function RiwayatPage() {
+export default async function RiwayatPage(props: { searchParams: Promise<{ dufah?: string }> }) {
   await requirePermission("riwayat_santri");
-  const santriGroups = await getRiwayatSantriRows();
+  const { dufah } = await props.searchParams;
+
+  const dufahList = await prisma.dufah.findMany({
+    orderBy: { usbu1StartDate: { sort: 'desc', nulls: 'last' } },
+    select: { nama: true }
+  });
+
+  const santriGroups = dufah ? await getRiwayatSantriRows(dufah) : [];
 
   return (
     <div className="space-y-6">
@@ -24,7 +32,7 @@ export default async function RiwayatPage() {
         </p>
       </div>
 
-      <RiwayatClient santriGroups={santriGroups} />
+      <RiwayatClient santriGroups={santriGroups} dufahList={dufahList.map(d => d.nama)} initialDufah={dufah} />
     </div>
   );
 }

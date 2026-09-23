@@ -7,7 +7,7 @@ import { getActiveDufahName } from "@/lib/absensi";
 import { calcAkumulatif, calcAkbarnasMapelAverage, applyNilaiTambahan } from "@/lib/grade-calculator";
 import { getSession } from "@/lib/auth";
 
-export default async function CetakUsbuPrintPage(props: { params: Promise<{ kelasId: string, usbu: string }>, searchParams: Promise<{ bulan?: string }> }) {
+export default async function CetakUsbuPrintPage(props: { params: Promise<{ kelasId: string, usbu: string }>, searchParams: Promise<{ bulan?: string, dufah?: string }> }) {
   await requirePermission("cetak_nilai_pekanan");
   const session = await getSession();
   const isAdmin = session?.role === "ADMIN";
@@ -15,7 +15,7 @@ export default async function CetakUsbuPrintPage(props: { params: Promise<{ kela
   const isRestricted = !isAdmin && !!allowedKelasId;
 
   const { kelasId, usbu } = await props.params;
-  const { bulan } = await props.searchParams;
+  const { bulan, dufah } = await props.searchParams;
   const targetUsbu = parseInt(usbu);
 
   if (targetUsbu < 1 || targetUsbu > 4) redirect("/admin/cetak-usbu");
@@ -45,11 +45,14 @@ export default async function CetakUsbuPrintPage(props: { params: Promise<{ kela
   const masterMap = new Map(masterList.map(m => [m.id, m]));
 
   const activeRiwayatList = await prisma.riwayatSantri.findMany({
-    where: { kelasId },
+    where: { 
+      kelasId,
+      ...(dufah ? { dufahNama: dufah } : {})
+    },
     select: { id: true, santriId: true, dufahNama: true }
   });
 
-  const validActiveRiwayats = activeRiwayatList.filter(r => {
+  const validActiveRiwayats = dufah ? activeRiwayatList : activeRiwayatList.filter(r => {
     const ms = masterMap.get(r.santriId);
     return ms?.isAktif && ms.dufahNama === r.dufahNama;
   });

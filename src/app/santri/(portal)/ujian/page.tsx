@@ -52,8 +52,8 @@ export default function DaftarUjianSantriPage() {
       
       if (!res.ok) throw new Error(data.error);
 
-      // Simpan data soal ke sessionStorage agar aman dan tidak perlu fetch lagi di page ujian
-      sessionStorage.setItem(`exam_${data.sesiId}`, JSON.stringify(data));
+      // Simpan data soal ke localStorage agar aman dan tidak perlu fetch lagi di page ujian jika tab ter-close
+      localStorage.setItem(`exam_${data.sesiId}`, JSON.stringify(data));
       
       toast.success("Berhasil masuk. Memulai mode ujian fullscreen...");
       setIsModalOpen(false);
@@ -71,7 +71,7 @@ export default function DaftarUjianSantriPage() {
     // Attempt to start without asking code again if session is still 'MENGERJAKAN'
     // But since API start requires kodeAkses to fetch the questions again if not in session storage,
     // It's actually better to just check if it's stored. If not, prompt the code again.
-    const stored = sessionStorage.getItem(`exam_${sesiId}`);
+    const stored = localStorage.getItem(`exam_${sesiId}`);
     if (stored) {
       router.push(`/santri/ujian/mengerjakan?s=${sesiId}`);
     } else {

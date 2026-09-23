@@ -10,6 +10,7 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const sesiId = searchParams.get("sesiId");
+    const unsavedCountStr = searchParams.get("unsaved");
     if (!sesiId) return NextResponse.json({ error: "sesiId diperlukan" }, { status: 400 });
 
     const sesi = await prisma.sesiUjianSantri.findUnique({
@@ -18,6 +19,15 @@ export async function GET(req: Request) {
     });
 
     if (!sesi) return NextResponse.json({ status: "NOT_FOUND" });
+
+    // Update unsaved count if provided and session is ongoing
+    if (unsavedCountStr !== null && sesi.status === "MENGERJAKAN") {
+      const unsavedCount = parseInt(unsavedCountStr) || 0;
+      await prisma.sesiUjianSantri.update({
+        where: { id: sesiId },
+        data: { unsavedClient: unsavedCount }
+      });
+    }
 
     return NextResponse.json({ status: sesi.status });
   } catch (error: any) {

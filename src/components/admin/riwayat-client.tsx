@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, FileText, Printer, CheckCircle2, XCircle, Clock } from "lucide-react";
 
 type StatusKelulusan = "LULUS" | "TIDAK_LULUS" | "MUSYAROKAH";
@@ -228,9 +229,14 @@ function RiwayatRow({ santri, index }: { santri: RiwayatSantriGroup; index: numb
 
 export function RiwayatClient({
   santriGroups,
+  dufahList = [],
+  initialDufah = "",
 }: {
   santriGroups: RiwayatSantriGroup[];
+  dufahList?: string[];
+  initialDufah?: string;
 }) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredGroups = santriGroups.filter((santri) =>
@@ -242,17 +248,42 @@ export function RiwayatClient({
       {/* Filters / Utility */}
       <section className="overflow-hidden neu-card-white">
         <div className="flex flex-col gap-4 border-b border-[var(--color-surface-dark)] px-6 py-5 md:flex-row md:items-end md:justify-between">
-          <div className="w-full md:max-w-md">
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
-              Cari Santri
-            </label>
-            <input
-              type="text"
-              placeholder="Masukkan nama santri..."
-              className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-[var(--color-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:bg-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <div className="flex w-full flex-col gap-4 md:max-w-xl md:flex-row">
+            <div className="w-full md:w-1/2">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                Dufah / Gelombang
+              </label>
+              <select
+                value={initialDufah || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    router.push(`/admin/riwayat?dufah=${encodeURIComponent(val)}`);
+                  } else {
+                    router.push(`/admin/riwayat`);
+                  }
+                }}
+                className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-[var(--color-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:bg-white"
+              >
+                <option value="">-- Pilih Dufah --</option>
+                {dufahList.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full md:w-1/2">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                Cari Santri
+              </label>
+              <input
+                type="text"
+                placeholder="Masukkan nama santri..."
+                className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-[var(--color-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:bg-white"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
           <div className="flex shrink-0 gap-3 text-sm">
             <span className="rounded-2xl bg-[var(--color-surface)] px-4 py-2 font-semibold text-[var(--color-text)]">
@@ -280,7 +311,7 @@ export function RiwayatClient({
               {filteredGroups.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-[var(--color-text-muted)]">
-                    Tidak ada data riwayat santri yang cocok.
+                    {!initialDufah ? "Silakan pilih Dufah (gelombang) untuk menampilkan arsip riwayat." : "Tidak ada data riwayat santri yang cocok."}
                   </td>
                 </tr>
               )}

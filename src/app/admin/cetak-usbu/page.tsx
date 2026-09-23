@@ -23,6 +23,24 @@ export default async function CetakUsbuPage() {
     ]
   });
 
+  const dufahList = await prisma.dufah.findMany({
+    orderBy: { usbu1StartDate: { sort: 'desc', nulls: 'last' } },
+    select: { nama: true }
+  });
+
+  const riwayatGroups = await prisma.riwayatSantri.groupBy({
+    by: ['dufahNama', 'kelasId'],
+    where: { kelasId: { not: null } }
+  });
+
+  const riwayatMapping: Record<string, string[]> = {};
+  for (const r of riwayatGroups) {
+    if (r.kelasId) {
+      if (!riwayatMapping[r.dufahNama]) riwayatMapping[r.dufahNama] = [];
+      riwayatMapping[r.dufahNama].push(r.kelasId);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-end justify-between">
@@ -38,6 +56,8 @@ export default async function CetakUsbuPage() {
         <CetakUsbuSelector 
           kelasList={kelasList.map(k => ({ id: k.id, nama: k.nama, programNama: k.program.nama_indo }))} 
           isRestricted={isRestricted}
+          dufahList={dufahList.map(d => d.nama)}
+          riwayatMapping={riwayatMapping}
         />
       </div>
     </div>

@@ -5,13 +5,28 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Save, Printer } from "lucide-react";
 
-export function CetakUsbuSelector({ kelasList, isRestricted = false }: { kelasList: { id: string, nama: string, programNama: string }[], isRestricted?: boolean }) {
+export function CetakUsbuSelector({ 
+  kelasList, 
+  isRestricted = false,
+  dufahList = [],
+  riwayatMapping = {}
+}: { 
+  kelasList: { id: string, nama: string, programNama: string }[], 
+  isRestricted?: boolean,
+  dufahList?: string[],
+  riwayatMapping?: Record<string, string[]>
+}) {
   const router = useRouter();
+  const [selectedDufah, setSelectedDufah] = useState<string>("");
   const [kelasId, setKelasId] = useState<string>("");
   const [usbu, setUsbu] = useState<string>("1");
   const [bulan, setBulan] = useState<string>("1");
 
-  const selectedKelas = kelasList.find(k => k.id === kelasId);
+  const filteredKelasList = selectedDufah 
+    ? kelasList.filter(k => riwayatMapping[selectedDufah]?.includes(k.id))
+    : kelasList;
+
+  const selectedKelas = filteredKelasList.find(k => k.id === kelasId);
   const isAkbarnas = selectedKelas?.programNama.toLowerCase().includes("akbarnas");
 
   const handlePrint = (e: React.FormEvent) => {
@@ -21,15 +36,37 @@ export function CetakUsbuSelector({ kelasList, isRestricted = false }: { kelasLi
       return;
     }
     if (kelasId === "ALL") {
-      router.push(`/admin/cetak-usbu/bulk/${usbu}`);
+      router.push(`/admin/cetak-usbu/bulk/${usbu}${selectedDufah ? `?dufah=${encodeURIComponent(selectedDufah)}` : ""}`);
       return;
     }
-    const searchParams = isAkbarnas ? `?bulan=${bulan}` : "";
+    
+    const query = new URLSearchParams();
+    if (isAkbarnas) query.set("bulan", bulan);
+    if (selectedDufah) query.set("dufah", selectedDufah);
+
+    const searchParams = query.toString() ? `?${query.toString()}` : "";
     router.push(`/admin/cetak-usbu/${kelasId}/${usbu}${searchParams}`);
   };
 
   return (
     <form onSubmit={handlePrint} className="flex flex-col gap-6">
+      <label className="space-y-2 text-sm font-semibold text-[var(--color-text)]">
+        <span>Dufah / Gelombang (Opsional)</span>
+        <select
+          value={selectedDufah}
+          onChange={(e) => {
+            setSelectedDufah(e.target.value);
+            setKelasId(""); // Reset kelas if dufah changes
+          }}
+          className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-[var(--color-secondary)] px-4 py-3 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:bg-white"
+        >
+          <option value="">-- Dufah / Gelombang Saat Ini --</option>
+          {dufahList.map(d => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </label>
+
       <label className="space-y-2 text-sm font-semibold text-[var(--color-text)]">
         <span>Ruangan Kelas</span>
         <select
@@ -41,7 +78,7 @@ export function CetakUsbuSelector({ kelasList, isRestricted = false }: { kelasLi
           {!isRestricted && (
             <option value="ALL" className="font-bold text-[var(--color-warning)]">-- Semua Ruangan Kelas (Cetak Bulk) --</option>
           )}
-          {kelasList.map(k => (
+          {filteredKelasList.map(k => (
             <option key={k.id} value={k.id}>
               {k.nama} ({k.programNama})
             </option>

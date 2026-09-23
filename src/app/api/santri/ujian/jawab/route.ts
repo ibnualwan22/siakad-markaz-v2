@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getSantriSession } from "@/lib/santri-auth";
 import prisma from "@/lib/prisma";
 
+const sesiCache = new Map<string, { data: any, expiresAt: number }>();
+
 export async function POST(req: Request) {
   try {
     const session = await getSantriSession();
@@ -14,11 +16,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
     }
 
-    // Validasi SESI
-    const sesi = await prisma.sesiUjianSantri.findUnique({
-      where: { id: sesiId },
-      include: { riwayat: true, paket: { include: { sesiGlobal: true } } }
-    });
+    // Validasi SESI dengan Cache 15 detik untuk meringankan DB
+    const now = Date.now();
+    let sesi = null;
+    const cached = sesiCache.get(sesiId);
+
+    if (cached && cached.expiresAt > now) {
+      sesi = cached.data;
+    } else {
+      sesi = await prisma.sesiUjianSantri.findUnique({
+        where: { id: sesiId },
+        include: { riwayat: true, paket: { include: { sesiGlobal: true } } }
+      });
+      if (sesi) {
+        // Hapus cache lama jika Map terlalu besar (proteksi memory)
+        if (sesiCache.size > 2000) sesiCache.clear();
+        sesiCache.set(sesiId, { data: sesi, expiresAt: now + 15000 });
+      }
+    }
 
     if (!sesi) return NextResponse.json({ error: "Sesi tidak ditemukan" }, { status: 404 });
     

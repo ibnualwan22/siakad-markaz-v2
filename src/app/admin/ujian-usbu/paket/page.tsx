@@ -36,9 +36,11 @@ export default function SesiUjianPage() {
         fetch("/api/admin/active-context")
       ]);
       
-      const programs = await progRes.json() || [];
-      setProgramList(programs);
-      setSesiList(await sesiRes.json() || []);
+      const programs = await progRes.json();
+      setProgramList(Array.isArray(programs) ? programs : []);
+      
+      const sesiData = await sesiRes.json();
+      setSesiList(Array.isArray(sesiData) ? sesiData : []);
       
       const activeCtx = await activeCtxRes.json();
       if (activeCtx && activeCtx.activeDufah) {
@@ -59,7 +61,12 @@ export default function SesiUjianPage() {
   const fetchSesiList = async () => {
     try {
       const res = await fetch("/api/admin/ujian-usbu/sesi");
-      if (res.ok) setSesiList(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setSesiList(Array.isArray(data) ? data : []);
+      } else {
+        toast.error((await res.json()).error || "Gagal refresh sesi");
+      }
     } catch {
       toast.error("Gagal refresh sesi");
     }

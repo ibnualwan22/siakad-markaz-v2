@@ -787,7 +787,7 @@ export default function ClientMengerjakanUjian() {
 
   // Failsafe jika currentIdx di luar batas (misal dari cache lama saat mapel ditambah admin)
   const soal = examData.soal[currentIdx];
-  const sameTypeSoals = examData.soal.filter((s: any) => s.tipeSoal === soal.tipeSoal);
+  const sameTypeSoals = examData.soal.filter((s: any) => (s.mapelId || '') === (soal.mapelId || '') && s.tipeSoal === soal.tipeSoal);
   const currentTypeIdx = sameTypeSoals.findIndex((s: any) => s.soalId === soal.soalId) + 1;
   const currentTypeTotal = sameTypeSoals.length;
   const readableType = (soal.tipeSoal || "Soal").replace(/_/g, ' ');
@@ -966,10 +966,10 @@ export default function ClientMengerjakanUjian() {
               {currentTypeIdx}
             </div>
             <div>
-              <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
-              <p className="text-[9px] md:text-xs font-semibold text-gray-500 bg-gray-100 px-1.5 md:px-2 py-0.5 mt-0.5 rounded-full inline-block">
+              <p className="text-[10px] md:text-xs font-bold text-blue-600 uppercase tracking-widest mb-0.5">
                 {soal.namaMapel || "Mata Pelajaran"}
               </p>
+              <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
             </div>
           </div>
 
@@ -1020,14 +1020,16 @@ export default function ClientMengerjakanUjian() {
               <div className="flex flex-col gap-4 mb-4">
                 {(() => {
                   const grouped = examData.soal.reduce((acc: any, s: any) => {
-                    if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
-                    acc[s.tipeSoal].push(s);
+                    const key = `${s.mapelId || ''}||${s.tipeSoal}`;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(s);
                     return acc;
                   }, {});
                   return Object.entries(grouped).map(([type, list]: [string, any]) => (
                     <div key={type}>
                       <h4 className="text-[10px] font-bold text-gray-500 mb-2 uppercase tracking-wide">
-                        {list[0].namaMapel ? `${list[0].namaMapel} — ` : ''}{type.replace(/_/g, ' ')}
+                        <span className="text-blue-600">{list[0].namaMapel || ''}</span>
+                        {list[0].namaMapel ? ' — ' : ''}{type.split('||')[1]?.replace(/_/g, ' ') || type.replace(/_/g, ' ')}
                       </h4>
                       <div className="grid grid-cols-5 gap-2">
                         {list.map((s: any, idx: number) => {
@@ -1052,6 +1054,12 @@ export default function ClientMengerjakanUjian() {
                   ));
                 })()}
               </div>
+              <button
+                onClick={() => { setShowMobileNav(false); setShowSummary(true); }}
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 mb-4 shadow-sm"
+              >
+                <CheckCircle2 size={16} /> Selesai Ujian
+              </button>
               <div className="flex gap-3 text-[10px] font-semibold text-gray-500 justify-center">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded border border-green-600"></div> Tersimpan</div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-400 rounded border border-yellow-500"></div> Belum Save</div>
@@ -1177,13 +1185,17 @@ export default function ClientMengerjakanUjian() {
           <div className="flex flex-col gap-6">
             {(() => {
               const grouped = examData.soal.reduce((acc: any, s: any) => {
-                if (!acc[s.tipeSoal]) acc[s.tipeSoal] = [];
-                acc[s.tipeSoal].push(s);
+                const key = `${s.mapelId || ''}||${s.tipeSoal}`;
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(s);
                 return acc;
               }, {});
               return Object.entries(grouped).map(([type, list]: [string, any]) => (
                 <div key={type}>
-                  <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">{type.replace(/_/g, ' ')}</h4>
+                  <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-wider">
+                    <span className="text-blue-600">{list[0].namaMapel || ''}</span>
+                    {list[0].namaMapel ? ' — ' : ''}{type.split('||')[1]?.replace(/_/g, ' ') || type.replace(/_/g, ' ')}
+                  </h4>
                   <div className="grid grid-cols-5 lg:grid-cols-6 gap-2 xl:gap-3">
                     {list.map((s: any, idx: number) => {
                       const globalIdx = examData.soal.findIndex((x: any) => x.soalId === s.soalId);

@@ -2,11 +2,43 @@ import { NextResponse } from "next/server";
 import { getSantriSession } from "@/lib/santri-auth";
 import prisma from "@/lib/prisma";
 
-// Fisher-Yates array shuffle function
-function shuffleArray(array: any[]) {
+// Seeded PRNG (Mulberry32) untuk memastikan urutan acak selalu SAMA untuk 1 santri yang sama di paket yang sama
+function cyrb128(str: string) {
+  let h1 = 1779033703, h2 = 3144134277,
+      h3 = 1013904242, h4 = 2773480762;
+  for (let i = 0, k; i < str.length; i++) {
+      k = str.charCodeAt(i);
+      h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+      h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+      h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+      h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+  return (h1^h2^h3^h4) >>> 0;
+}
+
+function mulberry32(a: number) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+function getSeededRandom(seedStr: string) {
+  const seed = cyrb128(seedStr);
+  return mulberry32(seed);
+}
+
+// Fisher-Yates dengan PRNG seed
+function shuffleArraySeeded(array: any[], rng: () => number) {
   const newArr = [...array];
   for (let i = newArr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(rng() * (i + 1));
     [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
   }
   return newArr;
@@ -70,6 +102,11 @@ export async function POST(req: Request) {
 
     const riwayat = santri.riwayatRecords[0];
 
+    // Build seeded randomizer untuk santri ini + paket ini
+    // Memastikan santri dapat urutan acak yang unik dibanding temannya, TAPI
+    // jika dia ganti device atau log out urutannya TETAP sama.
+    const rng = getSeededRandom(riwayat.id + paketId);
+
     // Cek apakah sudah ada sesi ujian
     let sesi = await prisma.sesiUjianSantri.findUnique({
       where: {
@@ -90,16 +127,16 @@ export async function POST(req: Request) {
       if (extractedData) {
         if (sp.soal.tipeSoal === "MENJODOHKAN" && extractedData.pairs) {
           const lefts = extractedData.pairs.map((p: any) => p.left);
-          const rights = shuffleArray(extractedData.pairs.map((p: any) => p.right));
+          const rights = shuffleArraySeeded(extractedData.pairs.map((p: any) => p.right), rng);
           extractedData = { lefts, rights };
         } else if (sp.soal.tipeSoal === "MENGURUTKAN" && extractedData.items) {
-          extractedData.items = shuffleArray(extractedData.items);
+          extractedData.items = shuffleArraySeeded(extractedData.items, rng);
         } else if (sp.soal.tipeSoal === "KITABAH" && extractedData.huruf) {
-          extractedData.huruf = shuffleArray(extractedData.huruf);
+          extractedData.huruf = shuffleArraySeeded(extractedData.huruf, rng);
           delete extractedData.jawaban;
         } else if (sp.soal.tipeSoal === "DRAG_KATEGORI" && extractedData.items) {
           extractedData.categories = extractedData.categories || [];
-          extractedData.items = shuffleArray(extractedData.items.map((it: any) => ({ text: it.text }))); // remove category
+          extractedData.items = shuffleArraySeeded(extractedData.items.map((it: any) => ({ text: it.text })), rng); // remove category
         } else if (sp.soal.tipeSoal === "ISIAN_SAMPING" || sp.soal.tipeSoal === "ISIAN_BAWAH") {
           delete extractedData.jawaban; // ensure no jawaban
         }
@@ -123,7 +160,7 @@ export async function POST(req: Request) {
         perintah: sp.soal.jenisSoal?.instruksi || sp.soal.perintah,
         dataTambahan: extractedData,
         bobot: sp.soal.bobot,
-        opsiList: paket.sesiGlobal.acakOpsi ? shuffleArray(safeOpsi) : safeOpsi,
+        opsiList: paket.sesiGlobal.acakOpsi ? shuffleArraySeeded(safeOpsi, rng) : safeOpsi,
         urutanAsli: sp.urutan
       };
     });
@@ -137,7 +174,7 @@ export async function POST(req: Request) {
       }
       
       // Acak urutan Layer 1 (Mapel)
-      const mapelKeys = shuffleArray(Array.from(grouped.keys()));
+      const mapelKeys = shuffleArraySeeded(Array.from(grouped.keys()), rng);
       
       const newSoalDisajikan: typeof soalDisajikan = [];
       for (const key of mapelKeys) {
@@ -153,7 +190,7 @@ export async function POST(req: Request) {
         }
         
         // Acak urutan Layer 2 (Jenis Soal) untuk santri ini
-        const jenisKeys = shuffleArray(Array.from(groupedByJenis.keys()));
+        const jenisKeys = shuffleArraySeeded(Array.from(groupedByJenis.keys()), rng);
         
         for (const jKey of jenisKeys) {
           const soalPerJenis = groupedByJenis.get(jKey)!;
@@ -189,7 +226,7 @@ export async function POST(req: Request) {
           }
           
           // Acak unit-unit di dalam blok Jenis Soal ini, lalu flatten
-          const shuffledUnits = shuffleArray(units);
+          const shuffledUnits = shuffleArraySeeded(units, rng);
           for (const unit of shuffledUnits) {
             newSoalDisajikan.push(...unit);
           }

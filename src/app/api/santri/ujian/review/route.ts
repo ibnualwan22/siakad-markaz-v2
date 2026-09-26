@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSantriSession } from "@/lib/santri-auth";
 import prisma from "@/lib/prisma";
+import { normalizeAnswerText } from "@/lib/arabic-utils";
 
 export async function GET(req: Request) {
   try {
@@ -104,7 +105,7 @@ export async function GET(req: Request) {
           if (jawaban.opsiId && jawaban.opsiId === opsiBenar) {
             isCorrect = true;
             calculatedScore = soal.bobot;
-          } else if (jawaban.jawabanTeks && soal.kunciJawaban && jawaban.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) {
+          } else if (jawaban.jawabanTeks && soal.kunciJawaban && normalizeAnswerText(jawaban.jawabanTeks) === normalizeAnswerText(soal.kunciJawaban)) {
             isCorrect = true;
             calculatedScore = soal.bobot;
           } else {

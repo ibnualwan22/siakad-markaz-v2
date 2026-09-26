@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { calcMapelNilaiAkhir, calcMapelNilaiAkhirUsbuain2 } from "@/lib/grade-calculator";
+import { normalizeAnswerText } from "@/lib/arabic-utils";
 
 export async function submitSesiUjianSantri(sesiId: string, reason: string) {
   const sesi = await prisma.sesiUjianSantri.findUnique({
@@ -89,7 +90,7 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
           const opsiBenar = soal.opsiList.length > 0 ? soal.opsiList[0].id : null;
           if (jaw.opsiId && jaw.opsiId === opsiBenar) {
             skorSoal = soal.bobot;
-          } else if (jaw.teks && soal.kunciJawaban && jaw.teks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) {
+          } else if (jaw.teks && soal.kunciJawaban && normalizeAnswerText(jaw.teks) === normalizeAnswerText(soal.kunciJawaban)) {
             skorSoal = soal.bobot;
           }
           break;
@@ -116,6 +117,7 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
               }
             });
             skorSoal = (benar / Math.max(1, dt.lefts.length)) * soal.bobot;
+            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
@@ -136,8 +138,8 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
           // DB stores kunci di kunciJawaban atau dt.jawaban
           const kitabahKunci = soal.kunciJawaban || dt.jawaban || null;
           if (jaw.teks && kitabahKunci) {
-            const possibleKitabah = kitabahKunci.split('|').map((k: string) => k.trim().toLowerCase());
-            if (possibleKitabah.includes(jaw.teks.trim().toLowerCase())) {
+            const possibleKitabah = kitabahKunci.split('|').map((k: string) => normalizeAnswerText(k));
+            if (possibleKitabah.includes(normalizeAnswerText(jaw.teks))) {
               skorSoal = soal.bobot;
             }
             jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
@@ -154,6 +156,7 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
               if (found && found.category === jitem.category) benar++;
             });
             skorSoal = (benar / Math.max(1, dtValid.length)) * soal.bobot;
+            jawabanUpdates.push({ id: jaw.id, nilaiManual: skorSoal });
           }
           break;
         }
@@ -164,8 +167,8 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
             let benar = 0;
             const answers = jaw.data.answers;
             dt.blanks.forEach((b: any) => {
-              const studentAns = (answers[b.index] || "").trim().toLowerCase();
-              const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => k.trim().toLowerCase());
+              const studentAns = normalizeAnswerText(answers[b.index] || "");
+              const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => normalizeAnswerText(k));
               if (possibleAnswers.includes(studentAns)) {
                 benar++;
               }
@@ -281,8 +284,8 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
                 if (cell.isBlank) {
                   totalBlank++;
                   const key = `${rIdx}-${cIdx}`;
-                  const studentAns = (answers[key] || "").trim().toLowerCase();
-                  const possibleAnswers = (cell.value || "").split("|").map((k: string) => k.trim().toLowerCase());
+                  const studentAns = normalizeAnswerText(answers[key] || "");
+                  const possibleAnswers = (cell.value || "").split("|").map((k: string) => normalizeAnswerText(k));
                   if (studentAns !== "" && possibleAnswers.includes(studentAns)) {
                     benar++;
                   }
@@ -325,8 +328,8 @@ export async function submitSesiUjianSantri(sesiId: string, reason: string) {
           } else {
             // Evaluasi otomatis khusus untuk esai singkat / Arab jika Kunci Jawaban ada
             if ((soal.tipeSoal === "ESSAY_SINGKAT" || soal.tipeSoal === "ESSAY_ARAB") && soal.kunciJawaban && jaw.teks) {
-              const studentAnswer = jaw.teks.trim().toLowerCase();
-              const possibleAnswers = soal.kunciJawaban.split('|').map((k: string) => k.trim().toLowerCase());
+              const studentAnswer = normalizeAnswerText(jaw.teks);
+              const possibleAnswers = soal.kunciJawaban.split('|').map((k: string) => normalizeAnswerText(k));
               
               if (possibleAnswers.includes(studentAnswer)) {
                 skorSoal = soal.bobot;

@@ -46,7 +46,13 @@ export async function POST() {
     try {
       response = await fetch(
         `${PPDB_URL}/api/santri/siakad?key=${apiKey}&filter=AKTIF`,
-        { cache: "no-store", signal: AbortSignal.timeout(8000) }
+        { 
+          cache: "no-store", 
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            "x-api-key": apiKey
+          }
+        }
       );
     } catch (fetchErr: any) {
       console.warn('[sync-santri] Tidak dapat menjangkau server PPDB:', fetchErr?.message);

@@ -181,3 +181,23 @@ function wrapTextNode(text: string): string {
     return `<span dir="${isAr ? 'rtl' : 'ltr'}" style="${isAr ? 'font-family:Amiri,Traditional Arabic,Noto Naskh Arabic,serif;' : ''}">${processed}</span>`;
   }).join('');
 }
+
+/**
+ * Normalizes text for comparison (especially useful for auto-grading).
+ * - Removes zero-width spaces, joiners, non-joiners
+ * - Removes Arabic diacritics (Harakat)
+ * - Normalizes Alef variations (أ, إ, آ => ا)
+ * - Normalizes Yaa (ى => ي)
+ * - Normalizes Taa Marbutah (ة => ه)
+ * - Trims whitespaces & lowercases everything
+ */
+export function normalizeAnswerText(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u200B-\u200F\u202A-\u202E]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .toLowerCase()
+    .trim();
+}

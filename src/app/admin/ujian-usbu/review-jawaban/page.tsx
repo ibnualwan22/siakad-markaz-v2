@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, CheckCircle, CheckCircle2, XCircle, Clock, X, Brain, Edit3, Save, AlertCircle, ChevronDown, ChevronRight, Activity, BookOpen, Layers } from "lucide-react";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
+import { normalizeAnswerText } from "@/lib/arabic-utils";
 
 export default function ReviewJawabanPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
@@ -19,7 +20,7 @@ export default function ReviewJawabanPage() {
   const [expandedSoalId, setExpandedSoalId] = useState<string | null>(null);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [editingJawabanId, setEditingJawabanId] = useState<string | null>(null);
-  const [editScore, setEditScore] = useState<number>(0);
+  const [editScore, setEditScore] = useState<number | string>(0);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isAIGrading, setIsAIGrading] = useState<string | null>(null); // soal.id basis
   
@@ -97,7 +98,7 @@ export default function ReviewJawabanPage() {
   const handleUpdateNilai = async (jawabanId: string, overrideVal?: number | null) => {
     setIsUpdating(true);
     try {
-      const val = overrideVal !== undefined ? overrideVal : editScore;
+      const val = overrideVal !== undefined ? overrideVal : (editScore === "" ? 0 : Number(editScore));
       const res = await fetch("/api/admin/ujian-usbu/review-jawaban", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -250,7 +251,7 @@ export default function ReviewJawabanPage() {
       } else {
         const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
         if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
-        else if (jaw.jawabanTeks && soal.kunciJawaban && jaw.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) isBenar = true;
+        else if (jaw.jawabanTeks && soal.kunciJawaban && normalizeAnswerText(jaw.jawabanTeks) === normalizeAnswerText(soal.kunciJawaban)) isBenar = true;
       }
       
       return isBenar ? (
@@ -468,12 +469,13 @@ export default function ReviewJawabanPage() {
                       return <td key={cIdx} className="px-2 py-1 border-r border-gray-100 bg-white text-gray-600">{cell.value}</td>;
                     }
                     const key = `${rIdx}-${cIdx}`;
-                    const studentAns = cells[key] || "";
-                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => k.trim().toLowerCase());
-                    const isCorrect = studentAns.trim() !== "" && possibleAnswers.includes(studentAns.trim().toLowerCase());
+                    const rawStudentAns = cells[key] || "";
+                    const studentAns = normalizeAnswerText(rawStudentAns);
+                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => normalizeAnswerText(k));
+                    const isCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
                     return (
                       <td key={cIdx} className={`px-2 py-1 border-r font-bold ${isCorrect ? 'bg-green-50 text-green-800 border-green-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
-                        {studentAns || <span className="text-gray-300 italic">—</span>}
+                        {rawStudentAns || <span className="text-gray-300 italic">—</span>}
                       </td>
                     );
                   })}
@@ -528,12 +530,13 @@ export default function ReviewJawabanPage() {
       return (
         <div className="flex flex-wrap gap-1">
           {soal.dataTambahan.blanks.map((b: any, i: number) => {
-            const studentAns = (jaw.jawabanData.answers[b.index] || "").trim();
-            const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => k.trim().toLowerCase());
-            const isCorrect = studentAns !== "" && possibleAnswers.includes(studentAns.toLowerCase());
+            const rawStudentAns = (jaw.jawabanData.answers[b.index] || "").trim();
+            const studentAns = normalizeAnswerText(rawStudentAns);
+            const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => normalizeAnswerText(k));
+            const isCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
             return (
               <span key={i} className={`text-xs font-medium px-2 py-1 flex items-center gap-1 inline-block rounded border ${isCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                B{b.index+1}: {studentAns || <span className="text-gray-400 italic">kosong</span>} {isCorrect ? <CheckCircle size={10} className="text-green-600"/> : <X size={10} className="text-rose-600"/>}
+                B{b.index+1}: {rawStudentAns || <span className="text-gray-400 italic">kosong</span>} {isCorrect ? <CheckCircle size={10} className="text-green-600"/> : <X size={10} className="text-rose-600"/>}
               </span>
             );
           })}
@@ -728,7 +731,7 @@ export default function ReviewJawabanPage() {
               } else {
                 const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
                 if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
-                else if (jaw.jawabanTeks && soal.kunciJawaban && jaw.jawabanTeks.trim().toLowerCase() === soal.kunciJawaban.trim().toLowerCase()) isBenar = true;
+                else if (jaw.jawabanTeks && soal.kunciJawaban && normalizeAnswerText(jaw.jawabanTeks) === normalizeAnswerText(soal.kunciJawaban)) isBenar = true;
               }
               if (isBenar) poin = soal.bobot;
            }
@@ -977,7 +980,7 @@ export default function ReviewJawabanPage() {
                                                               type="number" 
                                                               max={soal.bobot} min={0} 
                                                               value={editScore}
-                                                              onChange={(e) => setEditScore(Number(e.target.value))}
+                                                              onChange={(e) => setEditScore(e.target.value === "" ? "" : Number(e.target.value))}
                                                               className="neu-input w-20 py-1.5 px-2 text-center text-sm font-bold border rounded-lg focus:ring focus:ring-blue-200"
                                                             />
                                                             <div className="flex justify-end gap-1">
@@ -1020,7 +1023,7 @@ export default function ReviewJawabanPage() {
                                                           </React.Fragment>
                                                         )
                                                       ) : (
-                                                        <span className="text-gray-300 text-[10px] font-bold uppercase block">-</span>
+                                                        <span className="text-gray-300 text-[10px] font-bold uppercase">-</span>
                                                       )}
                                                    </td>
                                                  </tr>
@@ -1166,7 +1169,7 @@ export default function ReviewJawabanPage() {
                                                         type="number" 
                                                         max={soal.bobot} min={0} 
                                                         value={editScore}
-                                                        onChange={(e) => setEditScore(Number(e.target.value))}
+                                                        onChange={(e) => setEditScore(e.target.value === "" ? "" : Number(e.target.value))}
                                                         className="neu-input w-20 py-1.5 px-2 text-center text-sm font-bold border rounded-lg focus:ring focus:ring-blue-200"
                                                       />
                                                     </div>

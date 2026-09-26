@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, X, ChevronRight, Layers, ArrowLeft, Clock } from "lucide-react";
 import toast from "react-hot-toast";
+import { normalizeAnswerText } from "@/lib/arabic-utils";
 
 function ReviewContent() {
   const router = useRouter();
@@ -243,12 +244,12 @@ function ReviewContent() {
                       return <td key={cIdx} className="px-2 py-1.5 border-r border-gray-100 bg-gray-50 text-gray-600">{cell.value}</td>;
                     }
                     const key = `${rIdx}-${cIdx}`;
-                    const studentAns = cells[key] || "";
-                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => k.trim().toLowerCase());
-                    const isCellCorrect = studentAns.trim() !== "" && possibleAnswers.includes(studentAns.trim().toLowerCase());
+                    const studentAns = normalizeAnswerText(cells[key] || "");
+                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => normalizeAnswerText(k));
+                    const isCellCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
                     return (
                       <td key={cIdx} className={`px-2 py-1.5 border-r font-bold ${isCellCorrect ? 'bg-green-50 text-green-800' : 'bg-rose-50 text-rose-800'}`}>
-                        {studentAns || <span className="text-gray-300 italic">—</span>}
+                        {cells[key] || <span className="text-gray-300 italic">—</span>}
                         {studentAns && (isCellCorrect ? <CheckCircle size={10} className="inline ml-1 text-green-500" /> : <X size={10} className="inline ml-1 text-rose-500" />)}
                       </td>
                     );
@@ -349,12 +350,13 @@ function ReviewContent() {
       return (
         <div className="flex flex-wrap gap-1.5">
           {soal.dataTambahan.blanks.map((b: any, i: number) => {
-            const studentAns = (jaw.jawabanData.answers[b.index] || "").trim();
-            const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => k.trim().toLowerCase());
-            const isAnsCorrect = studentAns !== "" && possibleAnswers.includes(studentAns.toLowerCase());
+            const rawStudentAns = (jaw.jawabanData.answers[b.index] || "").trim();
+            const studentAns = normalizeAnswerText(rawStudentAns);
+            const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => normalizeAnswerText(k));
+            const isAnsCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
             return (
               <span key={i} className={`text-xs font-medium px-2 py-1.5 flex items-center gap-1.5 inline-block rounded border ${isAnsCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                Kosong {b.index + 1}: {studentAns || <span className="text-gray-400 italic">kosong</span>} {isAnsCorrect ? <CheckCircle size={12} className="text-green-600" /> : <X size={12} className="text-rose-600" />}
+                Kosong {b.index + 1}: {rawStudentAns || <span className="text-gray-400 italic">kosong</span>} {isAnsCorrect ? <CheckCircle size={12} className="text-green-600" /> : <X size={12} className="text-rose-600" />}
               </span>
             );
           })}

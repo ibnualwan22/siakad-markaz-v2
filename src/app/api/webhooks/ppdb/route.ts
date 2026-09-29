@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { POST as runGlobalSync } from "@/app/api/admin/sync-santri/route";
 
-const WEBHOOK_SECRET = process.env.PPDB_WEBHOOK_SECRET || "rahasia-webhook-siakad";
+const WEBHOOK_SECRET = process.env.PPDB_WEBHOOK_SECRET;
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +13,11 @@ export async function POST(req: NextRequest) {
     let token = customHeader;
     if (!token && authHeader && authHeader.startsWith("Bearer ")) {
       token = authHeader.substring(7);
+    }
+
+    if (!WEBHOOK_SECRET) {
+      console.error("PPDB_WEBHOOK_SECRET belum dikonfigurasi");
+      return NextResponse.json({ error: "Webhook belum dikonfigurasi" }, { status: 500 });
     }
 
     if (token !== WEBHOOK_SECRET) {

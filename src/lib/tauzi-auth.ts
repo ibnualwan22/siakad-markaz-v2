@@ -1,8 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const secretKey = process.env.JWT_SECRET || 'markaz-arabiyah-super-secret-key-123!@#';
-const key = new TextEncoder().encode(secretKey);
+import { getJwtKey } from './jwt-secret';
 
 export type TauziSessionPayload = {
   santriId: string;
@@ -17,12 +16,12 @@ export async function encryptTauziSession(payload: TauziSessionPayload) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('1d') // cukup 1 hari untuk tes
-    .sign(key);
+    .sign(getJwtKey());
 }
 
 export async function decryptTauziSession(input: string): Promise<TauziSessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(input, key, {
+    const { payload } = await jwtVerify(input, getJwtKey(), {
       algorithms: ['HS256'],
     });
     return payload as unknown as TauziSessionPayload;

@@ -2,8 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 
-const secretKey = process.env.JWT_SECRET || 'markaz-arabiyah-super-secret-key-123!@#';
-const key = new TextEncoder().encode(secretKey);
+import { getJwtKey } from './jwt-secret';
 
 export type SessionPayload = {
   userId: string;
@@ -19,12 +18,12 @@ export async function encrypt(payload: SessionPayload) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('24h')
-    .sign(key);
+    .sign(getJwtKey());
 }
 
 export async function decrypt(input: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(input, key, {
+    const { payload } = await jwtVerify(input, getJwtKey(), {
       algorithms: ['HS256'],
     });
     return payload as SessionPayload;

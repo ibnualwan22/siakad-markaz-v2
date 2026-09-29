@@ -6,7 +6,19 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding admin user...');
 
-  const passwordHash = await bcrypt.hash('admin123', 10);
+  // Password admin WAJIB disuplai via environment — jangan pernah hardcode
+  // kredensial di repo (sebelumnya 'admin123' tertulis di repo publik).
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 8) {
+    console.error(
+      "SEED_ADMIN_PASSWORD belum diset (minimal 8 karakter). " +
+        "Set env tersebut sebelum menjalankan seed, mis.:\n" +
+        "  SEED_ADMIN_PASSWORD='kata-sandi-kuat' npx prisma db seed"
+    );
+    process.exit(1);
+  }
+
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
 
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
@@ -47,7 +59,7 @@ async function main() {
   }
 
   console.log('Admin user seeded:', admin.username);
-  console.log('Password default: admin123');
+  console.log('Catatan: password diambil dari SEED_ADMIN_PASSWORD (tidak ditampilkan).');
 }
 
 main()

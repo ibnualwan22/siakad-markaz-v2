@@ -1,8 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 
-const secretKey = process.env.JWT_SECRET || 'markaz-arabiyah-super-secret-key-123!@#';
-const key = new TextEncoder().encode(secretKey);
+import { getJwtKey } from './jwt-secret';
 
 export type SantriSessionPayload = {
   santriId: string;
@@ -15,12 +14,12 @@ export async function encryptSantriSession(payload: SantriSessionPayload) {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(key);
+    .sign(getJwtKey());
 }
 
 export async function decryptSantriSession(input: string): Promise<SantriSessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(input, key, {
+    const { payload } = await jwtVerify(input, getJwtKey(), {
       algorithms: ['HS256'],
     });
     return payload as unknown as SantriSessionPayload;

@@ -106,6 +106,22 @@ model SantriInternal {
   anggotaLajnahList     AnggotaLajnah[]
   anggotaJasusList      AnggotaJasus[]
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
+  waOtpList             WaOtp[]
+}
+
+// OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
+model WaOtp {
+  id        String         @id @default(cuid())
+  santriId  String
+  noWa      String
+  otpHash   String
+  expiresAt DateTime
+  attempts  Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  santri SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@index([santriId])
 }
 
 model Dufah {

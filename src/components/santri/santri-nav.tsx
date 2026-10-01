@@ -18,7 +18,8 @@ import {
   MapPin,
   DoorOpen,
   ClipboardCheck,
-  AlertTriangle
+  AlertTriangle,
+  MessageCircle
 } from "lucide-react";
 import { useState } from "react";
 
@@ -32,6 +33,7 @@ const baseNavItems = [
   { href: "/santri/perizinan", label: "Perizinan", icon: Shield },
   { href: "/santri/denah-lokasi", label: "Denah Sakan", icon: MapPin },
   { href: "/santri/daftar-ulang", label: "Daftar Ulang", icon: RefreshCw },
+  { href: "/santri/no-wa", label: "WhatsApp AI", icon: MessageCircle },
   { href: "/santri/checkout", label: "Check Out", icon: DoorOpen },
 ];
 

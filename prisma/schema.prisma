@@ -145,6 +145,7 @@ model Dufah {
   sesiUjianGlobalList SesiUjianGlobal[]
   anggotaLajnahList AnggotaLajnah[]
   anggotaJasusList  AnggotaJasus[]
+  arsipGaleriList   ArsipGaleri[]
 }
 
 model RiwayatSantri {
@@ -1011,6 +1012,20 @@ model AnggotaLajnah {
   dufah      Dufah          @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
 
   @@unique([santriId, dufahNama])
+}
+
+// Arsip galeri per dufah: judul + link Google Drive (dikelola admin, dilihat santri)
+model ArsipGaleri {
+  id        String   @id @default(cuid())
+  judul     String
+  driveUrl  String
+  dufahNama String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dufah Dufah @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+
+  @@index([dufahNama])
 }
 
 model AnggotaJasus {

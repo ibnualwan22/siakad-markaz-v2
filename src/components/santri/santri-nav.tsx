@@ -19,7 +19,8 @@ import {
   DoorOpen,
   ClipboardCheck,
   AlertTriangle,
-  MessageCircle
+  MessageCircle,
+  Images
 } from "lucide-react";
 import { useState } from "react";
 
@@ -34,6 +35,7 @@ const baseNavItems = [
   { href: "/santri/denah-lokasi", label: "Denah Sakan", icon: MapPin },
   { href: "/santri/daftar-ulang", label: "Daftar Ulang", icon: RefreshCw },
   { href: "/santri/no-wa", label: "WhatsApp AI", icon: MessageCircle },
+  { href: "/santri/arsip-galeri", label: "Galeri", icon: Images },
   { href: "/santri/checkout", label: "Check Out", icon: DoorOpen },
 ];
 

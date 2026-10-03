@@ -117,6 +117,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: "agenda_rutinan_edit", label: "Agenda Rutinan (Aksi)", desc: "Akses mengelola agenda rutinan", category: "Manajemen Aplikasi", type: "aksi" },
   { id: "konten_instagram", label: "Konten Instagram (Lihat)", desc: "Akses melihat feed instagram", category: "Manajemen Aplikasi", type: "lihat" },
   { id: "konten_instagram_edit", label: "Konten Instagram (Aksi)", desc: "Akses mengelola feed instagram", category: "Manajemen Aplikasi", type: "aksi" },
+  { id: "arsip_galeri", label: "Arsip Galeri", desc: "Akses mengelola arsip galeri (judul + link Google Drive)", category: "Manajemen Aplikasi", type: "aksi" },
 
   // Divisi Kebahasaan
   { id: "mukholif_lughoh", label: "Mukholif Lughoh (Lihat)", desc: "Akses melihat daftar laporan pelanggaran bahasa", category: "Divisi Kebahasaan", type: "lihat" },

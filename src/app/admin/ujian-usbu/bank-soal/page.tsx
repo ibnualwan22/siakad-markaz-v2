@@ -268,12 +268,21 @@ export default function BankSoalPage() {
     }
   };
 
-  const fetchSoal = async () => {
+  const fetchSoal = async (keepPage = false) => {
     setLoadingSoal(true);
-    setCurrentPage(0);
+    if (!keepPage) setCurrentPage(0);
     try {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal?programId=${selectedProgram}&mapelId=${selectedMapel}&jenisSoalId=${selectedJenisSoal}`);
-      if (res.ok) setSoalList(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setSoalList(data);
+        if (keepPage) {
+          setCurrentPage((prev) => {
+            const total = Math.ceil(data.length / PAGE_SIZE);
+            return total === 0 ? 0 : Math.min(prev, total - 1);
+          });
+        }
+      }
       else setSoalList([]);
     } catch {
       toast.error("Gagal load soal");
@@ -555,7 +564,7 @@ export default function BankSoalPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(isEditing ? "Soal berhasil diupdate!" : "Soal berhasil ditambahkan!");
       setIsModalOpen(false);
-      fetchSoal();
+      fetchSoal(true);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -567,7 +576,7 @@ export default function BankSoalPage() {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Soal berhasil dihapus");
-      fetchSoal();
+      fetchSoal(true);
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -603,7 +612,7 @@ export default function BankSoalPage() {
       if (!res.ok) throw new Error((await res.json()).error);
     } catch (err: any) {
       toast.error(err.message || "Gagal mengubah assignment soal");
-      fetchSoal(); // rollback on error
+      fetchSoal(true); // rollback on error
     }
   };
 
@@ -632,7 +641,7 @@ export default function BankSoalPage() {
       toast.success(`Berhasil mengimport ${data.count} soal.`);
       setIsImportModalOpen(false);
       setImportFile(null);
-      fetchSoal();
+      fetchSoal(true);
     } catch (err: any) {
       toast.error(err.message || "Gagal import excel");
     } finally {
@@ -683,7 +692,7 @@ export default function BankSoalPage() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(`Berhasil mereset penugasan soal untuk Usbu' ${selectedUsbu}`);
-      fetchSoal();
+      fetchSoal(true);
     } catch (err: any) {
       toast.error(err.message || "Gagal mereset penugasan");
     }
@@ -727,7 +736,7 @@ export default function BankSoalPage() {
       setSoalList(prev => prev.map(s => ids.includes(s.id) ? { ...s, bobot: bobotBaru } : s));
     } catch (err: any) {
       toast.error(err.message || "Gagal update bobot masal");
-      fetchSoal();
+      fetchSoal(true);
     }
   };
 
@@ -767,7 +776,7 @@ export default function BankSoalPage() {
       toast.success(assign ? `Berhasil mencentang Usbu' ${targetU} untuk ${ids.length} soal` : `Berhasil menghapus centang Usbu' ${targetU} untuk ${ids.length} soal`);
     } catch(err: any) {
        toast.error(err.message);
-       fetchSoal();
+       fetchSoal(true);
     }
   };
 

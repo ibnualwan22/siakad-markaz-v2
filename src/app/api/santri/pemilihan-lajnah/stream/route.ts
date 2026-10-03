@@ -69,7 +69,7 @@ function ensurePolling(sesiId: string) {
       if (payload !== hub.lastPayload) {
         hub.lastPayload = payload;
         broadcast(sesiId, `data: ${payload}\n\n`);
-      } else if (n % 8 === 0) {
+      } else if (n % 25 === 0) {
         broadcast(sesiId, ": ping\n\n"); // heartbeat + sapu client mati
       }
     } catch {
@@ -77,7 +77,7 @@ function ensurePolling(sesiId: string) {
     }
   };
   tick();
-  hub.timer = setInterval(tick, 3000);
+  hub.timer = setInterval(tick, 1000);
 }
 
 function lepas(sesiId: string, controller: ReadableStreamDefaultController<Uint8Array>) {

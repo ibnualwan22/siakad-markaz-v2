@@ -208,6 +208,9 @@ export function PemilihanLajnahClient() {
       if (!res.ok) throw new Error(j.error || "Gagal memilih");
       setSudahMemilih(true);
       setPilihanSaya(confirm.id);
+      // Optimistic: langsung tambah hitungan di layar tanpa menunggu SSE
+      setPaslon((prev) => prev.map((pl) => (pl.id === confirm.id ? { ...pl, suara: pl.suara + 1 } : pl)));
+      setTotalSuara((t) => t + 1);
       setConfirm(null);
       fireConfetti();
       toast.success("Suara kamu sudah tercatat!");

@@ -54,6 +54,8 @@ export default function PemilihanLajnahPage() {
 
   // Hasil tutup
   const [hasilTutup, setHasilTutup] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState("");
 
   useEffect(() => { init(); }, []);
   useEffect(() => { if (activeDufah) muatSesi(activeDufah); }, [activeDufah]);
@@ -77,14 +79,22 @@ export default function PemilihanLajnahPage() {
     finally { setLoading(false); }
   };
 
-  const muatDetail = async (id: string) => {
+  const muatDetail = async (id: string, silent = false) => {
     try {
       const res = await fetch(`/api/admin/pemilihan-lajnah/${id}`);
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       setSelected(j);
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e: any) { if (!silent) toast.error(e.message); }
   };
+
+  // Polling live tiap 3 detik saat sesi dibuka
+  useEffect(() => {
+    if (!selected || selected.status !== "BUKA") return;
+    const iv = setInterval(() => muatDetail(selected.id, true), 3000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, selected?.status]);
 
   const buatSesi = async () => {
     if (!judul.trim() || !sesiDufah) return toast.error("Judul dan dufah wajib diisi");
@@ -112,6 +122,27 @@ export default function PemilihanLajnahPage() {
     } catch { /* abaikan */ }
   };
 
+  const handleFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) return toast.error("Ukuran foto maksimal 2MB");
+    setPreview(URL.createObjectURL(f));
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", f);
+      const res = await fetch("/api/admin/pemilihan-lajnah/upload", { method: "POST", body: fd });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Upload gagal");
+      setFotoUrl(j.url);
+    } catch (err: any) {
+      toast.error(err.message);
+      setPreview("");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const tambahPaslon = async () => {
     if (!sel1 || !sel2) return toast.error("Pilih dua santri (rois & wakil)");
     if (sel1.id === sel2.id) return toast.error("Rois dan wakil harus berbeda");
@@ -128,7 +159,7 @@ export default function PemilihanLajnahPage() {
       if (!res.ok) throw new Error(j.error);
       toast.success(`Paslon ${j.nomorUrut} ditambahkan`);
       setShowPaslonModal(false);
-      setSel1(null); setSel2(null); setQ1(""); setQ2(""); setFotoUrl(""); setVisiMisi("");
+      setSel1(null); setSel2(null); setQ1(""); setQ2(""); setFotoUrl(""); setVisiMisi(""); setPreview("");
       muatDetail(selected.id);
     } catch (e: any) { toast.error(e.message); }
   };
@@ -198,7 +229,13 @@ export default function PemilihanLajnahPage() {
         <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2"><Vote className="w-5 h-5" /> {s.judul}</h1>
-            <p className="text-sm text-gray-500">{s.dufahNama} • {statusBadge(s.status)}</p>
+            <p className="text-sm text-gray-500 flex items-center gap-2">{s.dufahNama} • {statusBadge(s.status)}
+              {s.status === "BUKA" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" /> LIVE
+                </span>
+              )}
+            </p>
           </div>
           <div className="flex gap-2">
             {s.status === "DRAFT" && (
@@ -232,7 +269,7 @@ export default function PemilihanLajnahPage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-bold">Paslon ({s.paslonList?.length || 0})</h2>
           {s.status === "DRAFT" && (
-            <button onClick={() => setShowPaslonModal(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm">
+            <button onClick={() => { setSel1(null); setSel2(null); setQ1(""); setQ2(""); setFotoUrl(""); setVisiMisi(""); setPreview(""); setShowPaslonModal(true); }} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm">
               <Plus className="w-4 h-4" /> Tambah Paslon
             </button>
           )}
@@ -314,12 +351,23 @@ export default function PemilihanLajnahPage() {
                   )}
                 </div>
               ))}
-              <label className="text-sm text-gray-600 block mb-1">Link Foto (opsional)</label>
-              <input value={fotoUrl} onChange={(e) => setFotoUrl(e.target.value)} placeholder="https://..." className="border rounded-lg px-3 py-2 text-sm w-full mb-3" />
+              <label className="text-sm text-gray-600 block mb-1">Foto Paslon (opsional, maks 2MB)</label>
+              <div className="flex items-center gap-3 mb-3">
+                {(preview || fotoUrl) && (
+                  <img src={preview || fotoUrl} alt="" className="w-16 h-16 rounded-xl object-cover border" />
+                )}
+                <label className={`cursor-pointer text-sm px-4 py-2 rounded-lg border ${uploading ? "opacity-50 pointer-events-none" : "hover:bg-gray-50"}`}>
+                  {uploading ? "Mengupload..." : fotoUrl ? "Ganti Foto" : "Pilih Foto"}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploading} onChange={handleFoto} />
+                </label>
+                {fotoUrl && !uploading && (
+                  <button onClick={() => { setFotoUrl(""); setPreview(""); }} className="text-xs text-red-600">Hapus</button>
+                )}
+              </div>
               <label className="text-sm text-gray-600 block mb-1">Visi & Misi (opsional)</label>
               <textarea value={visiMisi} onChange={(e) => setVisiMisi(e.target.value)} rows={3} placeholder="Visi misi paslon..." className="border rounded-lg px-3 py-2 text-sm w-full mb-4" />
-              <button onClick={tambahPaslon} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-medium">
-                Tambah Paslon
+              <button onClick={tambahPaslon} disabled={uploading} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium">
+                {uploading ? "Menunggu upload..." : "Tambah Paslon"}
               </button>
             </div>
           </div>

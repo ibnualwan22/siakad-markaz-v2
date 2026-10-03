@@ -16,7 +16,7 @@ services:
       - siakad-network
 
   app:
-    build: .
+    image: ghcr.io/ibnualwan22/siakad-markaz-v2:latest
     container_name: siakad-app
     restart: always
     ports:
@@ -29,6 +29,8 @@ services:
       - NODE_ENV=production
       # Menimpa DATABASE_URL dari .env lokal agar mengarah ke container db
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-rahasia}@db:5432/${POSTGRES_DB:-siakad}?schema=public
+    volumes:
+      - ./uploads:/app/public/uploads
     networks:
       - siakad-network
 

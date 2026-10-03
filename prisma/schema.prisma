@@ -105,6 +105,9 @@ model SantriInternal {
   pelanggarMukholifList PelanggarMukholif[] @relation("PelanggarMukholif")
   anggotaLajnahList     AnggotaLajnah[]
   anggotaJasusList      AnggotaJasus[]
+  paslonLajnah1List    PaslonLajnah[]     @relation("PaslonSantri1")
+  paslonLajnah2List    PaslonLajnah[]     @relation("PaslonSantri2")
+  suaraLajnahList      SuaraLajnah[]
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
   waOtpList             WaOtp[]
 }
@@ -146,6 +149,7 @@ model Dufah {
   anggotaLajnahList AnggotaLajnah[]
   anggotaJasusList  AnggotaJasus[]
   arsipGaleriList   ArsipGaleri[]
+  sesiPemilihanList SesiPemilihanLajnah[]
 }
 
 model RiwayatSantri {
@@ -1215,4 +1219,59 @@ model radusergroup {
   priority  Int    @default(1)
 
   @@index([username], map: "idx_radusergroup_username")
+}
+
+// Pemilihan Rois Lajnah: e-voting paslon (2 santri: rois + wakil).
+// Pemenang otomatis menjadi AnggotaLajnah.
+model SesiPemilihanLajnah {
+  id             String    @id @default(cuid())
+  judul          String
+  dufahNama      String
+  status         String    @default("DRAFT") // DRAFT | BUKA | TUTUP
+  rencanaTutupAt DateTime?
+  dibukaAt       DateTime?
+  ditutupAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  dufah      Dufah            @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+  paslonList PaslonLajnah[]
+  suaraList  SuaraLajnah[]
+
+  @@index([dufahNama])
+  @@index([status])
+}
+
+model PaslonLajnah {
+  id        String   @id @default(cuid())
+  sesiId    String
+  nomorUrut Int
+  santri1Id String // calon rois
+  santri2Id String // calon wakil
+  fotoUrl   String?
+  visiMisi  String?
+  createdAt DateTime @default(now())
+
+  sesi      SesiPemilihanLajnah @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+  santri1   SantriInternal      @relation("PaslonSantri1", fields: [santri1Id], references: [id], onDelete: Cascade)
+  santri2   SantriInternal      @relation("PaslonSantri2", fields: [santri2Id], references: [id], onDelete: Cascade)
+  suaraList SuaraLajnah[]
+
+  @@unique([sesiId, nomorUrut])
+  @@index([sesiId])
+}
+
+model SuaraLajnah {
+  id        String   @id @default(cuid())
+  sesiId    String
+  paslonId  String
+  santriId  String // pemilih
+  createdAt DateTime @default(now())
+
+  sesi   SesiPemilihanLajnah @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+  paslon PaslonLajnah        @relation(fields: [paslonId], references: [id], onDelete: Cascade)
+  santri SantriInternal      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@unique([sesiId, santriId]) // 1 santri = 1 suara per sesi
+  @@index([paslonId])
 }

@@ -20,35 +20,58 @@ export async function PUT(
     const { id } = await params;
     const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, bulanKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
-    // Update soal and re-create opsi
-    const updatedSoal = await prisma.bankSoalUsbu.update({
+    // Ambil opsi lama (id + urutan) SEBELUM dihapus — untuk memetakan
+    // jawaban santri yang sudah masuk ke id opsi yang baru
+    const soalLama = await prisma.bankSoalUsbu.findUnique({
       where: { id },
-      data: {
-        pertanyaan: pertanyaan || "",
-        gambarUrl: gambarUrl || null,
-        grupSoalId: grupSoalId !== undefined ? (grupSoalId || null) : undefined,
-        tipeSoal: tipeSoal || "PG",
-        perintah: perintah !== undefined ? (perintah || null) : undefined,
-        kunciJawaban: kunciJawaban !== undefined ? (kunciJawaban || null) : undefined,
-        dataTambahan: dataTambahan !== undefined ? (dataTambahan || null) : undefined,
-        bobot: Number(bobot) || 10,
-        ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
-        ...(bulanKe !== undefined && { bulanKe: Number(bulanKe) }),
-        ...(paketSoal !== undefined && { paketSoal }),
-        ...(jenisSoalId !== undefined && { jenisSoalId }),
-        opsiList: {
-          deleteMany: {},
-          create: opsiList?.map((opsi: any, i: number) => ({
-            teks: opsi.teks || "",
-            gambarUrl: opsi.gambarUrl || null,
-            isCorrect: opsi.isCorrect,
-            urutan: i + 1
-          })) || []
+      select: { opsiList: { select: { id: true, urutan: true }, orderBy: { urutan: "asc" } } },
+    });
+
+    // Update soal and re-create opsi, lalu arahkan jawaban santri ke id baru
+    const updatedSoal = await prisma.$transaction(async (tx) => {
+      const upd = await tx.bankSoalUsbu.update({
+        where: { id },
+        data: {
+          pertanyaan: pertanyaan || "",
+          gambarUrl: gambarUrl || null,
+          grupSoalId: grupSoalId !== undefined ? (grupSoalId || null) : undefined,
+          tipeSoal: tipeSoal || "PG",
+          perintah: perintah !== undefined ? (perintah || null) : undefined,
+          kunciJawaban: kunciJawaban !== undefined ? (kunciJawaban || null) : undefined,
+          dataTambahan: dataTambahan !== undefined ? (dataTambahan || null) : undefined,
+          bobot: Number(bobot) || 10,
+          ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
+          ...(bulanKe !== undefined && { bulanKe: Number(bulanKe) }),
+          ...(paketSoal !== undefined && { paketSoal }),
+          ...(jenisSoalId !== undefined && { jenisSoalId }),
+          opsiList: {
+            deleteMany: {},
+            create: opsiList?.map((opsi: any, i: number) => ({
+              teks: opsi.teks || "",
+              gambarUrl: opsi.gambarUrl || null,
+              isCorrect: opsi.isCorrect,
+              urutan: i + 1
+            })) || []
+          }
+        },
+        include: {
+          opsiList: true
         }
-      },
-      include: {
-        opsiList: true
+      });
+
+      // Petakan id lama -> id baru berdasarkan urutan opsi
+      const lama = (soalLama?.opsiList || []).slice().sort((a, b) => a.urutan - b.urutan);
+      const baru = (upd.opsiList || []).slice().sort((a, b) => a.urutan - b.urutan);
+      const n = Math.min(lama.length, baru.length);
+      for (let i = 0; i < n; i++) {
+        if (lama[i].id !== baru[i].id) {
+          await tx.jawabanUjianSantri.updateMany({
+            where: { soalId: id, opsiId: lama[i].id },
+            data: { opsiId: baru[i].id },
+          });
+        }
       }
+      return upd;
     });
 
     return NextResponse.json(updatedSoal);

@@ -234,10 +234,10 @@ export function PemilihanLajnahClient() {
     }
   }, []);
 
-  // Polling also discovers new sessions while this screen is empty or showing past results.
+  // Polling longgar (30 dtk) sebagai jaring pengaman SSE; juga menemukan sesi baru.
   useEffect(() => {
     void muat(false);
-    const interval = setInterval(() => { void muat(); }, 5000);
+    const interval = setInterval(() => { void muat(); }, 30000); // fallback longgar: SSE yang utama
     const onVisible = () => {
       if (document.visibilityState === "visible") void muat();
     };

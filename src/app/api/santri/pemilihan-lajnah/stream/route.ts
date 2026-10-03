@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
+import { tutupPemilihanKedaluwarsa } from "@/lib/pemilihan-lajnah";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
   }
 
   const ambilHasil = async () => {
+    await tutupPemilihanKedaluwarsa(prisma, sesiId);
     const sesi = await prisma.sesiPemilihanLajnah.findUnique({
       where: { id: sesiId },
       select: { status: true, rencanaTutupAt: true, ditutupAt: true },
@@ -44,33 +46,43 @@ export async function GET(req: Request) {
     return { status: sesi?.status, rencanaTutupAt: sesi?.rencanaTutupAt, totalSuara: total, suara };
   };
 
+  let stop = () => {};
   const stream = new ReadableStream({
-    async start(controller) {
+    start(controller) {
       const enc = new TextEncoder();
       let terakhir = "";
       let pingCount = 0;
+      let stopped = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      stop = () => {
+        if (stopped) return;
+        stopped = true;
+        if (timer) clearTimeout(timer);
+        req.signal.removeEventListener("abort", stop);
+        try { controller.close(); } catch { /* already closed or cancelled */ }
+      };
       const kirim = async () => {
         try {
           const data = await ambilHasil();
+          if (stopped) return;
           const payload = JSON.stringify(data);
-          if (payload !== terakhir) {
+          if (payload !== terakhir || ++pingCount % 5 === 0) {
             terakhir = payload;
-            controller.enqueue(enc.encode(`data: ${payload}\n\n`));
-          } else if (++pingCount % 5 === 0) {
-            controller.enqueue(enc.encode(`: ping\n\n`));
+            // Keep the changing clock out of change detection. A periodic data
+            // heartbeat lets clients refresh their server clock offset too.
+            controller.enqueue(enc.encode(`data: ${JSON.stringify({ ...data, serverNow: new Date().toISOString() })}\n\n`));
           }
         } catch {
-          clearInterval(iv);
-          try { controller.close(); } catch {}
+          stop();
+        } finally {
+          if (!stopped) timer = setTimeout(kirim, 3000);
         }
       };
-      await kirim();
-      const iv = setInterval(kirim, 3000);
-      req.signal.addEventListener("abort", () => {
-        clearInterval(iv);
-        try { controller.close(); } catch {}
-      });
+      req.signal.addEventListener("abort", stop, { once: true });
+      if (req.signal.aborted) stop();
+      else void kirim();
     },
+    cancel() { stop(); },
   });
 
   return new Response(stream, {

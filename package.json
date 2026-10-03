@@ -38,6 +38,7 @@
     "react-qr-code": "^2.2.0",
     "recharts": "^3.8.0",
     "sweetalert2": "^11.26.25",
+    "three": "^0.186.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -47,6 +48,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
     "babel-plugin-react-compiler": "1.0.0",
     "dotenv": "^17.3.1",
     "eslint": "^9",

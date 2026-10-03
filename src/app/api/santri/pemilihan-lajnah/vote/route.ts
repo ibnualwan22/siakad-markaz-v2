@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
+import { catatSuaraPemilihan } from "@/lib/pemilihan-lajnah";
 
 export const dynamic = "force-dynamic";
 
@@ -10,37 +11,15 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { sesiId, paslonId } = await req.json();
-    if (!sesiId || !paslonId) {
+    if (typeof sesiId !== "string" || !sesiId || typeof paslonId !== "string" || !paslonId) {
       return NextResponse.json({ error: "Sesi dan paslon wajib diisi" }, { status: 400 });
     }
-    const santri = await prisma.santriInternal.findUnique({
-      where: { id: session.santriId },
-      select: { id: true, isAktif: true, dufahNama: true },
-    });
-    if (!santri || !santri.isAktif) {
-      return NextResponse.json({ error: "Hanya santri aktif yang boleh memilih" }, { status: 403 });
-    }
-    const sesi = await prisma.sesiPemilihanLajnah.findUnique({ where: { id: sesiId } });
-    if (!sesi || sesi.status !== "BUKA") {
-      return NextResponse.json({ error: "Pemilihan tidak sedang dibuka" }, { status: 400 });
-    }
-    if (santri.dufahNama !== sesi.dufahNama) {
-      return NextResponse.json({ error: "Kamu tidak terdaftar sebagai pemilih pada sesi ini" }, { status: 403 });
-    }
-    const paslon = await prisma.paslonLajnah.findFirst({ where: { id: paslonId, sesiId } });
-    if (!paslon) {
-      return NextResponse.json({ error: "Paslon tidak ditemukan" }, { status: 404 });
-    }
-    try {
-      await prisma.suaraLajnah.create({
-        data: { sesiId, paslonId, santriId: santri.id },
-      });
-    } catch {
-      // Pelanggaran unique(sesiId, santriId) = sudah memilih
-      return NextResponse.json({ error: "Kamu sudah memilih pada sesi ini" }, { status: 409 });
+    const result = await catatSuaraPemilihan(prisma, { sesiId, paslonId, santriId: session.santriId });
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
     return NextResponse.json({ success: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal mencatat suara" }, { status: 500 });
   }
 }

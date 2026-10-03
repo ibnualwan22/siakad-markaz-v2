@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
+import { tutupPemilihanKedaluwarsa } from "@/lib/pemilihan-lajnah";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET(req: Request) {
       },
     };
 
-    let sesi: any = null;
+    let sesi = null;
     if (sesiIdParam) {
       sesi = await prisma.sesiPemilihanLajnah.findUnique({ where: { id: sesiIdParam }, include: includePaslon });
       if (!sesi || sesi.dufahNama !== santri.dufahNama) {
@@ -48,7 +49,11 @@ export async function GET(req: Request) {
           include: includePaslon,
         }));
     }
-    if (!sesi) return NextResponse.json({ sesi: null });
+    if (!sesi) return NextResponse.json({ sesi: null, serverNow: new Date().toISOString() });
+
+    await tutupPemilihanKedaluwarsa(prisma, sesi.id);
+    sesi = await prisma.sesiPemilihanLajnah.findUnique({ where: { id: sesi.id }, include: includePaslon });
+    if (!sesi) return NextResponse.json({ sesi: null, serverNow: new Date().toISOString() });
 
     const counts = await prisma.suaraLajnah.groupBy({
       by: ["paslonId"],
@@ -64,6 +69,7 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({
+      serverNow: new Date().toISOString(),
       sesi: {
         id: sesi.id,
         judul: sesi.judul,
@@ -73,7 +79,7 @@ export async function GET(req: Request) {
         dibukaAt: sesi.dibukaAt,
         ditutupAt: sesi.ditutupAt,
       },
-      paslon: sesi.paslonList.map((p: any) => ({
+      paslon: sesi.paslonList.map((p) => ({
         id: p.id,
         nomorUrut: p.nomorUrut,
         fotoUrl: p.fotoUrl,
@@ -86,8 +92,8 @@ export async function GET(req: Request) {
       sudahMemilih: !!myVote,
       pilihanSaya: myVote?.paslonId || null,
       bolehMemilih: sesi.status === "BUKA" && santri.isAktif,
-    });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal memuat sesi" }, { status: 500 });
   }
 }

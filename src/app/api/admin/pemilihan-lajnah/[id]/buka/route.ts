@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { kunciSesiPemilihan, parseRencanaTutup, PemilihanLajnahError } from "@/lib/pemilihan-lajnah";
 
 const PERMISSION = "lajnah_manage";
 
@@ -23,28 +24,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (denied) return denied;
   try {
     const { id } = await params;
-    const sesi = await prisma.sesiPemilihanLajnah.findUnique({
-      where: { id },
-      include: { _count: { select: { paslonList: true } } },
-    });
-    if (!sesi) return NextResponse.json({ error: "Sesi tidak ditemukan" }, { status: 404 });
-    if (sesi.status !== "DRAFT") {
-      return NextResponse.json({ error: "Hanya sesi DRAFT yang bisa dibuka" }, { status: 400 });
-    }
-    if (sesi._count.paslonList < 1) {
-      return NextResponse.json({ error: "Daftarkan minimal 1 paslon dulu sebelum membuka" }, { status: 400 });
-    }
     const body = await req.json().catch(() => ({}));
-    const updated = await prisma.sesiPemilihanLajnah.update({
-      where: { id },
-      data: {
-        status: "BUKA",
-        dibukaAt: new Date(),
-        rencanaTutupAt: body?.rencanaTutupAt ? new Date(body.rencanaTutupAt) : null,
-      },
-    });
+    const updated = await prisma.$transaction(async (tx) => {
+      const sesi = await kunciSesiPemilihan(tx, id);
+      if (!sesi) throw new PemilihanLajnahError("Sesi tidak ditemukan", 404);
+      if (sesi.status !== "DRAFT") {
+        throw new PemilihanLajnahError("Hanya sesi DRAFT yang bisa dibuka", 400);
+      }
+      if (await tx.paslonLajnah.count({ where: { sesiId: id } }) < 1) {
+        throw new PemilihanLajnahError("Daftarkan minimal 1 paslon dulu sebelum membuka", 400);
+      }
+      const now = new Date();
+      return tx.sesiPemilihanLajnah.update({
+        where: { id },
+        data: {
+          status: "BUKA",
+          dibukaAt: now,
+          rencanaTutupAt: parseRencanaTutup(body?.rencanaTutupAt, now),
+        },
+      });
+    }, { isolationLevel: "ReadCommitted" });
     return NextResponse.json(updated);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Gagal membuka pemilihan" },
+      { status: error instanceof PemilihanLajnahError ? error.status : 500 },
+    );
   }
 }

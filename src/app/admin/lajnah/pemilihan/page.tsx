@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Vote, Plus, Pencil, Trash2, Loader2, X, Play, Square, Trophy, Search, ExternalLink } from "lucide-react";
+import { Vote, Plus, Trash2, Loader2, X, Play, Square, Trophy, Search, Monitor, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 
 type Sesi = {
@@ -24,6 +24,13 @@ type Paslon = {
   santri2: { id: string; nama: string };
   _count: { suaraList: number };
 };
+
+function notifyElectionDisplay(sessionId: string) {
+  if (typeof BroadcastChannel === "undefined") return;
+  const channel = new BroadcastChannel("lajnah-election");
+  channel.postMessage({ sessionId });
+  channel.close();
+}
 
 export default function PemilihanLajnahPage() {
   const [dufahList, setDufahList] = useState<any[]>([]);
@@ -176,28 +183,35 @@ export default function PemilihanLajnahPage() {
   };
 
   const bukaSesi = async () => {
+    const batasTutup = rencanaTutup ? new Date(rencanaTutup) : null;
+    if (batasTutup && (!Number.isFinite(batasTutup.getTime()) || batasTutup.getTime() <= Date.now())) {
+      toast.error("Waktu tutup otomatis harus setelah waktu sekarang");
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/pemilihan-lajnah/${selected.id}/buka`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rencanaTutupAt: rencanaTutup || null }),
+        body: JSON.stringify({ rencanaTutupAt: batasTutup?.toISOString() || null }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       toast.success("Pemilihan DIBUKA — santri sudah bisa memilih");
+      notifyElectionDisplay(selected.id);
       setShowBukaModal(false); setRencanaTutup("");
       muatDetail(selected.id); muatSesi(activeDufah);
     } catch (e: any) { toast.error(e.message); }
   };
 
   const tutupSesi = async () => {
-    if (!confirm("Tutup pemilihan dan tetapkan pemenang? Pemenang otomatis menjadi anggota lajnah.")) return;
+    if (!confirm("Tutup pemilihan sekarang? Suara langsung dihentikan. Layar acara menampilkan hitungan 5 detik sebelum mengumumkan pemenang yang otomatis menjadi anggota lajnah.")) return;
     try {
       const res = await fetch(`/api/admin/pemilihan-lajnah/${selected.id}/tutup`, { method: "POST" });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
       setHasilTutup(j);
-      toast.success("Pemilihan ditutup");
+      notifyElectionDisplay(selected.id);
+      toast.success("Suara dihentikan. Layar acara menyiapkan pengumuman 5 detik.");
       muatDetail(selected.id); muatSesi(activeDufah);
     } catch (e: any) { toast.error(e.message); }
   };
@@ -237,7 +251,16 @@ export default function PemilihanLajnahPage() {
               )}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/pemilihan-lajnah/${encodeURIComponent(s.id)}/layar`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1.5 border border-emerald-700 text-emerald-800 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-medium"
+              title="Buka tampilan proyektor di tab baru"
+            >
+              <Monitor className="w-4 h-4" /> Layar Acara <ExternalLink className="w-3.5 h-3.5" />
+            </a>
             {s.status === "DRAFT" && (
               <button onClick={() => setShowBukaModal(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
                 <Play className="w-4 h-4" /> Buka Pemilihan
@@ -253,7 +276,7 @@ export default function PemilihanLajnahPage() {
 
         {s.rencanaTutupAt && s.status === "BUKA" && (
           <p className="text-sm text-amber-700 bg-amber-50 rounded-lg p-2.5 mb-4">
-            Rencana ditutup: {new Date(s.rencanaTutupAt).toLocaleString("id-ID")}
+            Tutup otomatis pada: {new Date(s.rencanaTutupAt).toLocaleString("id-ID")}
           </p>
         )}
 
@@ -379,7 +402,7 @@ export default function PemilihanLajnahPage() {
             <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
               <h2 className="font-bold text-lg mb-3">Buka Pemilihan</h2>
               <p className="text-sm text-gray-600 mb-3">Santri di {s.dufahNama} langsung bisa memilih setelah dibuka.</p>
-              <label className="text-sm text-gray-600 block mb-1">Rencana tutup (opsional — untuk countdown)</label>
+              <label className="text-sm text-gray-600 block mb-1">Tutup otomatis pada (opsional)</label>
               <input
                 type="datetime-local"
                 value={rencanaTutup}

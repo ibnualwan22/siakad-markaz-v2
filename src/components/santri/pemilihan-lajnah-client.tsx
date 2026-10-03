@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, Timer, Users, CheckCircle2, Trophy, ChevronDown, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -12,6 +12,32 @@ type Paslon = {
   santri1: { id: string; nama: string };
   santri2: { id: string; nama: string };
   suara: number;
+};
+
+type Sesi = {
+  id: string;
+  judul: string;
+  status: "DRAFT" | "BUKA" | "TUTUP";
+  rencanaTutupAt: string | null;
+};
+
+type DataPemilihan = {
+  sesi: Sesi | null;
+  paslon?: Paslon[];
+  totalSuara?: number;
+  sudahMemilih?: boolean;
+  pilihanSaya?: string | null;
+  bolehMemilih?: boolean;
+  serverNow?: string;
+  error?: string;
+};
+
+type UpdatePemilihan = {
+  status?: Sesi["status"];
+  rencanaTutupAt?: string | null;
+  totalSuara?: number;
+  suara?: Record<string, number>;
+  serverNow?: string;
 };
 
 // ---------- confetti mini (tanpa library) ----------
@@ -114,16 +140,13 @@ function CountUp({ value }: { value: number }) {
 }
 
 // ---------- countdown ----------
-function useCountdown(iso: string | null) {
-  const [sisa, setSisa] = useState<number | null>(null);
+function useCountdown(iso: string | null, serverOffset: number) {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!iso) { setSisa(null); return; }
-    const hitung = () => setSisa(Math.max(0, new Date(iso).getTime() - Date.now()));
-    hitung();
-    const iv = setInterval(hitung, 1000);
+    const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
-  }, [iso]);
-  return sisa;
+  }, []);
+  return iso ? Math.max(0, new Date(iso).getTime() - now - serverOffset) : null;
 }
 
 function formatSisa(ms: number) {
@@ -137,7 +160,7 @@ function formatSisa(ms: number) {
 
 export function PemilihanLajnahClient() {
   const [loading, setLoading] = useState(true);
-  const [sesi, setSesi] = useState<any>(null);
+  const [sesi, setSesi] = useState<Sesi | null>(null);
   const [paslon, setPaslon] = useState<Paslon[]>([]);
   const [totalSuara, setTotalSuara] = useState(0);
   const [sudahMemilih, setSudahMemilih] = useState(false);
@@ -146,57 +169,129 @@ export function PemilihanLajnahClient() {
   const [confirm, setConfirm] = useState<Paslon | null>(null);
   const [voting, setVoting] = useState(false);
   const [bukaVisi, setBukaVisi] = useState<string | null>(null);
+  const [serverOffset, setServerOffset] = useState(0);
   const statusRef = useRef<string>("");
+  const sesiRef = useRef<string | null>(null);
+  const requestRef = useRef(0);
+  const activeLoadRef = useRef<Promise<void> | null>(null);
+  const queuedRefreshRef = useRef(false);
 
-  const muat = async () => {
-    try {
-      const res = await fetch("/api/santri/pemilihan-lajnah");
-      const j = await res.json();
-      if (j.sesi) {
-        setSesi(j.sesi);
-        statusRef.current = j.sesi.status;
-        setPaslon(j.paslon || []);
-        setTotalSuara(j.totalSuara || 0);
-        setSudahMemilih(!!j.sudahMemilih);
-        setPilihanSaya(j.pilihanSaya || null);
-        setBolehMemilih(!!j.bolehMemilih);
-      } else {
-        setSesi(null);
-      }
-    } catch {
-      toast.error("Gagal memuat data pemilihan");
-    } finally {
-      setLoading(false);
+  const muat = useCallback(async (silent = true) => {
+    if (activeLoadRef.current) {
+      queuedRefreshRef.current = true;
+      await activeLoadRef.current;
+      return;
     }
-  };
 
-  useEffect(() => { muat(); }, []);
+    const request = ++requestRef.current;
+    const load = (async () => {
+      try {
+        const res = await fetch("/api/santri/pemilihan-lajnah", { cache: "no-store" });
+        const j: DataPemilihan = await res.json();
+        if (!res.ok) throw new Error(j.error || "Gagal memuat data pemilihan");
+        if (request !== requestRef.current) return;
+        if (j.serverNow && Number.isFinite(Date.parse(j.serverNow))) {
+          setServerOffset(Date.parse(j.serverNow) - Date.now());
+        }
+        if (sesiRef.current !== j.sesi?.id || j.sesi?.status !== "BUKA" || !j.bolehMemilih || j.sudahMemilih) {
+          setConfirm(null);
+        }
+        sesiRef.current = j.sesi?.id || null;
+        if (j.sesi) {
+          setSesi(j.sesi);
+          statusRef.current = j.sesi.status;
+          setPaslon(j.paslon || []);
+          setTotalSuara(j.totalSuara || 0);
+          setSudahMemilih(!!j.sudahMemilih);
+          setPilihanSaya(j.pilihanSaya || null);
+          setBolehMemilih(!!j.bolehMemilih);
+        } else {
+          setSesi(null);
+          setPaslon([]);
+          setTotalSuara(0);
+          setSudahMemilih(false);
+          setPilihanSaya(null);
+          setBolehMemilih(false);
+          statusRef.current = "";
+        }
+      } catch {
+        if (!silent && request === requestRef.current) toast.error("Gagal memuat data pemilihan");
+      } finally {
+        if (request === requestRef.current) setLoading(false);
+      }
+    })();
+    activeLoadRef.current = load;
+    try {
+      await load;
+    } finally {
+      if (activeLoadRef.current === load) {
+        activeLoadRef.current = null;
+        if (queuedRefreshRef.current) {
+          queuedRefreshRef.current = false;
+          queueMicrotask(() => { void muat(); });
+        }
+      }
+    }
+  }, []);
+
+  // Polling also discovers new sessions while this screen is empty or showing past results.
+  useEffect(() => {
+    void muat(false);
+    const interval = setInterval(() => { void muat(); }, 5000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void muat();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+      requestRef.current += 1;
+    };
+  }, [muat]);
 
   // Realtime via SSE
   useEffect(() => {
     if (!sesi?.id) return;
-    const es = new EventSource(`/api/santri/pemilihan-lajnah/stream?sesiId=${sesi.id}`);
+    const sesiId = sesi.id;
+    const es = new EventSource(`/api/santri/pemilihan-lajnah/stream?sesiId=${encodeURIComponent(sesiId)}`);
     es.onmessage = (ev) => {
       try {
-        const d = JSON.parse(ev.data);
-        setTotalSuara(d.totalSuara);
+        if (sesiRef.current !== sesiId) return;
+        const d: UpdatePemilihan = JSON.parse(ev.data);
+        if (typeof d.totalSuara === "number") setTotalSuara(d.totalSuara);
         setPaslon((prev) => prev.map((p) => ({ ...p, suara: d.suara?.[p.id] ?? p.suara })));
+        if (d.serverNow && Number.isFinite(Date.parse(d.serverNow))) {
+          setServerOffset(Date.parse(d.serverNow) - Date.now());
+        }
+        setSesi((prev) => prev?.id === sesiId ? {
+          ...prev,
+          status: d.status ?? prev.status,
+          rencanaTutupAt: d.rencanaTutupAt === undefined ? prev.rencanaTutupAt : d.rencanaTutupAt,
+        } : prev);
+        if (d.status && d.status !== "BUKA") setConfirm(null);
         if (d.status && d.status !== statusRef.current) {
           statusRef.current = d.status;
-          muat(); // status berubah (dibuka/ditutup) → muat ulang penuh
+          void muat(); // status berubah (dibuka/ditutup) → muat ulang penuh
         }
       } catch { /* abaikan */ }
     };
-    es.onerror = () => es.close();
+    // EventSource reconnects after transient failures; the polling above remains a fallback.
     return () => es.close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sesi?.id]);
+  }, [sesi?.id, muat]);
 
-  const sisa = useCountdown(sesi?.status === "BUKA" ? sesi?.rencanaTutupAt || null : null);
+  const sisa = useCountdown(sesi?.status === "BUKA" ? sesi.rencanaTutupAt : null, serverOffset);
+  const waktuHabis = sisa === 0;
+  const dapatMemilih = sesi?.status === "BUKA" && !waktuHabis && bolehMemilih && !sudahMemilih;
   const mendesak = sisa != null && sisa < 10 * 60 * 1000;
 
   const vote = async () => {
-    if (!confirm) return;
+    if (!confirm || !sesi || voting) return;
+    if (!dapatMemilih || (sesi.rencanaTutupAt && Date.parse(sesi.rencanaTutupAt) <= Date.now() + serverOffset)) {
+      setConfirm(null);
+      toast.error("Pemilihan sudah ditutup");
+      void muat();
+      return;
+    }
     setVoting(true);
     try {
       const res = await fetch("/api/santri/pemilihan-lajnah/vote", {
@@ -208,14 +303,13 @@ export function PemilihanLajnahClient() {
       if (!res.ok) throw new Error(j.error || "Gagal memilih");
       setSudahMemilih(true);
       setPilihanSaya(confirm.id);
-      // Optimistic: langsung tambah hitungan di layar tanpa menunggu SSE
-      setPaslon((prev) => prev.map((pl) => (pl.id === confirm.id ? { ...pl, suara: pl.suara + 1 } : pl)));
-      setTotalSuara((t) => t + 1);
       setConfirm(null);
       fireConfetti();
       toast.success("Suara kamu sudah tercatat!");
-    } catch (e: any) {
-      toast.error(e.message);
+      await muat();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Gagal memilih");
+      await muat();
     } finally {
       setVoting(false);
     }
@@ -253,8 +347,8 @@ export function PemilihanLajnahClient() {
           <p className="text-xs font-semibold tracking-widest text-emerald-700 uppercase">Pemilihan Rois Lajnah</p>
           <h1 className="text-xl font-bold mt-1">{sesi.judul}</h1>
           <div className="flex items-center justify-center gap-3 mt-2 text-sm">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${sesi.status === "BUKA" ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-700"}`}>
-              {sesi.status === "BUKA" ? "SEDANG DIBUKA" : "DITUTUP"}
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${sesi.status === "BUKA" && !waktuHabis ? "bg-emerald-100 text-emerald-800" : "bg-gray-200 text-gray-700"}`}>
+              {waktuHabis ? "WAKTU HABIS" : sesi.status === "BUKA" ? "SEDANG DIBUKA" : "DITUTUP"}
             </span>
             <span key={totalSuara} className="inline-flex items-center gap-1 text-gray-600 animate-pulse">
               <Users className="w-4 h-4" /> <CountUp value={totalSuara} /> suara
@@ -318,7 +412,7 @@ export function PemilihanLajnahClient() {
                       </button>
                     )}
                   </div>
-                  {sesi.status === "BUKA" && bolehMemilih && !sudahMemilih && (
+                  {dapatMemilih && (
                     <div className="shrink-0 self-center">
                       <button
                         onClick={() => setConfirm(p)}
@@ -365,7 +459,7 @@ export function PemilihanLajnahClient() {
       </div>
 
       {/* Dialog konfirmasi */}
-      {confirm && (
+      {confirm && dapatMemilih && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setConfirm(null)}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-bold text-lg mb-1">Konfirmasi Pilihan</h2>

@@ -1,14 +1,18 @@
 name: Deploy to VPS
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build & Push Siakad Image"]
+    types:
+      - completed
     branches:
-      - main # Atur di branch apa deploy akan tertrigger
+      - main
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@master

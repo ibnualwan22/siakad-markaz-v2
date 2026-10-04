@@ -217,7 +217,10 @@ export default function PemilihanLajnahPage() {
   };
 
   const hapusSesi = async (s: Sesi) => {
-    if (!confirm(`Hapus sesi "${s.judul}"?`)) return;
+    const msg = s.status === "DRAFT"
+      ? `Hapus sesi "${s.judul}"?`
+      : `Hapus sesi "${s.judul}"?\nStatus: ${s.status}\n${s._count.paslonList} paslon dan ${s._count.suaraList} suara akan dihapus PERMANEN dan tidak bisa dikembalikan!`;
+    if (!confirm(msg)) return;
     try {
       const res = await fetch(`/api/admin/pemilihan-lajnah/${s.id}`, { method: "DELETE" });
       const j = await res.json();
@@ -465,11 +468,9 @@ export default function PemilihanLajnahPage() {
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 {statusBadge(se.status)}
-                {se.status === "DRAFT" && (
-                  <button onClick={() => hapusSesi(se)} className="p-2 hover:bg-gray-100 rounded-lg" title="Hapus">
-                    <Trash2 className="w-4 h-4 text-red-600" />
-                  </button>
-                )}
+                <button onClick={() => hapusSesi(se)} className="p-2 hover:bg-gray-100 rounded-lg" title={se.status === "DRAFT" ? "Hapus sesi" : `Hapus sesi ${se.status} (data suara ikut terhapus permanen)`}>
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </button>
               </div>
             </div>
           ))}

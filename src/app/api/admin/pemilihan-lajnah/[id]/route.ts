@@ -97,7 +97,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const sesi = await prisma.sesiPemilihanLajnah.findUnique({ where: { id } });
     if (!sesi) return NextResponse.json({ error: "Sesi tidak ditemukan" }, { status: 404 });
-    if (sesi.status !== "DRAFT") return NextResponse.json({ error: "Hanya sesi DRAFT yang bisa dihapus" }, { status: 400 });
+    // Semua status boleh dihapus (DRAFT/BUKA/TUTUP); paslon & suara ikut terhapus via onDelete: Cascade.
+    // Konfirmasi tegas dilakukan di UI karena data suara yang terhapus tidak bisa dikembalikan.
     await prisma.sesiPemilihanLajnah.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

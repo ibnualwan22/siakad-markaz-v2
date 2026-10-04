@@ -22,6 +22,48 @@ const programInclude = {
   },
 };
 
+/**
+ * Gabungkan nilai Akbarnas lintas dufah per santri.
+ * Aturan: perhitungan Akbarnas menggabungkan 2 dufah (2 bulan); mapel
+ * bulan_aktif=1 (mis. Hiwar, Ta'birat) hanya diujikan di Bulan 1.
+ * Hasil: daftar riwayat dengan nilaiList per mapel yang sudah digabung
+ * memakai calcAkbarnasMapelAverage — sama persis seperti angka di syahadah.
+ */
+async function mergeAkbarnasNilaiPerSantri(riwayatList: any[]): Promise<any[]> {
+  const santriIds = [...new Set(riwayatList.map((r: any) => r.santriId))];
+  const cohortIds = new Set(riwayatList.map((r: any) => r.id));
+
+  const histList = await prisma.riwayatSantri.findMany({
+    where: {
+      santriId: { in: santriIds },
+      id: { notIn: [...cohortIds] },
+      program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
+    },
+    include: { nilaiList: { include: { mapel: true } } },
+  });
+
+  const histBySantri = new Map<string, any[]>();
+  for (const h of histList) {
+    if (!histBySantri.has(h.santriId)) histBySantri.set(h.santriId, []);
+    histBySantri.get(h.santriId)!.push(...h.nilaiList);
+  }
+
+  return riwayatList.map((r: any) => {
+    const allNilai = [...r.nilaiList, ...(histBySantri.get(r.santriId) ?? [])];
+    const byMapel = new Map<string, any[]>();
+    for (const n of allNilai) {
+      if (!byMapel.has(n.mapelId)) byMapel.set(n.mapelId, []);
+      byMapel.get(n.mapelId)!.push(n);
+    }
+    const mergedNilaiList: any[] = [];
+    for (const list of byMapel.values()) {
+      const base = list[list.length - 1];
+      mergedNilaiList.push({ ...base, nilaiAkhir: calcAkbarnasMapelAverage(list) });
+    }
+    return { ...r, nilaiList: mergedNilaiList };
+  });
+}
+
 async function checkMartabahUla(programId: string, dufahNama: string, riwayatId: string, isUsbuain: boolean = false): Promise<boolean> {
   // Ambil semua anak di cohort ini
   const whereClause: any = { dufahNama };
@@ -54,10 +96,20 @@ async function checkMartabahUla(programId: string, dufahNama: string, riwayatId:
     return false;
   }
 
+  // ATURAN AKBARNAS: perhitungan menggabungkan 2 dufah. Mapel bulan_aktif=1
+  // hanya ada di Bulan 1, sehingga kelengkapan & rata-rata harus dihitung
+  // dari nilai gabungan — sama seperti angka yang tercetak di syahadah.
+  let evalList: any[] = riwayatList;
+  const sampleProgram = riwayatList[0]?.program;
+  const isAkbarnasCohort = !isUsbuain && (sampleProgram?.nama_indo ?? "").toLowerCase().includes("akbarnas");
+  if (isAkbarnasCohort) {
+    evalList = await mergeAkbarnasNilaiPerSantri(riwayatList);
+  }
+
   let highestAverage = -1;
   let topRiwayatId: string | null = null;
 
-  for (const riwayat of riwayatList) {
+  for (const riwayat of evalList) {
     const program = riwayat.program;
     if (!program) continue;
 

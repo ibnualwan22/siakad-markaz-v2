@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { convertToArabicNumerals } from "@/lib/formatters";
 import { translateDufahToArabic } from "@/lib/formatters";
 import { LayoutData, LayoutElementKey, getDefaultLayout } from "@/lib/syahadah-layout";
+import NamaSyahadahAutofit from "@/components/nama-syahadah-autofit";
 
 // Define a minimal required type derived from getCertificateData
 type SyahadahDocumentProps = {
@@ -181,25 +182,22 @@ export function SyahadahMartabahDocument({ qrUrl, data, layout, editorMode, sele
               transform: `translate(${lo.namaSantri.offsetX}mm, ${lo.namaSantri.offsetY}mm)`,
             }}
           >
-            <span
+            <NamaSyahadahAutofit
+              nama={data.masterSantri.nama}
+              fontSizePt={namaFontSize}
+              dir="ltr"
               style={{
-                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
                 color: "#b08527",
                 fontFamily: "Georgia, 'Times New Roman', serif",
                 letterSpacing: "0.01em",
                 lineHeight: 1.2,
-                display: "inline-block",
-                whiteSpace: "nowrap",
                 borderBottom: "2px solid #b08527",
                 paddingBottom: "2mm",
                 paddingLeft: "10mm",
                 paddingRight: "10mm",
               }}
-              dir="ltr"
-            >
-              {data.masterSantri.nama}
-            </span>
+            />
           </div>
 
           {/* Teks Keterangan & Beasiswa (Combined) */}

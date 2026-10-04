@@ -4,6 +4,7 @@ import React from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { convertToArabicNumerals } from "@/lib/formatters";
 import { OnlineLayoutData, OnlineLayoutElementKey, getDefaultOnlineLayout } from "@/lib/syahadah-online-layout";
+import NamaSyahadahAutofit from "@/components/nama-syahadah-autofit";
 
 export type SyahadahOnlineDocumentData = {
   id: string;
@@ -211,20 +212,17 @@ export function SyahadahOnlineDocument({ data, qrUrl, layout, editorMode, select
               position: "relative",
             })}
           >
-            <span
+            <NamaSyahadahAutofit
+              nama={data.nama}
+              fontSizePt={namaFontSize}
               style={{
-                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
                 color: "#1a6b1a",
                 fontFamily: "Georgia, 'Times New Roman', serif",
                 letterSpacing: "0.01em",
                 lineHeight: 1.1,
-                display: "inline-block",
-                whiteSpace: "nowrap",
               }}
-            >
-              {data.nama}
-            </span>
+            />
           </div>
 
           {/* Pengantar Program */}

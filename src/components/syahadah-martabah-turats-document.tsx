@@ -3,6 +3,7 @@
 import React from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { LayoutData, LayoutElementKey, getDefaultLayout } from "@/lib/syahadah-layout";
+import NamaSyahadahAutofit from "@/components/nama-syahadah-autofit";
 
 // Reuses same prop shape as SyahadahDocument for compatibility
 type SyahadahTuratsDocumentProps = {
@@ -201,20 +202,17 @@ export function SyahadahMartabahTuratsDocument({
               transform: `translate(${lo.namaSantri.offsetX}mm, ${lo.namaSantri.offsetY}mm)`,
             }}
           >
-            <span
+            <NamaSyahadahAutofit
+              nama={data.masterSantri.nama}
+              fontSizePt={namaFontSize}
               style={{
-                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
                 color: "#1a4a1a",
                 fontFamily: "Georgia, 'Times New Roman', serif",
                 letterSpacing: "0.01em",
                 lineHeight: 1.2,
-                display: "inline-block",
-                whiteSpace: "nowrap",
               }}
-            >
-              {data.masterSantri.nama}
-            </span>
+            />
           </div>
 
           {/* Teks Keterangan */}

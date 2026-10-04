@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { LayoutData, LayoutElementKey, getDefaultLayout } from "@/lib/syahadah-layout";
+import NamaSyahadahAutofit from "@/components/nama-syahadah-autofit";
 
 type SyahadahDocumentProps = {
   qrUrl: string;
@@ -169,12 +170,11 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
               transform: `translate(${lo.namaSantri.offsetX}mm, ${lo.namaSantri.offsetY}mm)`,
             }}
           >
-            <span
+            <NamaSyahadahAutofit
+              nama={data.masterSantri.nama.toUpperCase()}
+              fontSizePt={namaFontSize}
               style={{
-                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
-                display: "inline-block",
-                whiteSpace: "nowrap",
                 paddingLeft: "10mm",
                 paddingRight: "10mm",
                 background: "linear-gradient(to right, #b3823c, #d8c568)",
@@ -184,9 +184,7 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
                 WebkitPrintColorAdjust: "exact",
                 printColorAdjust: "exact" as any,
               }}
-            >
-              {data.masterSantri.nama.toUpperCase()}
-            </span>
+            />
             <span
               style={{
                 fontSize: `${namaFontSize}pt`,

@@ -5,6 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { convertToArabicNumerals } from "@/lib/formatters";
 import { translateDufahToArabic } from "@/lib/formatters";
 import { LayoutData, LayoutElementKey, getDefaultLayout } from "@/lib/syahadah-layout";
+import NamaSyahadahAutofit from "@/components/nama-syahadah-autofit";
 
 // Define a minimal required type derived from getCertificateData
 type SyahadahDocumentProps = {
@@ -364,20 +365,17 @@ export function SyahadahDocument({ qrUrl, data, layout, editorMode, selectedElem
               transform: `translate(${lo.namaSantri.offsetX}mm, ${lo.namaSantri.offsetY}mm)`,
             }}
           >
-            <span
+            <NamaSyahadahAutofit
+              nama={data.masterSantri.nama}
+              fontSizePt={namaFontSize}
               style={{
-                fontSize: `${namaFontSize}pt`,
                 fontWeight: "900",
                 color: "#1a6b1a",
                 fontFamily: "Georgia, 'Times New Roman', serif",
                 letterSpacing: "0.01em",
                 lineHeight: 1,
-                display: "inline-block",
-                whiteSpace: "nowrap",
               }}
-            >
-              {data.masterSantri.nama}
-            </span>
+            />
           </div>
 
           {/* Teks Duf'ah */}

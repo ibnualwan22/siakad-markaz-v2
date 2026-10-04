@@ -40,6 +40,15 @@ export default function SoalText({ html, className = "", style }: SoalTextProps)
     cleaned = cleaned.replace(/&#13;/gi, "");
     // Sometimes RTL rendering tears the entity apart into x000d; and &#, so we also remove x000d; broadly
     cleaned = cleaned.replace(/x000d;/gi, "");
+
+    // Bersihkan SEMUA entity karakter kontrol C0 (TAB &#x0009;, dsb):
+    // jika lolos, digitnya dikonversi ke angka Arab oleh processArabicHtml
+    // sehingga entity jadi invalid & tampil sebagai teks rusak (mis. &#x٠٠٠٩;)
+    cleaned = cleaned.replace(/&#x([0-9a-f]{1,4});/gi, (m, h) => parseInt(h, 16) < 32 ? "" : m);
+    cleaned = cleaned.replace(/&#([0-9]{1,5});/g, (m, d) => parseInt(d, 10) < 32 ? "" : m);
+    cleaned = cleaned.replace(/&amp;#x([0-9a-f]{1,4});/gi, (m, h) => parseInt(h, 16) < 32 ? "" : m);
+    cleaned = cleaned.replace(/&amp;#([0-9]{1,5});/g, (m, d) => parseInt(d, 10) < 32 ? "" : m);
+    cleaned = cleaned.replace(/_x([0-9a-f]{4})_/gi, (m, h) => parseInt(h, 16) < 32 ? "" : m); // varian Excel
     
     return processArabicHtml(cleaned);
   }, [html]);

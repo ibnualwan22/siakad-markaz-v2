@@ -26,9 +26,10 @@ export default async function HaflahWadaPage() {
 
   const dufahLabel = activeDufahName ?? "Aktif";
 
-  // Fetch all active santri inside graduating programs, including those who failed or haven't completed (TIDAK_LULUS)
-  const eligibleRows = santriRows.filter((santri: any) => 
-    santri.isAktif && santri.programId
+  // Fetch all active santri inside graduating programs, including those who failed or haven't completed (TIDAK_LULUS).
+  // Santri yang sudah checkout tidak ditampilkan di denah maupun susunan barisan.
+  const eligibleRows = santriRows.filter((santri: any) =>
+    santri.isAktif && !santri.isCheckedOut && santri.programId
   );
 
   return (

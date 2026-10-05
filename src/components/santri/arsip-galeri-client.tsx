@@ -11,7 +11,7 @@ type Arsip = {
   createdAt: string;
 };
 
-export function ArsipGaleriClient() {
+export function ArsipGaleriClient({ apiBase = "/api/santri/arsip-galeri" }: { apiBase?: string }) {
   const [dufahList, setDufahList] = useState<string[]>([]);
   const [activeDufah, setActiveDufah] = useState("");
   const [arsipList, setArsipList] = useState<Arsip[]>([]);
@@ -24,7 +24,7 @@ export function ArsipGaleriClient() {
     setIsLoading(true);
     try {
       const q = dufahNama ? `?dufahNama=${encodeURIComponent(dufahNama)}` : "";
-      const res = await fetch(`/api/santri/arsip-galeri${q}`);
+      const res = await fetch(`${apiBase}${q}`);
       const json = await res.json();
       setArsipList(Array.isArray(json.data) ? json.data : []);
       setDufahList(Array.isArray(json.dufahList) ? json.dufahList : []);

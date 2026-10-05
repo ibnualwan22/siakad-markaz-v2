@@ -105,6 +105,7 @@ const navigationGroups = [
       { href: "/admin/manajemen-konten/agenda", label: "Agenda Rutinan", icon: CalendarDays, permissionId: "agenda_rutinan" },
       { href: "/admin/manajemen-konten/instagram", label: "Konten Instagram", icon: Instagram, permissionId: "konten_instagram" },
       { href: "/admin/arsip-galeri", label: "Arsip Galeri", icon: Images, permissionId: "arsip_galeri" },
+      { href: "/admin/galeri", label: "Lihat Galeri", icon: Images },
     ]
   },
   {

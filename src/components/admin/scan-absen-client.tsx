@@ -39,6 +39,29 @@ function beep(freq: number, ms = 160) {
   }
 }
 
+// Bunyi sukses ala scanner kasir: nyaring, pendek, nembus suara ramai
+function beepKasir() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new Ctx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.type = "square";
+    o.frequency.value = 2200;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
+    g.gain.setValueAtTime(0.5, t + 0.1);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    o.start(t);
+    o.stop(t + 0.16);
+  } catch {
+    /* abaikan */
+  }
+}
+
 export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) {
   const [kategoriId, setKategoriId] = useState("");
   const [durasiMenit, setDurasiMenit] = useState(60);
@@ -156,7 +179,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         const h: Hasil = { tipe: data.hasil, nama: data.namaSantri, sakan: data.sakan, kelasNama: data.kelasNama, alasan: data.alasan };
         setHasil(h);
         if (h.tipe === "TERCATAT") {
-          beep(880);
+          beepKasir();
           setDupNotif(null);
           setCount((c) => c + 1);
           if (h.nama) {

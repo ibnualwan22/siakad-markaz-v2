@@ -332,9 +332,15 @@ model SesiAbsenKegiatan {
   ditutupPada DateTime
   isClosed    Boolean  @default(false)
   createdAt   DateTime @default(now())
+  metode      MetodeSesiAbsen @default(LOKASI_MANDIRI)
 
   kategori   KategoriKegiatan  @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
   lokasiList SesiAbsenLokasi[]
+}
+
+enum MetodeSesiAbsen {
+  LOKASI_MANDIRI
+  SCAN_PETUGAS
 }
 
 model SesiAbsenLokasi {

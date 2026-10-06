@@ -24,6 +24,7 @@
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
     "date-fns": "^4.1.0",
+    "html5-qrcode": "^2.3.8",
     "html2canvas": "^1.4.1",
     "jose": "^6.2.3",
     "jspdf": "^4.2.1",

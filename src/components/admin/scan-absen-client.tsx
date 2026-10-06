@@ -12,7 +12,7 @@ type Sesi = {
   ditutupPada: string;
   hadirCount?: number;
 };
-type Hasil = { tipe: "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK"; nama?: string; alasan?: string };
+type Hasil = { tipe: "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK"; nama?: string; sakan?: string; kelasNama?: string | null; alasan?: string };
 type Preview = {
   hadir: number;
   totalAktif: number;
@@ -59,7 +59,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [showExcluded, setShowExcluded] = useState(false);
-  const [dupNotif, setDupNotif] = useState<string | null>(null);
+  const [dupNotif, setDupNotif] = useState<{ nama: string; sakan?: string; kelasNama?: string | null } | null>(null);
   const dupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,7 +153,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
           beep(220, 300);
           return;
         }
-        const h: Hasil = { tipe: data.hasil, nama: data.namaSantri, alasan: data.alasan };
+        const h: Hasil = { tipe: data.hasil, nama: data.namaSantri, sakan: data.sakan, kelasNama: data.kelasNama, alasan: data.alasan };
         setHasil(h);
         if (h.tipe === "TERCATAT") {
           beep(880);
@@ -165,7 +165,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         } else if (h.tipe === "SUDAH_TERCATAT") {
           beep(440);
           if (h.nama) {
-            setDupNotif(h.nama);
+            setDupNotif({ nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
             if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
             dupTimerRef.current = setTimeout(() => setDupNotif(null), 5000);
             try { navigator.vibrate?.([120, 60, 120]); } catch { /* abaikan */ }
@@ -601,10 +601,15 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
 
       {dupNotif && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-400 bg-amber-100 px-3 py-2">
-          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
-          <p className="min-w-0 flex-1 truncate text-sm font-bold text-amber-900">
-            SUDAH DIABSEN — {dupNotif}
-          </p>
+          <AlertTriangle size={20} className="shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black text-amber-900">SUDAH DIABSEN — {dupNotif.nama}</p>
+            {(dupNotif.sakan || dupNotif.kelasNama) && (
+              <p className="text-xs text-amber-700">
+                {[dupNotif.sakan, dupNotif.kelasNama].filter(Boolean).join(" • ")}
+              </p>
+            )}
+          </div>
           <button
             onClick={() => setDupNotif(null)}
             className="shrink-0 px-1 text-lg font-bold leading-none text-amber-700"

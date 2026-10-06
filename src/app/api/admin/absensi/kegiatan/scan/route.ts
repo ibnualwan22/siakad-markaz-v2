@@ -68,6 +68,8 @@ export async function POST(request: Request) {
       return NextResponse.json({
         hasil: "SUDAH_TERCATAT",
         namaSantri: target.nama,
+        sakan: target.sakan,
+        kelasNama: target.kelasNama,
         alasan: "Sudah tercatat hadir",
       } as const);
     }
@@ -91,13 +93,20 @@ export async function POST(request: Request) {
         return NextResponse.json({
           hasil: "SUDAH_TERCATAT",
           namaSantri: target.nama,
+          sakan: target.sakan,
+          kelasNama: target.kelasNama,
           alasan: "Sudah tercatat hadir",
         } as const);
       }
       throw e;
     }
 
-    return NextResponse.json({ hasil: "TERCATAT", namaSantri: target.nama } as const);
+    return NextResponse.json({
+      hasil: "TERCATAT",
+      namaSantri: target.nama,
+      sakan: target.sakan,
+      kelasNama: target.kelasNama,
+    } as const);
   } catch (error) {
     console.error("POST scan error", error);
     return NextResponse.json({ hasil: "DITOLAK", alasan: "Kesalahan server" } as const);

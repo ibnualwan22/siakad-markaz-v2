@@ -82,8 +82,14 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [showExcluded, setShowExcluded] = useState(false);
-  const [dupNotif, setDupNotif] = useState<{ nama: string; sakan?: string; kelasNama?: string | null } | null>(null);
-  const dupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [notif, setNotif] = useState<{ tipe: "TERCATAT" | "SUDAH_TERCATAT"; nama: string; sakan?: string; kelasNama?: string | null } | null>(null);
+  const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const tampilkanNotif = useCallback((n: { tipe: "TERCATAT" | "SUDAH_TERCATAT"; nama: string; sakan?: string; kelasNama?: string | null }) => {
+    setNotif(n);
+    if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+    notifTimerRef.current = setTimeout(() => setNotif(null), 5000);
+  }, []);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const qrRef = useRef<any>(null);
@@ -128,7 +134,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   useEffect(() => {
     return () => {
       stopCamera();
-      if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+      if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
     };
   }, [stopCamera]);
 
@@ -180,7 +186,9 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         setHasil(h);
         if (h.tipe === "TERCATAT") {
           beepKasir();
-          setDupNotif(null);
+          if (h.nama) {
+            tampilkanNotif({ tipe: "TERCATAT", nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
+          }
           setCount((c) => c + 1);
           if (h.nama) {
             setRiwayat((r) => [{ nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
@@ -188,14 +196,12 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         } else if (h.tipe === "SUDAH_TERCATAT") {
           beep(440);
           if (h.nama) {
-            setDupNotif({ nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
-            if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
-            dupTimerRef.current = setTimeout(() => setDupNotif(null), 5000);
+            tampilkanNotif({ tipe: "SUDAH_TERCATAT", nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
             try { navigator.vibrate?.([120, 60, 120]); } catch { /* abaikan */ }
           }
         } else {
           beep(220, 300);
-          setDupNotif(null);
+          setNotif(null);
         }
       } catch {
         setHasil({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
@@ -205,7 +211,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         fokusInput();
       }
     },
-    [sesiAktif, fokusInput]
+    [sesiAktif, fokusInput, tampilkanNotif]
   );
 
   const bukaSesi = async () => {
@@ -622,20 +628,24 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         </button>
       </div>
 
-      {dupNotif && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-400 bg-amber-100 px-3 py-2">
-          <AlertTriangle size={20} className="shrink-0 text-amber-600" />
+      {notif && (
+        <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${notif.tipe === "TERCATAT" ? "border-green-500 bg-green-100" : "border-amber-400 bg-amber-100"}`}>
+          {notif.tipe === "TERCATAT"
+            ? <CheckCircle2 size={20} className="shrink-0 text-green-600" />
+            : <AlertTriangle size={20} className="shrink-0 text-amber-600" />}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-black text-amber-900">SUDAH DIABSEN — {dupNotif.nama}</p>
-            {(dupNotif.sakan || dupNotif.kelasNama) && (
-              <p className="text-xs text-amber-700">
-                {[dupNotif.sakan, dupNotif.kelasNama].filter(Boolean).join(" • ")}
+            <p className={`text-sm font-black ${notif.tipe === "TERCATAT" ? "text-green-900" : "text-amber-900"}`}>
+              {notif.tipe === "TERCATAT" ? "TERCATAT" : "SUDAH DIABSEN"} — {notif.nama}
+            </p>
+            {(notif.sakan || notif.kelasNama) && (
+              <p className={`text-xs ${notif.tipe === "TERCATAT" ? "text-green-700" : "text-amber-700"}`}>
+                {[notif.sakan, notif.kelasNama].filter(Boolean).join(" • ")}
               </p>
             )}
           </div>
           <button
-            onClick={() => setDupNotif(null)}
-            className="shrink-0 px-1 text-lg font-bold leading-none text-amber-700"
+            onClick={() => setNotif(null)}
+            className={`shrink-0 px-1 text-lg font-bold leading-none ${notif.tipe === "TERCATAT" ? "text-green-700" : "text-amber-700"}`}
             aria-label="Tutup notifikasi"
           >
             ×

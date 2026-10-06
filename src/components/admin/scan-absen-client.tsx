@@ -448,6 +448,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         </div>
       ) : (
         <div className="rounded-2xl border bg-white p-6">
+          <div id="qr-reader" className={`overflow-hidden rounded-xl ${cameraOn ? "" : "hidden"}`} />
           {!cameraOn ? (
             <button
               onClick={startCamera}
@@ -456,15 +457,12 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
               <Play size={18} /> Nyalakan Kamera
             </button>
           ) : (
-            <>
-              <div id="qr-reader" className="overflow-hidden rounded-xl" />
-              <button
-                onClick={stopCamera}
-                className="mt-3 w-full rounded-xl border px-4 py-2 text-sm font-bold"
-              >
-                Matikan Kamera
-              </button>
-            </>
+            <button
+              onClick={stopCamera}
+              className="mt-3 w-full rounded-xl border px-4 py-2 text-sm font-bold"
+            >
+              Matikan Kamera
+            </button>
           )}
         </div>
       )}

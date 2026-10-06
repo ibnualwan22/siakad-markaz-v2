@@ -59,6 +59,8 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [showExcluded, setShowExcluded] = useState(false);
+  const [dupNotif, setDupNotif] = useState<string | null>(null);
+  const dupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const qrRef = useRef<any>(null);
@@ -103,6 +105,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   useEffect(() => {
     return () => {
       stopCamera();
+      if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
     };
   }, [stopCamera]);
 
@@ -154,14 +157,22 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         setHasil(h);
         if (h.tipe === "TERCATAT") {
           beep(880);
+          setDupNotif(null);
           setCount((c) => c + 1);
           if (h.nama) {
             setRiwayat((r) => [{ nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
           }
         } else if (h.tipe === "SUDAH_TERCATAT") {
           beep(440);
+          if (h.nama) {
+            setDupNotif(h.nama);
+            if (dupTimerRef.current) clearTimeout(dupTimerRef.current);
+            dupTimerRef.current = setTimeout(() => setDupNotif(null), 5000);
+            try { navigator.vibrate?.([120, 60, 120]); } catch { /* abaikan */ }
+          }
         } else {
           beep(220, 300);
+          setDupNotif(null);
         }
       } catch {
         setHasil({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
@@ -324,6 +335,24 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   if (!sesiAktif && !preview && !selesai) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
+        {dupNotif && (
+          <div className="fixed inset-x-0 top-0 z-50 px-3 pt-3">
+            <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border-2 border-amber-500 bg-amber-100 px-4 py-3 shadow-xl">
+              <AlertTriangle className="shrink-0 text-amber-600" size={30} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-black tracking-wide text-amber-800">SUDAH DIABSEN</p>
+                <p className="truncate text-lg font-bold text-amber-950">{dupNotif}</p>
+              </div>
+              <button
+                onClick={() => setDupNotif(null)}
+                className="rounded-full bg-amber-200 px-3 py-1 text-lg font-bold text-amber-800"
+                aria-label="Tutup notifikasi"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
         <div className="rounded-2xl border bg-white p-6">
           <h2 className="text-lg font-bold">Buka Sesi Scan</h2>
           <p className="mt-1 text-sm text-gray-500">Pilih kegiatan, atur durasi, lalu mulai scan di gerbang.</p>

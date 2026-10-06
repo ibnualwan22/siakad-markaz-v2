@@ -51,6 +51,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const [count, setCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selesai, setSelesai] = useState<string | null>(null);
 
@@ -101,7 +102,9 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   }, [stopCamera]);
 
   const startCamera = async () => {
-    if (cameraOn) return;
+    if (cameraOn || cameraLoading) return;
+    setCameraLoading(true);
+    setHasil(null);
     try {
       const { Html5Qrcode } = await import("html5-qrcode");
       const qr = new Html5Qrcode("qr-reader");
@@ -114,7 +117,9 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
       );
       setCameraOn(true);
     } catch (e) {
-      setHasil({ tipe: "DITOLAK", alasan: "Kamera tidak bisa diakses. Cek izin browser & HTTPS." });
+      setHasil({ tipe: "DITOLAK", alasan: "Kamera tidak bisa diakses. Ketuk ikon gembok di address bar lalu izinkan kamera, dan pastikan situs dibuka via HTTPS." });
+    } finally {
+      setCameraLoading(false);
     }
   };
 
@@ -448,13 +453,14 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         </div>
       ) : (
         <div className="rounded-2xl border bg-white p-6">
-          <div id="qr-reader" className={`overflow-hidden rounded-xl ${cameraOn ? "" : "hidden"}`} />
+          <div id="qr-reader" className="overflow-hidden rounded-xl" />
           {!cameraOn ? (
             <button
               onClick={startCamera}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-3 font-bold text-white"
+              disabled={cameraLoading}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-3 font-bold text-white disabled:opacity-50"
             >
-              <Play size={18} /> Nyalakan Kamera
+              <Play size={18} /> {cameraLoading ? "Menyiapkan kamera..." : "Nyalakan Kamera"}
             </button>
           ) : (
             <button
@@ -463,6 +469,11 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
             >
               Matikan Kamera
             </button>
+          )}
+          {!cameraOn && !cameraLoading && (
+            <p className="mt-2 text-xs text-gray-400">
+              Saat diminta browser, pilih Izinkan/Allow akses kamera. Arahkan kamera ke QR santri — otomatis tercatat.
+            </p>
           )}
         </div>
       )}

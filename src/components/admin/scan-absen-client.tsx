@@ -657,7 +657,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         </div>
       )}
 
-      {hasil && (
+      {hasil && hasil.tipe !== "SUDAH_TERCATAT" && (
         <div className={`rounded-2xl border-2 p-6 text-center ${hasilWarna}`}>
           {hasil.tipe === "TERCATAT" && <CheckCircle2 size={40} className="mx-auto text-green-600" />}
           {hasil.tipe === "SUDAH_TERCATAT" && <AlertTriangle size={40} className="mx-auto text-yellow-600" />}

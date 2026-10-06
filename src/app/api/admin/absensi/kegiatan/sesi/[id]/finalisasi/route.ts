@@ -78,6 +78,7 @@ async function getBelumTercatat(sesi: { kategoriId: string; createdAt: Date }) {
       riwayatId: s.riwayatId,
       nama: s.nama,
       sakan: s.sakan,
+      kelasNama: s.kelasNama,
       usul: izinMap.get(s.riwayatId) || "ALPHA",
     }));
 
@@ -123,7 +124,7 @@ export async function POST(
     if ("error" in res) return NextResponse.json({ error: res.error }, { status: 400 });
     const { sesi } = res;
 
-    const { mode } = await request.json();
+    const { mode, kecualikan } = await request.json();
     if (mode !== "TANDAI_ALPHA" && mode !== "BIARKAN") {
       return NextResponse.json({ error: "Mode finalisasi tidak valid" }, { status: 400 });
     }
@@ -139,8 +140,10 @@ export async function POST(
 
     const aktor = session.nama || session.username || "admin";
     const { today, belumTercatat } = await getBelumTercatat(sesi);
+    const kecualikanSet = new Set<string>(Array.isArray(kecualikan) ? kecualikan : []);
+    const target = belumTercatat.filter((s) => !kecualikanSet.has(s.riwayatId));
 
-    const operations = belumTercatat.map((s) =>
+    const operations = target.map((s) =>
       prisma.absenKegiatan.upsert({
         where: {
           riwayatId_kategoriId_tanggal: {

@@ -16,7 +16,7 @@ type Hasil = { tipe: "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK"; nama?: string; a
 type Preview = {
   hadir: number;
   totalAktif: number;
-  belumTercatat: { riwayatId: string; nama: string; sakan: string; usul: string }[];
+  belumTercatat: { riwayatId: string; nama: string; sakan: string; kelasNama: string | null; usul: string }[];
 };
 
 function beep(freq: number, ms = 160) {
@@ -54,6 +54,11 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const [cameraLoading, setCameraLoading] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selesai, setSelesai] = useState<string | null>(null);
+  const [filterSakan, setFilterSakan] = useState("");
+  const [filterKelas, setFilterKelas] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [showExcluded, setShowExcluded] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const qrRef = useRef<any>(null);
@@ -214,7 +219,14 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
       if (data.success) {
         const pv = await fetch(`/api/admin/absensi/kegiatan/sesi/${sesiAktif.id}/finalisasi`);
         const pdata = await pv.json();
-        if (pdata.success) setPreview(pdata);
+        if (pdata.success) {
+          setPreview(pdata);
+          setFilterSakan("");
+          setFilterKelas("");
+          setSelected(new Set());
+          setExcluded(new Set());
+          setShowExcluded(false);
+        }
         loadSesi();
       }
     } finally {
@@ -229,22 +241,70 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
       const res = await fetch(`/api/admin/absensi/kegiatan/sesi/${sesiAktif.id}/finalisasi`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: m }),
+        body: JSON.stringify({ mode: m, kecualikan: [...excluded] }),
       });
       const data = await res.json();
       if (data.success) {
+        const jmlKecuali = excluded.size;
         setSelesai(
           m === "TANDAI_ALPHA"
-            ? `Selesai. ${data.ditandai} santri ditandai sesuai usulan (ALPHA/IZIN).`
+            ? `Selesai. ${data.ditandai} santri ditandai sesuai usulan (ALPHA/IZIN)${jmlKecuali > 0 ? `, ${jmlKecuali} dikecualikan` : ""}.`
             : "Selesai. Sesi ditutup tanpa menandai yang belum tercatat."
         );
         setPreview(null);
         setSesiAktif(null);
         setCount(0);
+        setSelected(new Set());
+        setExcluded(new Set());
+        setFilterSakan("");
+        setFilterKelas("");
       }
     } finally {
       setBusy(false);
     }
+  };
+
+  // ---- Finalisasi: filter + pilih + kecualikan ----
+  const belumSemua = preview?.belumTercatat ?? [];
+  const belumAktif = belumSemua.filter((s) => !excluded.has(s.riwayatId));
+  const sakanOptions = [...new Set(belumAktif.map((s) => s.sakan))].sort();
+  const kelasOptions = [...new Set(belumAktif.map((s) => s.kelasNama).filter(Boolean) as string[])].sort();
+  const belumTampil = belumAktif.filter(
+    (s) => (!filterSakan || s.sakan === filterSakan) && (!filterKelas || s.kelasNama === filterKelas)
+  );
+  const excludedList = belumSemua.filter((s) => excluded.has(s.riwayatId));
+
+  const togglePilih = (id: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+  const pilihSemuaTampil = () => {
+    const ids = belumTampil.map((s) => s.riwayatId);
+    setSelected((prev) => {
+      const semuaSudah = ids.length > 0 && ids.every((id) => prev.has(id));
+      const n = new Set(prev);
+      if (semuaSudah) ids.forEach((id) => n.delete(id));
+      else ids.forEach((id) => n.add(id));
+      return n;
+    });
+  };
+  const kecualikanTerpilih = () => {
+    const aktifIds = new Set(belumAktif.map((s) => s.riwayatId));
+    const mau = [...selected].filter((id) => aktifIds.has(id));
+    if (mau.length === 0) return;
+    setExcluded((prev) => new Set([...prev, ...mau]));
+    setSelected(new Set());
+  };
+  const kembalikanSatu = (id: string) => {
+    setExcluded((prev) => {
+      const n = new Set(prev);
+      n.delete(id);
+      return n;
+    });
   };
 
   const gantiMode = async (m: "scanner" | "kamera") => {
@@ -367,23 +427,115 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
                 Yang belum tercatat akan diusulkan: <b>IZIN</b> bila punya tasrih aktif, selain itu <b>ALPHA</b>.
                 Masih bisa susulkan yang telat via Absen Kegiatan manual sebelum menekan tombol di bawah.
               </p>
-              {preview.belumTercatat.length > 0 && (
-                <div className="max-h-64 overflow-auto rounded-xl border">
-                  {preview.belumTercatat.map((s) => (
-                    <div key={s.riwayatId} className="flex justify-between border-b px-4 py-2 text-sm last:border-0">
-                      <span>{s.nama} <span className="text-gray-400">({s.sakan})</span></span>
-                      <span className={`font-bold ${s.usul === "ALPHA" ? "text-red-600" : "text-blue-600"}`}>{s.usul}</span>
+              {belumAktif.length > 0 && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500">Filter Asrama</label>
+                      <select
+                        value={filterSakan}
+                        onChange={(e) => setFilterSakan(e.target.value)}
+                        className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                      >
+                        <option value="">Semua asrama</option>
+                        {sakanOptions.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
                     </div>
-                  ))}
+                    <div>
+                      <label className="text-xs font-semibold text-gray-500">Filter Kelas</label>
+                      <select
+                        value={filterKelas}
+                        onChange={(e) => setFilterKelas(e.target.value)}
+                        className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                      >
+                        <option value="">Semua kelas</option>
+                        {kelasOptions.map((k) => (
+                          <option key={k} value={k}>{k}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={pilihSemuaTampil}
+                      className="text-sm font-bold text-blue-600"
+                    >
+                      {belumTampil.length > 0 && belumTampil.every((s) => selected.has(s.riwayatId))
+                        ? "Batalkan semua"
+                        : `Pilih semua (${belumTampil.length})`}
+                    </button>
+                    {selected.size > 0 && (
+                      <button
+                        onClick={kecualikanTerpilih}
+                        className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white"
+                      >
+                        Kecualikan dari ALPHA ({selected.size})
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-64 overflow-auto rounded-xl border">
+                    {belumTampil.length === 0 && (
+                      <p className="px-4 py-6 text-center text-sm text-gray-400">
+                        Tidak ada nama pada filter ini.
+                      </p>
+                    )}
+                    {belumTampil.map((s) => (
+                      <label
+                        key={s.riwayatId}
+                        className="flex cursor-pointer items-center gap-3 border-b px-4 py-2 text-sm last:border-0 hover:bg-gray-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(s.riwayatId)}
+                          onChange={() => togglePilih(s.riwayatId)}
+                          className="h-4 w-4"
+                        />
+                        <span className="flex-1">
+                          {s.nama}
+                          <span className="text-gray-400"> ({s.sakan}{s.kelasNama ? ` • ${s.kelasNama}` : ""})</span>
+                        </span>
+                        <span className={`font-bold ${s.usul === "ALPHA" ? "text-red-600" : "text-blue-600"}`}>{s.usul}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {excludedList.length > 0 && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50">
+                  <button
+                    onClick={() => setShowExcluded((v) => !v)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-amber-800"
+                  >
+                    <span>Dikecualikan dari ALPHA ({excludedList.length})</span>
+                    <span>{showExcluded ? "▾" : "▸"}</span>
+                  </button>
+                  {showExcluded && (
+                    <div className="max-h-40 overflow-auto border-t border-amber-200">
+                      {excludedList.map((s) => (
+                        <div key={s.riwayatId} className="flex items-center justify-between px-4 py-2 text-sm">
+                          <span>{s.nama} <span className="text-gray-400">({s.sakan})</span></span>
+                          <button onClick={() => kembalikanSatu(s.riwayatId)} className="font-bold text-blue-600">
+                            Kembalikan
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
+
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => finalisasi("TANDAI_ALPHA")}
-                  disabled={busy}
+                  disabled={busy || belumAktif.length === 0}
                   className="rounded-xl bg-red-600 px-4 py-3 font-bold text-white disabled:opacity-40"
                 >
-                  {busy ? "..." : "Tandai ALPHA/IZIN"}
+                  {busy ? "..." : `Tandai ALPHA/IZIN (${belumAktif.length})`}
                 </button>
                 <button
                   onClick={() => finalisasi("BIARKAN")}

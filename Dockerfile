@@ -8,7 +8,9 @@ FROM base AS deps
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# npm install (bukan npm ci) agar build tidak gagal bila package-lock.json
+# belum sempat disinkronkan setelah penambahan dependency.
+RUN npm install --no-audit --no-fund
 
 # Rebuild the source code only when needed
 FROM base AS builder

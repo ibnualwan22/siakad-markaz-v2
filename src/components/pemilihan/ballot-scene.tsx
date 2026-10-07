@@ -268,6 +268,15 @@ function createScene(host: HTMLDivElement, initialState: SceneState, onPending?:
         checkMark(paperPrototype, 0.75, 0, 0.13, 0.019);
         rounded(0.35, 0.014, 0.005, 0.002, brass, 0, -0.17, 0.013, paperPrototype);
         rounded(0.24, 0.012, 0.005, 0.002, brass, 0, -0.26, 0.013, paperPrototype);
+        // Surat tidak ikut shadow pass: 1 surat = 4 mesh, 20 surat = 80 caster.
+        // Bayangannya nyaris tak terlihat saat terbang; mematikannya memangkas
+        // biaya render terbesar saat banyak surat bersamaan (anti drop-frame).
+        paperPrototype.traverse((obj) => {
+            if (obj instanceof THREE.Mesh) {
+                obj.castShadow = false;
+                obj.receiveShadow = false;
+            }
+        });
 
         const pulseMaterial = material(new THREE.MeshBasicMaterial({
             color: 0xe6c985,

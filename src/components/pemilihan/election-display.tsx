@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Expand, Loader2, Minimize, Pause, Play, Radio, Trophy, WifiOff } from "lucide-react";
 import styles from "./election-display.module.css";
 import { presentSession, receiveSession, type PresentationTimeline } from "./election-presentation";
@@ -20,7 +20,7 @@ type Candidate = {
   _count: { suaraList: number };
 };
 
-type Election = {
+export type Election = {
   id: string;
   judul: string;
   dufahNama: string;
@@ -30,6 +30,12 @@ type Election = {
   ditutupAt: string | null;
   serverNow: string;
   paslonList: Candidate[];
+};
+
+// Sumber data injeksi untuk mode demo: halaman demo menyuntikkan snapshot
+// Election dari simulator lokal, bukan dari fetch/SSE server.
+export type ElectionFeed = {
+  subscribe: (onData: (election: Election) => void) => () => void;
 };
 
 type Connection = "loading" | "live" | "retrying" | "unauthorized" | "missing";
@@ -54,7 +60,7 @@ function formatCountdown(milliseconds: number) {
   return [h, m, s].map((part) => String(part).padStart(2, "0")).join(":");
 }
 
-export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
+export default function ElectionDisplay({ sessionId, feed }: { sessionId?: string; feed?: ElectionFeed | null }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -75,7 +81,19 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
   const systemReducedMotion = useSyncExternalStore(subscribeMotion, readMotionPreference, () => true);
   const reducedMotion = motionOverride ?? systemReducedMotion;
 
+  // Terima snapshot Election penuh — dipakai jalur fetch (produksi) maupun
+  // feed injeksi (demo). Offset jam server 0 untuk feed lokal.
+  const applyElectionData = useCallback((data: Election, offset: number, receivedAt: number) => {
+    setServerOffset(offset);
+    setTimeline((previous) => receiveSession(previous, data, receivedAt, offset));
+    setElection(data);
+    setLastUpdated(receivedAt);
+    setNow(receivedAt);
+    setConnection("live");
+  }, []);
+
   useEffect(() => {
+    if (feed) return; // mode demo: data datang dari feed, bukan fetch/SSE
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     let activeRequest: AbortController | null = null;
@@ -92,7 +110,7 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
       const timeout = setTimeout(() => controller.abort(), 10_000);
       const requestedAt = Date.now();
       try {
-        const response = await fetch(`/api/admin/pemilihan-lajnah/${encodeURIComponent(sessionId)}`, {
+        const response = await fetch(`/api/admin/pemilihan-lajnah/${encodeURIComponent(sessionId ?? "")}`, {
           cache: "no-store",
           signal: controller.signal,
         });
@@ -116,14 +134,9 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
         const receivedAt = Date.now();
         const serverTime = Date.parse(data.serverNow);
         const offset = Number.isFinite(serverTime) ? serverTime - (requestedAt + receivedAt) / 2 : 0;
-        setServerOffset(offset);
-        setTimeline((previous) => receiveSession(previous, data, receivedAt, offset));
         const untilClose = data.rencanaTutupAt ? Date.parse(data.rencanaTutupAt) - receivedAt - offset : Infinity;
         pollDelay = data.status === "BUKA" && untilClose <= 10_000 ? 500 : 3_000;
-        setElection(data);
-        setLastUpdated(receivedAt);
-        setNow(receivedAt);
-        setConnection("live");
+        applyElectionData(data, offset, receivedAt);
       } catch {
         if (!disposed) setConnection("retrying");
       } finally {
@@ -153,7 +166,17 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
     };
-  }, [sessionId, refreshKey]);
+  }, [sessionId, refreshKey, feed, applyElectionData]);
+
+  // Mode demo: langganan feed simulator lokal. Tiap snapshot diperlakukan
+  // persis seperti respons fetch — termasuk transisi seremoni via receiveSession.
+  useEffect(() => {
+    if (!feed) return;
+    return feed.subscribe((data) => {
+      if (!Array.isArray(data.paslonList) || !["DRAFT", "BUKA", "TUTUP"].includes(data.status)) return;
+      applyElectionData(data, 0, Date.now());
+    });
+  }, [feed, applyElectionData]);
 
   // Cerminkan election terbaru untuk handler SSE di bawah.
   useEffect(() => {
@@ -164,10 +187,11 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
   // ada suara masuk; perubahan status memicu muat ulang penuh. Polling 3 detik
   // di atas tetap berjalan sebagai fallback.
   useEffect(() => {
+    if (feed) return; // mode demo: data datang dari feed, bukan SSE
     let disposed = false;
     let source: EventSource | null = null;
     try {
-      source = new EventSource("/api/admin/pemilihan-lajnah/" + encodeURIComponent(sessionId) + "/stream");
+      source = new EventSource("/api/admin/pemilihan-lajnah/" + encodeURIComponent(sessionId ?? "") + "/stream");
     } catch {
       return;
     }
@@ -210,7 +234,7 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
       disposed = true;
       es.close();
     };
-  }, [sessionId]);
+  }, [sessionId, feed]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 100);

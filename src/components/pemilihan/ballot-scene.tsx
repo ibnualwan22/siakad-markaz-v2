@@ -321,8 +321,11 @@ function createScene(host: HTMLDivElement, initialState: SceneState, onPending?:
                 onPending?.(pendingVotes);
             }
         }
-        let spawnDelay = 0;
         let nextPaper = 0;
+        // 1 suara = 1 surat: tiap vote langsung menjadi surat tanpa throttle.
+        // Batas 60 surat bersamaan hanya pengaman untuk ledakan tak wajar;
+        // pada tempo acara nyata (1-8 suara/detik, terbang 2,4 dtk) tak akan tersentuh.
+        const MAX_PAPERS = 60;
         let pulseTime = 0;
         let ambientTime = 0;
         let lastFrameTime = 0;
@@ -336,7 +339,6 @@ function createScene(host: HTMLDivElement, initialState: SceneState, onPending?:
             setPendingVotes(0);
             pulseTime = 0;
             pulseMaterial.opacity = 0;
-            spawnDelay = 0;
         };
 
         function schedule() {
@@ -364,14 +366,17 @@ function createScene(host: HTMLDivElement, initialState: SceneState, onPending?:
             indicatorMaterial.emissiveIntensity = 0.04 + openness * 0.42 + pulseTime * 0.4;
             key.intensity = 3.5 + (state.phase !== "closed" && !state.reducedMotion ? Math.sin(ambientTime * 0.55) * (state.phase === "waiting" ? 0.22 : 0.06) : 0);
 
-            spawnDelay = Math.max(0, spawnDelay - delta);
-            if (state.phase === "open" && !state.reducedMotion && openness > 0.98 && pendingVotes > 0 && spawnDelay === 0 && papers.length < 3) {
-                const mesh = paperPrototype.clone(true);
-                const offset = nextPaper++ % 2 === 0 ? -0.62 : 0.52;
-                scene.add(mesh);
-                papers.push({ mesh, age: 0, offset });
-                setPendingVotes(pendingVotes - 1);
-                spawnDelay = 0.5; // maksimal 1 surat per 500ms
+            if (state.phase === "open" && !state.reducedMotion && openness > 0.98 && pendingVotes > 0) {
+                // 1:1 — semua suara yang mengantre langsung diterbangkan detik ini juga.
+                while (pendingVotes > 0 && papers.length < MAX_PAPERS) {
+                    const mesh = paperPrototype.clone(true);
+                    const side = nextPaper++ % 2 === 0 ? -1 : 1;
+                    // Sebaran acak kecil agar surat yang lahir bersamaan tidak menumpuk persis.
+                    const offset = side * (0.45 + Math.random() * 0.35);
+                    scene.add(mesh);
+                    papers.push({ mesh, age: 0, offset });
+                    setPendingVotes(pendingVotes - 1);
+                }
             }
 
             for (let index = papers.length - 1; index >= 0; index -= 1) {

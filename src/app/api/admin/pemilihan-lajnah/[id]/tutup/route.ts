@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { PemilihanLajnahError, tutupPemilihanLajnah } from "@/lib/pemilihan-lajnah";
+import { jadwalkanBroadcast } from "@/lib/pemilihan-lajnah-hub";
 
 const PERMISSION = "lajnah_manage";
 
@@ -24,7 +25,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (denied) return denied;
   try {
     const { id } = await params;
-    return NextResponse.json(await tutupPemilihanLajnah(prisma, id));
+    const hasil = await tutupPemilihanLajnah(prisma, id);
+    // Dorong status TUTUP agar seremoni hitung mundur langsung mulai di layar acara.
+    jadwalkanBroadcast(id);
+    return NextResponse.json(hasil);
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Gagal menutup pemilihan" },

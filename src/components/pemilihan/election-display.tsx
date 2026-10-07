@@ -58,6 +58,8 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const updateRef = useRef<(() => void) | null>(null);
+  const electionRef = useRef<Election | null>(null);
   const [election, setElection] = useState<Election | null>(null);
   const [timeline, setTimeline] = useState<PresentationTimeline | null>(null);
   const [showRecap, setShowRecap] = useState(false);
@@ -132,6 +134,7 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
       }
     };
 
+    updateRef.current = update;
     const onVisible = () => { if (!document.hidden) void update(); };
     const onOnline = () => { void update(); };
     // Same-browser admin actions wake the display immediately. The event carries
@@ -143,6 +146,7 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
     window.addEventListener("online", onOnline);
     return () => {
       disposed = true;
+      updateRef.current = null;
       clearTimeout(timer);
       activeRequest?.abort();
       channel?.close();
@@ -150,6 +154,63 @@ export default function ElectionDisplay({ sessionId }: { sessionId: string }) {
       window.removeEventListener("online", onOnline);
     };
   }, [sessionId, refreshKey]);
+
+  // Cerminkan election terbaru untuk handler SSE di bawah.
+  useEffect(() => {
+    electionRef.current = election;
+  });
+
+  // Realtime via SSE (stream admin): hitungan & bar diperbarui seketika tiap
+  // ada suara masuk; perubahan status memicu muat ulang penuh. Polling 3 detik
+  // di atas tetap berjalan sebagai fallback.
+  useEffect(() => {
+    let disposed = false;
+    let source: EventSource | null = null;
+    try {
+      source = new EventSource("/api/admin/pemilihan-lajnah/" + encodeURIComponent(sessionId) + "/stream");
+    } catch {
+      return;
+    }
+    const es = source;
+    es.onmessage = (event) => {
+      if (disposed) return;
+      let data: { status?: string; totalSuara?: number; suara?: Record<string, number>; serverNow?: string } | null;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!data || typeof data.totalSuara !== "number") return;
+      const receivedAt = Date.now();
+      const prev = electionRef.current;
+      const statusBaru = typeof data.status === "string" ? data.status : null;
+      if (prev && statusBaru && statusBaru !== prev.status) {
+        // Status berubah (dibuka/ditutup): ambil data otoritatif penuh.
+        const refresh = updateRef.current;
+        if (refresh) refresh();
+        return;
+      }
+      if (!prev) return;
+      const suara = data.suara || {};
+      let berubah = false;
+      const paslonList = prev.paslonList.map((kandidat) => {
+        const jumlah = typeof suara[kandidat.id] === "number" ? suara[kandidat.id] : kandidat._count.suaraList;
+        if (jumlah === kandidat._count.suaraList) return kandidat;
+        berubah = true;
+        return { ...kandidat, _count: { suaraList: jumlah } };
+      });
+      if (!berubah) return;
+      setElection({ ...prev, paslonList: paslonList, serverNow: typeof data.serverNow === "string" ? data.serverNow : prev.serverNow });
+      setLastUpdated(receivedAt);
+      setNow(receivedAt);
+      setConnection("live");
+    };
+    // EventSource menyambung ulang otomatis bila putus; polling di atas tetap jadi fallback.
+    return () => {
+      disposed = true;
+      es.close();
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 100);

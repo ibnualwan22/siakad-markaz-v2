@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 import { kunciSesiPemilihan, parseRencanaTutup, PemilihanLajnahError } from "@/lib/pemilihan-lajnah";
+import { jadwalkanBroadcast } from "@/lib/pemilihan-lajnah-hub";
 
 const PERMISSION = "lajnah_manage";
 
@@ -44,6 +45,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         },
       });
     }, { isolationLevel: "ReadCommitted" });
+    // Dorong status BUKA agar seremoni pembukaan langsung mulai di layar acara.
+    jadwalkanBroadcast(id);
     return NextResponse.json(updated);
   } catch (error) {
     return NextResponse.json(

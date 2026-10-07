@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
 import { catatSuaraPemilihan } from "@/lib/pemilihan-lajnah";
+import { jadwalkanBroadcast } from "@/lib/pemilihan-lajnah-hub";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function POST(req: Request) {
     if ("error" in result) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
+    // Dorong hasil ke semua layar (santri + layar acara) tanpa menunggu poll.
+    jadwalkanBroadcast(sesiId);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Gagal mencatat suara" }, { status: 500 });

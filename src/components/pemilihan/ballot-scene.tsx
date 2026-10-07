@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
@@ -33,12 +33,13 @@ export default function BallotScene({
     const hostRef = useRef<HTMLDivElement>(null);
     const initialState = useRef({ phase, totalVotes, reducedMotion });
     const controllerRef = useRef<SceneController | null>(null);
+    const [suratAntre, setSuratAntre] = useState(0);
 
     useEffect(() => {
         const host = hostRef.current;
         if (!host) return;
 
-        controllerRef.current = createScene(host, initialState.current);
+        controllerRef.current = createScene(host, initialState.current, setSuratAntre);
         return () => {
             controllerRef.current?.dispose();
             controllerRef.current = null;
@@ -56,6 +57,9 @@ export default function BallotScene({
             className={`group relative isolate h-full min-h-64 w-full ${className}`}
         >
             <div className="absolute inset-0 flex items-center justify-center group-data-[scene-ready=true]:invisible">
+            {suratAntre > 1 && (
+                <div aria-hidden="true" title="Surat suara menunggu animasi" className="absolute right-3 top-3 z-10 rounded-full bg-[#c7ac6b]/95 px-2.5 py-1 text-xs font-bold tabular-nums text-[#153e37] shadow">+{suratAntre}</div>
+            )}
                 <svg viewBox="0 0 480 430" className="h-full max-h-full w-full" fill="none">
                     <ellipse cx="240" cy="349" rx="154" ry="28" fill="#042725" opacity=".55" />
                     <path d="M87 324c0-17 68-31 153-31s153 14 153 31v13c0 17-68 31-153 31S87 354 87 337z" fill="#123f3a" />
@@ -74,7 +78,7 @@ export default function BallotScene({
     );
 }
 
-function createScene(host: HTMLDivElement, initialState: SceneState): SceneController | null {
+function createScene(host: HTMLDivElement, initialState: SceneState, onPending?: (pending: number) => void): SceneController | null {
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const shadows = new Set<THREE.LightShadow>();
@@ -308,6 +312,15 @@ function createScene(host: HTMLDivElement, initialState: SceneState): SceneContr
         let targetOpenness = openness;
         let openingTime = 1.8;
         let pendingVotes = 0;
+        let notifiedPending = -1;
+        // Beri tahu React saat antrean animasi berubah, untuk badge "+N".
+        function setPendingVotes(value: number) {
+            pendingVotes = Math.max(0, Math.min(999, value));
+            if (pendingVotes !== notifiedPending) {
+                notifiedPending = pendingVotes;
+                onPending?.(pendingVotes);
+            }
+        }
         let spawnDelay = 0;
         let nextPaper = 0;
         let pulseTime = 0;
@@ -320,7 +333,7 @@ function createScene(host: HTMLDivElement, initialState: SceneState): SceneContr
         const clearPapers = () => {
             papers.forEach((paper) => scene.remove(paper.mesh));
             papers.length = 0;
-            pendingVotes = 0;
+            setPendingVotes(0);
             pulseTime = 0;
             pulseMaterial.opacity = 0;
             spawnDelay = 0;
@@ -357,8 +370,8 @@ function createScene(host: HTMLDivElement, initialState: SceneState): SceneContr
                 const offset = nextPaper++ % 2 === 0 ? -0.62 : 0.52;
                 scene.add(mesh);
                 papers.push({ mesh, age: 0, offset });
-                pendingVotes -= 1;
-                spawnDelay = 0.85;
+                setPendingVotes(pendingVotes - 1);
+                spawnDelay = 0.5; // maksimal 1 surat per 500ms
             }
 
             for (let index = papers.length - 1; index >= 0; index -= 1) {
@@ -463,7 +476,7 @@ function createScene(host: HTMLDivElement, initialState: SceneState): SceneContr
                 if (state.phase !== "open" || state.reducedMotion || document.hidden || delta < 0) {
                     clearPapers();
                 } else if (previousPhase === "open" && delta > 0) {
-                    pendingVotes = Math.min(4, pendingVotes + Math.min(delta, 4));
+                    setPendingVotes(pendingVotes + delta);
                 }
 
                 dirty = true;

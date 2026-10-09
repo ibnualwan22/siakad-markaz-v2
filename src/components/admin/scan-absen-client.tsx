@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Keyboard, CheckCircle2, AlertTriangle, XCircle, LogOut, Play } from "lucide-react";
+import { Camera, Keyboard, CheckCircle2, AlertTriangle, XCircle, LogOut, Play, Maximize, Minimize } from "lucide-react";
 
 type Kategori = { id: string; nama: string };
 type Sesi = {
@@ -62,7 +62,10 @@ function beepKasir() {
   }
 }
 
-export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) {
+// Pola QR santri: SKA.<santriId>.<tanda-tangan-hex-32> — dipakai untuk auto-submit tanpa Enter
+const POLA_QR_SANTRI = /^SKA\.[^.]+\.[0-9a-f]{32}$/i;
+
+export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategoriList: Kategori[]; bisaBuatSesi?: boolean }) {
   const [kategoriId, setKategoriId] = useState("");
   const [durasiMenit, setDurasiMenit] = useState(60);
   const [sesiList, setSesiList] = useState<Sesi[]>([]);
@@ -94,7 +97,28 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   const inputRef = useRef<HTMLInputElement>(null);
   const qrRef = useRef<any>(null);
   const lastScanRef = useRef<{ payload: string; at: number }>({ payload: "", at: 0 });
-  const submittingRef = useRef(false);
+  // Antrean FIFO: scan beruntun diproses berurutan, tidak ada yang dibuang diam-diam
+  const antreanRef = useRef<string[]>([]);
+  const memprosesRef = useRef(false);
+
+  // Fullscreen khusus mode kamera (tombol disembunyikan bila browser tidak mendukung)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const bisaFullscreen = typeof document !== "undefined" && !!document.fullscreenEnabled;
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      /* abaikan */
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
 
   const loadSesi = useCallback(async () => {
     try {
@@ -160,16 +184,10 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
     }
   };
 
-  const submitScan = useCallback(
-    async (payload: string) => {
-      const p = payload.trim();
-      if (!p || !sesiAktif || submittingRef.current) return;
-      // Abaikan scan ganda dari kamera dalam 3 detik
-      const now = Date.now();
-      if (lastScanRef.current.payload === p && now - lastScanRef.current.at < 3000) return;
-      lastScanRef.current = { payload: p, at: now };
-      submittingRef.current = true;
-      setScanValue("");
+  // Kirim satu payload scan ke server. Dipanggil berurutan oleh antrean.
+  const kirimScan = useCallback(
+    async (p: string) => {
+      if (!sesiAktif) return;
       try {
         const res = await fetch("/api/admin/absensi/kegiatan/scan", {
           method: "POST",
@@ -206,12 +224,40 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
       } catch {
         setHasil({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
         beep(220, 300);
-      } finally {
-        submittingRef.current = false;
-        fokusInput();
       }
     },
-    [sesiAktif, fokusInput, tampilkanNotif]
+    [sesiAktif, tampilkanNotif]
+  );
+
+  // Proses antrean satu per satu sampai habis
+  const prosesAntrean = useCallback(async () => {
+    if (memprosesRef.current) return;
+    memprosesRef.current = true;
+    try {
+      while (antreanRef.current.length > 0) {
+        const p = antreanRef.current.shift() as string;
+        await kirimScan(p);
+      }
+    } finally {
+      memprosesRef.current = false;
+      fokusInput();
+    }
+  }, [kirimScan, fokusInput]);
+
+  // Titik masuk semua scan (scanner BT maupun kamera): validasi ringan, lalu antre
+  const submitScan = useCallback(
+    (payload: string) => {
+      const p = payload.trim();
+      if (!p || !sesiAktif) return;
+      // Abaikan scan ganda (mis. kamera membaca QR yang sama berkali-kali) dalam 3 detik
+      const now = Date.now();
+      if (lastScanRef.current.payload === p && now - lastScanRef.current.at < 3000) return;
+      lastScanRef.current = { payload: p, at: now };
+      antreanRef.current.push(p);
+      setScanValue("");
+      void prosesAntrean();
+    },
+    [sesiAktif, prosesAntrean]
   );
 
   const bukaSesi = async () => {
@@ -364,6 +410,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
   if (!sesiAktif && !preview && !selesai) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
+        {bisaBuatSesi ? (
         <div className="rounded-2xl border bg-white p-6">
           <h2 className="text-lg font-bold">Buka Sesi Scan</h2>
           <p className="mt-1 text-sm text-gray-500">Pilih kegiatan, atur durasi, lalu mulai scan di gerbang.</p>
@@ -404,8 +451,9 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
             )}
           </div>
         </div>
+        ) : null}
 
-        {sesiList.length > 0 && (
+        {sesiList.length > 0 ? (
           <div className="rounded-2xl border bg-white p-6">
             <h2 className="text-lg font-bold">Sesi Terbuka (gabung jalur lain)</h2>
             <div className="mt-3 space-y-2">
@@ -428,6 +476,12 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
               ))}
             </div>
           </div>
+        ) : (
+          !bisaBuatSesi && (
+            <div className="rounded-2xl border bg-white p-6 text-center">
+              <p className="text-sm text-gray-500">Belum ada sesi terbuka. Minta admin membuka sesi terlebih dahulu.</p>
+            </div>
+          )
         )}
       </div>
     );
@@ -604,6 +658,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
             {" "}• {count} tercatat di jalur ini
           </p>
         </div>
+        {bisaBuatSesi && (
         <button
           onClick={tutupSesi}
           disabled={busy}
@@ -611,6 +666,7 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
         >
           <LogOut size={16} /> Tutup Sesi
         </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -654,19 +710,26 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
       )}
 
       {mode === "scanner" ? (
-        <div className="rounded-2xl border bg-white p-6">
-          <label className="text-sm font-semibold">Arahkan scanner ke QR santri</label>
+        <div className="rounded-2xl border bg-white p-6 text-center">
+          <p className="text-sm font-semibold">Arahkan scanner ke QR santri</p>
+          <p className="mt-1 text-xs text-gray-400">Cukup scan — otomatis tercatat, tanpa perlu mengetuk layar.</p>
+          {/* Input disembunyikan demi tampilan minimalis, tapi tetap fokus & menerima ketikan scanner */}
           <input
             ref={inputRef}
             value={scanValue}
-            onChange={(e) => setScanValue(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setScanValue(v);
+              // Auto-submit begitu pola QR lengkap — tidak tergantung tombol Enter dari scanner
+              if (POLA_QR_SANTRI.test(v.trim())) submitScan(v);
+            }}
             onKeyDown={(e) => { if (e.key === "Enter") submitScan(scanValue); }}
             onBlur={fokusInput}
-            placeholder="Hasil scan akan muncul di sini..."
             autoComplete="off"
-            className="mt-2 w-full rounded-xl border-2 px-4 py-3 text-lg"
+            aria-hidden={true}
+            tabIndex={-1}
+            className="absolute h-0 w-0 opacity-0"
           />
-          <p className="mt-2 text-xs text-gray-400">Kolom ini selalu fokus — cukup scan, tanpa perlu mengetuk layar.</p>
         </div>
       ) : (
         <div className="rounded-2xl border bg-white p-6">
@@ -685,6 +748,15 @@ export function ScanAbsenClient({ kategoriList }: { kategoriList: Kategori[] }) 
               className="mt-3 w-full rounded-xl border px-4 py-2 text-sm font-bold"
             >
               Matikan Kamera
+            </button>
+          )}
+          {bisaFullscreen && (
+            <button
+              onClick={toggleFullscreen}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold"
+            >
+              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+              {isFullscreen ? "Keluar Layar Penuh" : "Layar Penuh"}
             </button>
           )}
           {!cameraOn && !cameraLoading && (

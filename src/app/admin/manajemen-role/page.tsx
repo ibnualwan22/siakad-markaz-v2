@@ -48,6 +48,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: "rekap_pengajar_edit", label: "Rekap Pengajar (Aksi)", desc: "Akses mengubah jam / mengelola absen pengajar", category: "Divisi Absensi", type: "aksi" },
   { id: "pengaturan_kegiatan", label: "Pengaturan Kegiatan (Lihat)", desc: "Akses melihat jenis kegiatan absensi", category: "Divisi Absensi", type: "lihat" },
   { id: "pengaturan_kegiatan_edit", label: "Pengaturan Kegiatan (Aksi)", desc: "Akses menambah/mengedit jenis kegiatan absensi", category: "Divisi Absensi", type: "aksi" },
+  { id: "scan_absen_kegiatan", label: "Scan Absen Kegiatan", desc: "Akses scan QR kehadiran di gerbang (tanpa bisa membuka/menutup sesi)", category: "Divisi Absensi", type: "aksi" },
 
   // Divisi Perizinan
   { id: "perizinan_harian", label: "Izin Harian (Lihat)", desc: "Akses melihat & membuat izin harian kelas", category: "Divisi Perizinan", type: "lihat" },

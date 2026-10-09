@@ -1,5 +1,6 @@
-import { requirePermission } from "@/lib/permission";
+import { checkPermission } from "@/lib/permission";
 import { Metadata } from "next";
+import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { ScanAbsenClient } from "@/components/admin/scan-absen-client";
 
@@ -10,7 +11,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ScanAbsenPage() {
-  await requirePermission("pengaturan_kegiatan");
+  // Halaman boleh diakses pemilik permission scan_absen_kegiatan ATAU pengaturan_kegiatan.
+  // Form "buka sesi" hanya tampil untuk pemilik pengaturan_kegiatan (lihat prop bisaBuatSesi).
+  const bisaKelola = await checkPermission("pengaturan_kegiatan");
+  const bisaScan = await checkPermission("scan_absen_kegiatan");
+  if (!bisaKelola && !bisaScan) redirect("/admin/dashboard?error=unauthorized");
 
   const kategoriList = await prisma.kategoriKegiatan.findMany({
     where: { aktif: true },
@@ -27,7 +32,7 @@ export default async function ScanAbsenPage() {
           Mendukung banyak jalur scan bersamaan dalam satu sesi.
         </p>
       </div>
-      <ScanAbsenClient kategoriList={kategoriList} />
+      <ScanAbsenClient kategoriList={kategoriList} bisaBuatSesi={bisaKelola} />
     </div>
   );
 }

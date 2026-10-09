@@ -9,7 +9,7 @@ async function checkAkses() {
   if (!session) return null;
   if (session.role === "ADMIN") return session;
   const rp = await prisma.rolePermission.findMany({
-    where: { role: session.role as any, permission: "pengaturan_kegiatan" },
+    where: { role: session.role as any, permission: { in: ["pengaturan_kegiatan", "scan_absen_kegiatan"] } },
   });
   return rp.length > 0 ? session : null;
 }

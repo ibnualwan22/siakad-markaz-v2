@@ -36,7 +36,7 @@ const navigationGroups = [
       { href: "/admin/jadwal-sesi", label: "Jadwal Buka/Tutup Sesi", icon: CalendarCheck, permissionId: "manajemen_sesi" },
       { href: "/admin/absensi/kegiatan", label: "Absen Kegiatan", icon: Activity, permissionId: "absen_kegiatan" },
       { href: "/admin/absensi/kegiatan/buka-sesi", label: "Buka Sesi Absen", icon: QrCode, permissionId: "absen_kegiatan" },
-      { href: "/admin/absensi/kegiatan/scan", label: "Scan Absen", icon: ScanLine, permissionId: "pengaturan_kegiatan" },
+      { href: "/admin/absensi/kegiatan/scan", label: "Scan Absen", icon: ScanLine, permissionId: ["pengaturan_kegiatan", "scan_absen_kegiatan"] },
       { href: "/admin/absensi/tabirot", label: "Absen Ta'birot", icon: Users, permissionId: "absen_tabirot" },
       { href: "/admin/absensi/rekap/sakan", label: "Rekap Sakan", icon: Bed, permissionId: "rekap_sakan" },
       { href: "/admin/absensi/rekap/kegiatan", label: "Rekap Kegiatan", icon: Activity, permissionId: "rekap_kegiatan" },
@@ -283,9 +283,10 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
               if (item.requiredRole && user?.role !== item.requiredRole) return false;
               if (item.requiredRoles && !item.requiredRoles.includes(user?.role)) return false;
 
-              // Filter permission
-              if (item.permissionId && !permissions.includes("*") && !permissions.includes(item.permissionId)) {
-                return false;
+              // Filter permission (permissionId bisa string tunggal atau array = salah satu cukup)
+              if (item.permissionId && !permissions.includes("*")) {
+                const ids = Array.isArray(item.permissionId) ? item.permissionId : [item.permissionId];
+                if (!ids.some((id: string) => permissions.includes(id))) return false;
               }
 
               return true;

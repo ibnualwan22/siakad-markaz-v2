@@ -5,6 +5,63 @@ import prisma from '@/lib/prisma';
 const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
 const PPDB_API_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
 
+const ppdbHeaders = {
+  'Content-Type': 'application/json',
+  'x-api-key': PPDB_API_KEY,
+  'Accept': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+};
+
+// GET /api/santri/me/daftar-ulang — cek tagihan PENDING milik santri yang login
+export async function GET() {
+  const session = await getSantriSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const res = await fetch(
+      `${PPDB_BASE_URL}/api/integrasi/siakad/status-bayar?nis=${encodeURIComponent(session.santriId)}`,
+      { headers: ppdbHeaders, cache: 'no-store' }
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return NextResponse.json({ error: data?.error || 'Gagal memeriksa status pembayaran' }, { status: res.status });
+    }
+    return NextResponse.json({ success: true, data: data?.data || { pending: null } });
+  } catch (error) {
+    console.error('Cek status bayar error:', error);
+    return NextResponse.json({ error: 'Tidak dapat terhubung ke server PPDB' }, { status: 502 });
+  }
+}
+
+// DELETE /api/santri/me/daftar-ulang — batalkan semua tagihan PENDING milik santri yang login
+export async function DELETE() {
+  const session = await getSantriSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const res = await fetch(
+      `${PPDB_BASE_URL}/api/integrasi/siakad/batalkan`,
+      {
+        method: 'POST',
+        headers: ppdbHeaders,
+        body: JSON.stringify({ nis: session.santriId }),
+      }
+    );
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return NextResponse.json({ error: data?.error || 'Gagal membatalkan tagihan' }, { status: res.status });
+    }
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('Batalkan tagihan error:', error);
+    return NextResponse.json({ error: 'Tidak dapat terhubung ke server PPDB' }, { status: 502 });
+  }
+}
+
 export async function POST(request: Request) {
   const session = await getSantriSession();
   if (!session) {

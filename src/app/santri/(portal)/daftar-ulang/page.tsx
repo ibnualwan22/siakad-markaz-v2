@@ -45,6 +45,17 @@ type MetaData = {
   programTersedia?: PPDBProgram[];
 };
 
+type PendingTagihan = {
+  id: string;
+  noKwitansi: string;
+  nominalProgram: number;
+  kodeUnik: number;
+  totalTagihan: number;
+  createdAt: string;
+  program: { id: string; nama: string };
+  dufah: { id: number; nama: string } | null;
+};
+
 export default function SantriDaftarUlangPage() {
   const [statusData, setStatusData] = useState<StatusData | null>(null);
   const [metaData, setMetaData] = useState<MetaData | null>(null);
@@ -61,7 +72,29 @@ export default function SantriDaftarUlangPage() {
     message: string;
   } | null>(null);
 
+  // Tagihan PENDING — bila ada, wizard diganti layar "Menunggu Verifikasi"
+  const [pendingTagihan, setPendingTagihan] = useState<PendingTagihan | null>(null);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+
+  const fetchPending = async () => {
+    try {
+      const r = await fetch("/api/santri/me/daftar-ulang", { cache: "no-store" });
+      const d = await r.json();
+      if (d.success && d.data?.pending) {
+        setPendingTagihan(d.data.pending);
+      } else {
+        setPendingTagihan(null);
+      }
+    } catch {
+      // abaikan — wizard tetap tampil bila cek gagal
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchPending();
     // Fetch status directly from the PPDB Integration API
     fetch("/api/santri/me/status")
       .then((r) => r.json())
@@ -95,16 +128,26 @@ export default function SantriDaftarUlangPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setResult({
-          success: false,
-          message: data.error || "Gagal melakukan pendaftaran ulang",
-        });
+        // 409 = sudah ada tagihan PENDING — tampilkan layar pembayaran
+        if (res.status === 409) {
+          await fetchPending();
+          setResult({
+            success: false,
+            message: "Anda sudah memiliki tagihan yang menunggu pembayaran.",
+          });
+        } else {
+          setResult({
+            success: false,
+            message: data.error || "Gagal melakukan pendaftaran ulang",
+          });
+        }
       } else {
         setResult({
           success: true,
           message:
-            "Pendaftaran berhasil! Segera lunasi tagihan di Admin Keuangan.",
+            "Pendaftaran berhasil! Segera lunasi tagihan di bawah ini.",
         });
+        await fetchPending();
       }
     } catch {
       setResult({
@@ -114,6 +157,31 @@ export default function SantriDaftarUlangPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleCancelTagihan = async () => {
+    if (!confirm("Batalkan tagihan ini dan ganti program?")) return;
+    setCancelling(true);
+    try {
+      const res = await fetch("/api/santri/me/daftar-ulang", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Gagal membatalkan tagihan");
+      } else {
+        setPendingTagihan(null);
+        setSelectedProgram("");
+        setIsAgreed(false);
+        setResult(null);
+      }
+    } catch {
+      alert("Tidak dapat terhubung ke server");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const copyRekening = () => {
+    navigator.clipboard.writeText("055501001108569").catch(() => {});
   };
 
   const adjustDufahName = (name?: string) => {
@@ -165,6 +233,186 @@ export default function SantriDaftarUlangPage() {
         </p>
       </div>
 
+      {/* ===== LAYAR MENUNGGU VERIFIKASI (ada tagihan PENDING) ===== */}
+      {!pendingLoading && pendingTagihan ? (
+        <div className="space-y-4">
+          <div
+            className="neu-card p-6 text-center"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--color-warning-light), var(--bg-card))",
+            }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+              style={{
+                background: "var(--color-warning-light)",
+                color: "var(--color-warning)",
+              }}
+            >
+              <Hourglass size={28} />
+            </div>
+            <h2
+              className="text-lg font-bold"
+              style={{ color: "var(--color-text)" }}
+            >
+              Menunggu Verifikasi Admin
+            </h2>
+            <p
+              className="text-xs mt-1"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              Tagihan daftar ulang Anda sudah diterbitkan. Segera lakukan
+              pembayaran agar masa aktif diperbarui.
+            </p>
+          </div>
+
+          <div className="neu-card p-5 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  Program yang diambil
+                </p>
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  {pendingTagihan.program.nama}
+                </p>
+                {pendingTagihan.dufah && (
+                  <p
+                    className="text-[11px]"
+                    style={{ color: "var(--color-text-muted)" }}
+                  >
+                    {pendingTagihan.dufah.nama}
+                  </p>
+                )}
+              </div>
+              <span
+                className="px-2.5 py-1 rounded-full text-[10px] font-bold"
+                style={{
+                  background: "var(--color-warning-light)",
+                  color: "var(--color-warning)",
+                }}
+              >
+                BELUM LUNAS
+              </span>
+            </div>
+
+            <div
+              className="rounded-xl p-4"
+              style={{
+                background: "var(--color-surface-light)",
+                boxShadow: "var(--shadow-inset-sm)",
+              }}
+            >
+              <p
+                className="text-[11px] font-semibold"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Nomor Kwitansi
+              </p>
+              <p
+                className="font-mono text-sm font-bold"
+                style={{ color: "var(--color-primary)" }}
+              >
+                {pendingTagihan.noKwitansi}
+              </p>
+              <p
+                className="text-[11px] font-semibold mt-3"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Nominal yang harus dibayar
+              </p>
+              <p
+                className="text-2xl font-black"
+                style={{ color: "var(--color-success)" }}
+              >
+                Rp{" "}
+                {new Intl.NumberFormat("id-ID").format(
+                  pendingTagihan.totalTagihan
+                )}
+              </p>
+              <p
+                className="text-[10px] mt-1 italic"
+                style={{ color: "var(--color-text-subtle)" }}
+              >
+                Termasuk kode unik +{pendingTagihan.kodeUnik} — pastikan
+                transfer tepat hingga 3 digit terakhir agar otomatis terbaca
+                oleh admin.
+              </p>
+            </div>
+
+            <div
+              className="rounded-xl p-4 text-center"
+              style={{
+                background: "var(--color-surface-light)",
+                boxShadow: "var(--shadow-inset-sm)",
+              }}
+            >
+              <p
+                className="text-[10px] uppercase tracking-widest font-bold mb-2"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Transfer ke Rekening
+              </p>
+              <p
+                className="text-lg font-black font-mono tracking-widest"
+                style={{ color: "var(--color-text)" }}
+              >
+                0555-01-001108-569
+              </p>
+              <p
+                className="text-xs font-bold mt-1"
+                style={{ color: "var(--color-primary)" }}
+              >
+                BANK BRI a.n Markaz Arabiyah
+              </p>
+              <button
+                onClick={copyRekening}
+                className="mt-3 px-4 py-2 rounded-lg text-xs font-bold"
+                style={{
+                  background: "var(--color-surface-dark)",
+                  color: "var(--color-text)",
+                }}
+              >
+                Salin No. Rekening
+              </button>
+            </div>
+
+            <a
+              href="https://wa.me/6281212887788?text=Assalamualaikum%20Admin,%20saya%20sudah%20transfer%20daftar%20ulang."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+              style={{
+                background: "var(--color-success)",
+                color: "#fff",
+              }}
+            >
+              Konfirmasi via WhatsApp Admin
+            </a>
+
+            <button
+              onClick={handleCancelTagihan}
+              disabled={cancelling}
+              className="w-full py-3 px-4 rounded-xl text-sm font-bold"
+              style={{
+                background: "transparent",
+                color: "var(--color-danger)",
+                border: "1px solid var(--color-danger)",
+                opacity: cancelling ? 0.5 : 1,
+              }}
+            >
+              {cancelling ? "Membatalkan..." : "Batalkan / Ganti Program"}
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Status Card */}
       <div
         className="neu-card p-5"
@@ -627,6 +875,8 @@ export default function SantriDaftarUlangPage() {
           </p>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

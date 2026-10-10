@@ -33,6 +33,7 @@ type StatusData = {
   };
   logikaSistem?: {
     butuhDaftarUlang: boolean;
+    klaimTersedia?: boolean;
     statusKoneksi: string;
   };
   [key: string]: any;
@@ -159,6 +160,50 @@ export default function SantriDaftarUlangPage() {
     }
   };
 
+  const handleKlaim = async () => {
+    if (!selectedProgram) return;
+    setSubmitting(true);
+    setResult(null);
+
+    try {
+      const res = await fetch("/api/santri/me/daftar-ulang", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programId: selectedProgram, isBeliAtribut: false }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 409) {
+          await fetchPending();
+          setResult({
+            success: false,
+            message: "Anda sudah memiliki tagihan yang menunggu pembayaran.",
+          });
+        } else {
+          setResult({
+            success: false,
+            message: data.error || "Gagal mengaktifkan program",
+          });
+        }
+      } else {
+        const progNama = data.siakadProgram?.nama_indo || selectedProgramData?.nama;
+        setResult({
+          success: true,
+          message: `Program ${progNama} berhasil diaktifkan untuk periode berikutnya. Kuota Anda telah digunakan.`,
+        });
+      }
+    } catch {
+      setResult({
+        success: false,
+        message: "Tidak dapat terhubung ke server",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleCancelTagihan = async () => {
     if (!confirm("Batalkan tagihan ini dan ganti program?")) return;
     setCancelling(true);
@@ -199,6 +244,8 @@ export default function SantriDaftarUlangPage() {
   const isDurasiLow =
     sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
   const requiresRenewal = statusData?.logikaSistem?.butuhDaftarUlang;
+  // Mode klaim: santri punya kuota aktif -> halaman jadi "Pemilihan Program", bukan transaksi
+  const klaimTersedia = statusData?.logikaSistem?.klaimTersedia === true;
   
   const programs = metaData?.programTersedia || [];
   const selectedProgramData = programs.find((p) => p.id === selectedProgram);
@@ -570,8 +617,42 @@ export default function SantriDaftarUlangPage() {
 
       {/* PPDB Programs List (Siakad Theme) */}
       <div className="space-y-4 pt-2">
+        {/* Banner Mode Klaim */}
+        {klaimTersedia && !statusLoading && (
+          <div
+            className="rounded-xl p-4 flex items-start gap-3"
+            style={{
+              background: "var(--color-success-light)",
+              boxShadow: "var(--shadow-inset-sm)",
+            }}
+          >
+            <CheckCircle
+              size={18}
+              className="flex-shrink-0 mt-0.5"
+              style={{ color: "var(--color-success)" }}
+            />
+            <div>
+              <p
+                className="text-xs font-bold"
+                style={{ color: "var(--color-success)" }}
+              >
+                Kuota Aktif — Pemilihan Program
+              </p>
+              <p
+                className="text-[11px] mt-1 leading-relaxed"
+                style={{ color: "var(--color-text-muted)" }}
+              >
+                Anda memiliki sisa kuota {sisaBulan ?? "-"} bulan
+                {berakhirDufah ? ` (berakhir ${berakhirDufah})` : ""}. Cukup
+                pilih program di bawah ini — gratis, tanpa pembayaran, dan
+                program Siakad Anda ikut diperbarui.
+              </p>
+            </div>
+          </div>
+        )}
+
         <h2 className="text-sm font-bold" style={{ color: "var(--color-text)" }}>
-          Memilih Program Pendaftaran
+          {klaimTersedia ? "Pilih Program Anda" : "Memilih Program Pendaftaran"}
         </h2>
 
         {/* Kategori Filter */}
@@ -692,7 +773,99 @@ export default function SantriDaftarUlangPage() {
         )}
       </div>
 
-      {/* Submission Panel */}
+      {klaimTersedia ? (
+      /* ===== PANEL KLAIM: cukup pilih program, tanpa transaksi ===== */
+      <div className="neu-card p-5 space-y-4">
+        {/* Selected Summary */}
+        {selectedProgramData && (
+          <div
+            className="rounded-xl p-3.5 flex items-center justify-between"
+            style={{
+              background: "var(--color-success-light)",
+              boxShadow: "var(--shadow-inset-sm)",
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <CheckCircle size={16} style={{ color: "var(--color-success)" }} />
+              <div>
+                <p className="text-xs font-bold" style={{ color: "var(--color-success)" }}>
+                  Program Terpilih
+                </p>
+                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--color-text)" }}>
+                  {selectedProgramData?.nama}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
+              GRATIS
+            </p>
+          </div>
+        )}
+
+        {/* Result */}
+        {result && (
+          <div
+            className="rounded-xl p-4 flex items-start gap-3"
+            style={{
+              background: result?.success ? "var(--color-success-light)" : "var(--color-danger-light)",
+              boxShadow: "var(--shadow-inset-sm)",
+            }}
+          >
+            {result?.success ? (
+              <CheckCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: "var(--color-success)" }} />
+            ) : (
+              <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" style={{ color: "var(--color-danger)" }} />
+            )}
+            <p
+              className="text-xs font-semibold"
+              style={{ color: result?.success ? "var(--color-success)" : "var(--color-danger)" }}
+            >
+              {result?.message}
+            </p>
+          </div>
+        )}
+
+        <button
+          onClick={handleKlaim}
+          disabled={!selectedProgram || submitting || result?.success}
+          className="w-full py-3.5 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
+          style={
+            !selectedProgram || submitting || result?.success
+              ? {
+                  background: "var(--color-surface-dark)",
+                  color: "var(--color-text-subtle)",
+                  cursor: "not-allowed",
+                }
+              : {
+                  background: "var(--color-primary)",
+                  color: "#fff",
+                  boxShadow:
+                    "3px 3px 8px rgba(0,102,102,0.3), -2px -2px 6px rgba(0,133,133,0.15)",
+                }
+          }
+        >
+          {submitting ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : result?.success ? (
+            <>
+              <CheckCircle size={16} />
+              Program Diaktifkan
+            </>
+          ) : (
+            <>
+              Aktifkan Program
+              <ArrowRight size={16} />
+            </>
+          )}
+        </button>
+        {!selectedProgram && (
+          <p className="text-[11px] text-center" style={{ color: "var(--color-text-muted)" }}>
+            Pilih program di atas untuk mengaktifkan kuota Anda.
+          </p>
+        )}
+      </div>
+      ) : (
+      /* Submission Panel */
       <div className="neu-card p-5 space-y-4">
         {/* Info */}
         <div
@@ -875,6 +1048,7 @@ export default function SantriDaftarUlangPage() {
           </p>
         )}
       </div>
+      )}
       </>
       )}
     </div>

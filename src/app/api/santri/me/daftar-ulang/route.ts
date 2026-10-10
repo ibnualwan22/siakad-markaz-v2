@@ -133,7 +133,50 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    // Sinkron program ke Siakad langsung (tidak menunggu webhook):
+    // petakan nama program PPDB -> Program Siakad (nama_indo), lalu set ke riwayat terbaru.
+    let siakadProgram: { id: string; nama_indo: string } | null = null;
+    const ppdbProgramNama = data?.data?.program?.nama;
+    if (ppdbProgramNama) {
+      try {
+        const prog = await prisma.program.findFirst({
+          where: { nama_indo: { equals: ppdbProgramNama, mode: 'insensitive' } },
+          select: { id: true, nama_indo: true },
+        });
+        if (prog) {
+          siakadProgram = prog;
+          const riwayatTerbaru = await prisma.riwayatSantri.findFirst({
+            where: { santriId: session.santriId },
+            orderBy: { id: 'desc' },
+            select: { id: true },
+          });
+          if (riwayatTerbaru) {
+            await prisma.riwayatSantri.update({
+              where: { id: riwayatTerbaru.id },
+              data: { programId: prog.id },
+            });
+          }
+          // Samakan juga peserta tauzi aktif bila ada
+          const sesiAktif = await prisma.sesiTauzi.findFirst({
+            where: { isActive: true },
+            select: { id: true },
+          });
+          if (sesiAktif) {
+            await prisma.pesertaTauzi.upsert({
+              where: { sesiTauziId_santriId: { sesiTauziId: sesiAktif.id, santriId: session.santriId } },
+              update: { programId: prog.id },
+              create: { sesiTauziId: sesiAktif.id, santriId: session.santriId, programId: prog.id },
+            });
+          }
+        } else {
+          console.warn(`[daftar-ulang] Program PPDB "${ppdbProgramNama}" tidak cocok dengan Program Siakad manapun (NIS: ${session.santriId}). Program Siakad dipertahankan.`);
+        }
+      } catch (e) {
+        console.error('[daftar-ulang] Gagal sinkron program ke Siakad:', e);
+      }
+    }
+
+    return NextResponse.json({ success: true, data, siakadProgram });
   } catch (error) {
     console.error('Daftar ulang error:', error);
     return NextResponse.json(

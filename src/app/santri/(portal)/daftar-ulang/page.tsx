@@ -19,6 +19,7 @@ type PPDBProgram = {
   durasiBulanFormatted: string;
   tglProgramFormatted: string;
   hargaFormatted: string;
+  harga: number;
 };
 
 type StatusData = {
@@ -52,6 +53,8 @@ export default function SantriDaftarUlangPage() {
 
   const [activeKategori, setActiveKategori] = useState<string>("ALL");
   const [selectedProgram, setSelectedProgram] = useState("");
+  const [isBeliAtribut, setIsBeliAtribut] = useState(false);
+  const [isAgreed, setIsAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
@@ -78,6 +81,7 @@ export default function SantriDaftarUlangPage() {
 
   const handleSubmit = async () => {
     if (!selectedProgram) return;
+    if (!isAgreed) return;
     setSubmitting(true);
     setResult(null);
 
@@ -85,7 +89,7 @@ export default function SantriDaftarUlangPage() {
       const res = await fetch("/api/santri/me/daftar-ulang", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ programId: selectedProgram }),
+        body: JSON.stringify({ programId: selectedProgram, isBeliAtribut }),
       });
 
       const data = await res.json();
@@ -356,38 +360,6 @@ export default function SantriDaftarUlangPage() {
               <Loader2 size={24} className="animate-spin" style={{ color: "var(--color-primary)" }} />
               <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>Mensinkronisasi program dengan pusat keuangan...</p>
             </div>
-        ) : true ? (
-          <div className="neu-card p-6 text-center space-y-4">
-            <div className="flex flex-col items-center justify-center gap-2 mb-4">
-              <Info size={32} style={{ color: "var(--color-primary)" }} />
-              <h2 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>
-                Pendaftaran Ulang Dialihkan
-              </h2>
-              <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-                Untuk sementara, pendaftaran ulang dilakukan melalui portal PPDB pusat. Silakan pilih kategori Anda di bawah ini:
-              </p>
-            </div>
-            <div className="flex justify-center gap-3">
-              <a
-                href="https://ppdb.markazarabiyah.site/daftar-ulang?kategori=REGULER"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-3 rounded-xl text-sm font-bold shadow-md hover:scale-[1.02] transition-all"
-                style={{ background: "var(--color-primary)", color: "white" }}
-              >
-                Daftar Ulang (Reguler)
-              </a>
-              <a
-                href="https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-3 rounded-xl text-sm font-bold shadow-md hover:scale-[1.02] transition-all"
-                style={{ background: "#b45309", color: "white" }}
-              >
-                Daftar Ulang (Turats)
-              </a>
-            </div>
-          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredPrograms.map((prog) => {
@@ -473,7 +445,7 @@ export default function SantriDaftarUlangPage() {
       </div>
 
       {/* Submission Panel */}
-      {false && <div className="neu-card p-5 space-y-4">
+      <div className="neu-card p-5 space-y-4">
         {/* Info */}
         <div
           className="rounded-xl p-3.5 flex items-start gap-2.5"
@@ -494,6 +466,47 @@ export default function SantriDaftarUlangPage() {
             Pastikan pilihan program Anda sudah benar sebelum menekan tombol "Daftar Ulang Sekarang".
           </p>
         </div>
+
+        {/* Opsi Atribut */}
+        <label
+          className="rounded-xl p-3.5 flex items-start gap-3 cursor-pointer"
+          style={{
+            background: "var(--color-surface-light)",
+            boxShadow: "var(--shadow-inset-sm)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isBeliAtribut}
+            onChange={(e) => setIsBeliAtribut(e.target.checked)}
+            className="mt-0.5 w-5 h-5 accent-teal-700 cursor-pointer shrink-0"
+          />
+          <span className="text-xs leading-relaxed" style={{ color: "var(--color-text)" }}>
+            <span className="font-bold">Ambil paket atribut</span> (dresscode, tote bag, pin, peci/khimar, malzamah, ta'birot).
+            <br />
+            <span style={{ color: "var(--color-text-muted)" }}>
+              {isBeliAtribut
+                ? "Harga program sudah termasuk paket atribut."
+                : "Tidak mengambil atribut — nominal dikurangi Rp 100.000."}
+            </span>
+          </span>
+        </label>
+
+        {/* Persetujuan */}
+        <label
+          className="flex items-start gap-2.5 cursor-pointer"
+        >
+          <input
+            type="checkbox"
+            checked={isAgreed}
+            onChange={(e) => setIsAgreed(e.target.checked)}
+            className="mt-0.5 w-5 h-5 accent-teal-700 cursor-pointer shrink-0"
+          />
+          <span className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+            <span className="font-bold" style={{ color: "var(--color-text)" }}>Saya setuju</span> untuk
+            tidak merefund atau mengalihkan pembayaran.
+          </span>
+        </label>
 
         {/* Selected Summary */}
         {selectedProgramData && (
@@ -525,9 +538,16 @@ export default function SantriDaftarUlangPage() {
                 </div>
             </div>
             <p className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
-                {selectedProgramData?.hargaFormatted}
+                {selectedProgramData && !isBeliAtribut && selectedProgramData.harga
+                  ? `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, selectedProgramData.harga - 100000))}`
+                  : selectedProgramData?.hargaFormatted}
             </p>
           </div>
+        )}
+        {!isBeliAtribut && selectedProgramData && (
+          <p className="text-[11px] text-right -mt-2" style={{ color: "var(--color-text-muted)" }}>
+            Sudah dikurangi Rp 100.000 (tanpa atribut)
+          </p>
         )}
 
         {/* Result */}
@@ -570,10 +590,10 @@ export default function SantriDaftarUlangPage() {
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={!selectedProgram || submitting || result?.success}
+          disabled={!selectedProgram || !isAgreed || submitting || result?.success}
           className="w-full py-3.5 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
           style={
-            !selectedProgram || submitting || result?.success
+            !selectedProgram || !isAgreed || submitting || result?.success
               ? {
                   background: "var(--color-surface-dark)",
                   color: "var(--color-text-subtle)",
@@ -601,7 +621,12 @@ export default function SantriDaftarUlangPage() {
             </>
           )}
         </button>
-      </div>}
+        {!isAgreed && selectedProgram && !result?.success && (
+          <p className="text-[11px] text-center" style={{ color: "var(--color-warning)" }}>
+            Centang persetujuan di atas untuk melanjutkan.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

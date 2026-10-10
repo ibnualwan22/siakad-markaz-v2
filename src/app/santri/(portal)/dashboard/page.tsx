@@ -197,9 +197,7 @@ export default function SantriDashboardPage() {
 
   const isDurasiLow = sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
 
-  const daftarUlangLink = santri.kategori?.toUpperCase() === 'TUROTS'
-    ? 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=TUROTS'
-    : 'https://ppdb.markazarabiyah.site/daftar-ulang?kategori=REGULER';
+  const daftarUlangLink = "/santri/daftar-ulang";
 
   return (
     <div className="space-y-6">
@@ -249,8 +247,6 @@ export default function SantriDashboardPage() {
             </p>
             <a
               href={daftarUlangLink}
-              target="_blank"
-              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg text-[11px] font-bold"
               style={{
                 background: "var(--color-warning)",
@@ -258,7 +254,7 @@ export default function SantriDashboardPage() {
               }}
             >
               <RefreshCw size={12} />
-              Daftar Ulang (Eksternal)
+              Daftar Ulang
             </a>
           </div>
         </div>
@@ -394,8 +390,6 @@ export default function SantriDashboardPage() {
                 {isDurasiLow && (
                   <a
                     href={daftarUlangLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className="inline-flex items-center justify-center w-full gap-1.5 mt-3 px-3.5 py-2.5 rounded-xl text-[11px] font-bold transition-all"
                     style={{
                       background: "var(--color-danger)",
@@ -745,7 +739,7 @@ export default function SantriDashboardPage() {
               href: daftarUlangLink,
               icon: RefreshCw,
               label: "Daftar Ulang",
-              desc: "Via Website PPDB Pusat",
+              desc: "Perpanjang masa aktif santri",
             },
           ].map((item) => {
             const Icon = item.icon;

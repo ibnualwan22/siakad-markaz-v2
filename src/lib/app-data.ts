@@ -938,27 +938,6 @@ export async function getRiwayatSantriRows(
     masterMap.set(ms.id, ms);
   }
 
-  // Untuk Akbarnas: ambil nilai dari dufah lain santri yang sama (penggabungan 2 dufah)
-  const akbarnasIds = santriIds.filter((id) => {
-    const r = riwayatList.find((x) => x.santriId === id);
-    return r?.program?.nama_indo?.toLowerCase().includes("akbarnas");
-  });
-  const nilaiLintasDufah = new Map<string, any[]>();
-  if (akbarnasIds.length > 0) {
-    const extraRiwayat = await prisma.riwayatSantri.findMany({
-      where: {
-        santriId: { in: akbarnasIds },
-        dufahNama: { not: targetDufah },
-        program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
-      },
-      include: { nilaiList: { include: { mapel: true } } },
-    });
-    for (const r of extraRiwayat) {
-      if (!nilaiLintasDufah.has(r.santriId)) nilaiLintasDufah.set(r.santriId, []);
-      nilaiLintasDufah.get(r.santriId)!.push(...r.nilaiList);
-    }
-  }
-
   const groupsMap = new Map<string, any>();
 
   for (const riwayat of riwayatList) {
@@ -990,28 +969,9 @@ export async function getRiwayatSantriRows(
     const program = riwayat.program;
     const kelas = riwayat.kelas;
     const isAkbarnas = program?.nama_indo.toLowerCase().includes("akbarnas");
+    // Tiap riwayat tampil dengan nilai aslinya masing-masing (tidak digabung lintas dufah).
+    // Transkrip gabungan Akbarnas tersedia terpisah via detail API (bulan ke-2).
     let nilaiList: any[] = riwayat.nilaiList ?? [];
-
-    // Akbarnas: gabungkan nilai lintas dufah (aturan 2 dufah), konsisten dengan syahadah
-    if (isAkbarnas && nilaiLintasDufah.has(riwayat.santriId)) {
-      const semuaNilai = [...nilaiList, ...nilaiLintasDufah.get(riwayat.santriId)!];
-      const gabungan = calcAkbarnasGabungan(semuaNilai);
-      const merged: any[] = [];
-      const seen = new Set<string>();
-      for (const n of nilaiList) {
-        if (!seen.has(n.mapelId)) {
-          seen.add(n.mapelId);
-          merged.push({ ...n, nilaiAkhir: gabungan.get(n.mapelId) ?? n.nilaiAkhir });
-        }
-      }
-      for (const [mapelId, nilaiAkhir] of gabungan) {
-        if (!seen.has(mapelId)) {
-          const source = semuaNilai.find((n: any) => n.mapelId === mapelId);
-          if (source) merged.push({ ...source, nilaiAkhir });
-        }
-      }
-      nilaiList = merged;
-    }
 
     if (!isAkbarnas) {
       const effectiveUsbuainMode = riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0;
@@ -1121,5 +1081,67 @@ export async function getRiwayatSantriRows(
   }
 
   return Array.from(groupsMap.values()).sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+}
+
+// Transkrip gabungan Akbarnas: gabungan nilai bulan ini + bulan Akbarnas sebelumnya.
+// Untuk transparansi — kartu riwayat tetap menampilkan nilai asli masing-masing bulan,
+// transkrip gabungan tersedia terpisah (tombol "Transkrip Gabungan" di bulan ke-2).
+export async function getTranskripAkbarnas(santriId: string, dufahNama: string) {
+  const getDufahNum = (name: string) => {
+    const m = (name || "").match(/\d+/);
+    return m ? parseInt(m[0], 10) : 0;
+  };
+  const currNum = getDufahNum(dufahNama);
+  if (!currNum) return null;
+
+  const allAkbarnas: any[] = await prisma.riwayatSantri.findMany({
+    where: {
+      santriId,
+      program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
+    },
+    include: {
+      program: { include: { programMapels: { include: { mapel: true } } } },
+      nilaiList: { include: { mapel: true } },
+    },
+  });
+
+  const withNum = allAkbarnas
+    .map((r) => ({ ...r, _num: getDufahNum(r.dufahNama) }))
+    .filter((r) => r._num > 0);
+  const curr = withNum.find((r) => r._num === currNum);
+  const prevList = withNum
+    .filter((r) => r._num < currNum)
+    .sort((a, b) => b._num - a._num);
+  const prev = prevList[0];
+  // Bulan pertama Akbarnas: tidak ada transkrip gabungan
+  if (!curr || !prev) return null;
+
+  const allNilai = [...(prev.nilaiList || []), ...(curr.nilaiList || [])];
+  if (allNilai.length === 0) return null;
+
+  const gabungan = calcAkbarnasGabungan(allNilai);
+  const progMapels: any[] = curr.program?.programMapels || [];
+  const rows = progMapels
+    .map((pm: any) => {
+      const skor = gabungan.get(pm.mapelId) ?? null;
+      return {
+        mapelNama: pm.mapel?.nama_indo ?? "-",
+        skor,
+        bobot: pm.mapel?.bobot ?? 1,
+        masukAkumulasi: pm.mapel?.masuk_akumulasi !== false,
+      };
+    })
+    .filter((r: any) => r.skor !== null);
+  const accItems = rows
+    .filter((r: any) => r.masukAkumulasi)
+    .map((r: any) => ({ score: r.skor, bobot: r.bobot }));
+  const rataRata = accItems.length > 0 ? calcAkumulatif(accItems).toFixed(2) : null;
+
+  return {
+    dariDufah: prev.dufahNama,
+    sampaiDufah: curr.dufahNama,
+    nilaiList: rows.map((r: any) => ({ mapelNama: r.mapelNama, skor: r.skor })),
+    rataRata,
+  };
 }
 

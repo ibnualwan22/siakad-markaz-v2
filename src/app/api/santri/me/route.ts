@@ -70,33 +70,47 @@ export async function GET() {
       return getNum(b.dufahNama) - getNum(a.dufahNama);
     });
 
-    // Akbarnas: gabungkan nilai lintas dufah (2 bulan) agar konsisten dengan syahadah.
-    // Tanpa ini, rata-rata di portal hanya dari 1 dufah dan tidak cocok dengan angka syahadah.
-    const akbarnasRecords = santri.riwayatRecords.filter((r: any) =>
-      r.program?.nama_indo?.toLowerCase().includes('akbarnas')
-    );
-    if (akbarnasRecords.length > 0) {
-      const allNilai = akbarnasRecords.flatMap((r: any) => r.nilaiList || []);
+    // Akbarnas: tiap bulan tampil dengan nilai aslinya masing-masing (tidak digabung
+    // ke kartu). Transkrip gabungan (bulan 1 + bulan 2) dihitung terpisah dan
+    // dilampirkan pada riwayat bulan ke-2 sebagai transparansi.
+    const getDufahNum = (name: string) => {
+      const m = (name || '').match(/\d+/);
+      return m ? parseInt(m[0], 10) : 0;
+    };
+    const akbarnasRecords = santri.riwayatRecords
+      .filter((r: any) => r.program?.nama_indo?.toLowerCase().includes('akbarnas'))
+      .sort((a: any, b: any) => getDufahNum(a.dufahNama) - getDufahNum(b.dufahNama));
+    // Petakan riwayat bulan ke-2 -> transkrip gabungan (bulan 1 + bulan 2)
+    const transkripGabunganMap = new Map<string, any>();
+    for (let i = 1; i < akbarnasRecords.length; i++) {
+      const prev = akbarnasRecords[i - 1];
+      const curr = akbarnasRecords[i];
+      const allNilai = [...(prev.nilaiList || []), ...(curr.nilaiList || [])];
+      if (allNilai.length === 0) continue;
       const gabungan = calcAkbarnasGabungan(allNilai);
-      for (const r of akbarnasRecords) {
-        const merged: any[] = [];
-        const seen = new Set<string>();
-        // Pertahankan struktur nilaiList per riwayat, tapi nilaiAkhir diganti hasil gabungan
-        for (const n of (r.nilaiList || [])) {
-          if (!seen.has(n.mapelId)) {
-            seen.add(n.mapelId);
-            merged.push({ ...n, nilaiAkhir: gabungan.get(n.mapelId) ?? n.nilaiAkhir });
-          }
-        }
-        // Tambahkan mapel yang hanya ada di dufah lain
-        for (const [mapelId, nilaiAkhir] of gabungan) {
-          if (!seen.has(mapelId)) {
-            const source = allNilai.find((n: any) => n.mapelId === mapelId);
-            if (source) merged.push({ ...source, nilaiAkhir });
-          }
-        }
-        r.nilaiList = merged;
-      }
+      const progMapels: any[] = curr.program?.programMapels || [];
+      const rows = progMapels
+        .map((pm: any) => {
+          const skor = gabungan.get(pm.mapelId) ?? null;
+          return {
+            mapelId: pm.mapelId,
+            namaIndo: pm.mapel?.nama_indo ?? '-',
+            skor,
+            predikat: skor !== null ? getPredikat(skor) : null,
+            masukAkumulasi: pm.mapel?.masuk_akumulasi ?? true,
+            bobot: pm.mapel?.bobot ?? 1,
+          };
+        })
+        .filter((r: any) => r.skor !== null);
+      const accRows = rows.filter((r: any) => r.masukAkumulasi);
+      const avgGab = calcAkumulatif(accRows.map((r: any) => ({ score: r.skor, bobot: r.bobot })));
+      transkripGabunganMap.set(curr.id, {
+        dariDufah: prev.dufahNama,
+        sampaiDufah: curr.dufahNama,
+        nilaiRows: rows,
+        average: Math.round(avgGab * 100) / 100,
+        averagePredikat: getPredikat(Math.round(avgGab)),
+      });
     }
 
     const riwayatResult = santri.riwayatRecords.map((riwayat) => {
@@ -198,6 +212,9 @@ export async function GET() {
         nilaiRows,
         average: Math.round(average * 100) / 100,
         averagePredikat,
+
+        // Transkrip gabungan Akbarnas (bulan 1 + bulan 2), hanya ada di bulan ke-2
+        transkripGabungan: transkripGabunganMap.get(riwayat.id) ?? null,
 
         // Rekap absensi
         rekapAbsenKelas: hitungRekap(riwayat.absenKelasList),

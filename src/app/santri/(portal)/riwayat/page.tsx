@@ -13,7 +13,20 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
+
+type TranskripGabungan = {
+  dariDufah: string;
+  sampaiDufah: string;
+  nilaiRows: Array<{
+    namaIndo: string;
+    skor: number | null;
+    predikat: { indo: string } | null;
+  }>;
+  average: number;
+  averagePredikat: { indo: string; arab: string };
+};
 
 type RiwayatData = {
   id: string;
@@ -28,6 +41,7 @@ type RiwayatData = {
   riwayatId: string;
   average: number;
   averagePredikat: { indo: string; arab: string };
+  transkripGabungan: TranskripGabungan | null;
   nilaiRows: Array<{
     namaIndo: string;
     skor: number | null;
@@ -39,6 +53,7 @@ export default function SantriRiwayatPage() {
   const [riwayat, setRiwayat] = useState<RiwayatData[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showTranskripId, setShowTranskripId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/santri/me")
@@ -207,9 +222,71 @@ export default function SantriRiwayatPage() {
                     </div>
                   )}
 
-                  {/* Download Syahadah */}
-                  {r.canDownloadSyahadah && (
+                  {/* Transkrip Gabungan Akbarnas */}
+                  {r.transkripGabungan && (
+                    <div className="space-y-1.5">
+                      <button
+                        onClick={() => setShowTranskripId(showTranskripId === r.id ? null : r.id)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition-all"
+                        style={{
+                          background: "var(--color-primary-50)",
+                          color: "var(--color-primary)",
+                        }}
+                      >
+                        <BookOpen size={14} />
+                        {showTranskripId === r.id ? "Tutup Transkrip Gabungan" : "Lihat Transkrip Gabungan"}
+                        {showTranskripId === r.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                      {showTranskripId === r.id && (
+                        <div className="rounded-xl p-3 space-y-1.5" style={{ background: "var(--color-surface-light)" }}>
+                          <p className="text-[10px] font-bold text-center" style={{ color: "var(--color-text-muted)" }}>
+                            Gabungan {r.transkripGabungan.dariDufah} + {r.transkripGabungan.sampaiDufah}
+                          </p>
+                          <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: "var(--color-primary-50)" }}>
+                            <span className="text-xs font-bold" style={{ color: "var(--color-text)" }}>Rata-rata Gabungan</span>
+                            <span className="text-xs font-bold" style={{ color: "var(--color-primary)" }}>
+                              {r.transkripGabungan.average} ({r.transkripGabungan.averagePredikat.indo})
+                            </span>
+                          </div>
+                          {r.transkripGabungan.nilaiRows.map((n, i) => (
+                            <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-white">
+                              <span className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>{n.namaIndo}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold" style={{ color: n.skor !== null && n.skor >= 70 ? "var(--color-success)" : n.skor !== null ? "var(--color-danger)" : "var(--color-text-subtle)" }}>
+                                  {n.skor !== null ? Math.round(n.skor) : "-"}
+                                </span>
+                                {n.predikat && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ background: "var(--color-primary-50)", color: "var(--color-primary)" }}>
+                                    {n.predikat.indo}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Transkrip Nilai (program non-Akbarnas) */}
+                  {!r.programNama.toLowerCase().includes("akbarnas") && r.nilaiRows.length > 0 && (
                     <Link
+                      href={`/santri/transkrip/${r.riwayatId}`}
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all"
+                      style={{
+                        background: "var(--color-surface-light)",
+                        color: "var(--color-primary)",
+                        border: "1px solid var(--color-primary-100)",
+                      }}
+                    >
+                      <FileText size={14} />
+                      Lihat Transkrip Nilai
+                    </Link>
+                  )}
+
+                  {/* Download Syahadah */}
+                  {r.canDownloadSyahadah && (                    <Link
                       href={`/cetak/${r.riwayatId}`}
                       target="_blank"
                       className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all"

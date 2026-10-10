@@ -11,6 +11,13 @@ type AbsenSummary = { hadir: number; izin: number; sakit: number; alpha: number;
 type AbsenHissoh = { hissoh: string; hadir: number; alpha: number; total: number };
 type AbsenKegiatan = { nama: string; hadir: number; alpha: number; total: number };
 
+type TranskripGabungan = {
+  dariDufah: string;
+  sampaiDufah: string;
+  nilaiList: Array<{ mapelNama: string; skor: number }>;
+  rataRata: string | null;
+} | null;
+
 type RiwayatRecord = {
   riwayatId: string;
   dufahNama: string;
@@ -24,6 +31,7 @@ type RiwayatRecord = {
   canViewIjazah: boolean;
   nilaiList: Array<{ mapelNama: string; skor: number }>;
   rataRata: string | null;
+  transkripGabungan?: TranskripGabungan;
   absenSakan?: AbsenSummary;
   absenKelasByHissoh?: AbsenHissoh[];
   absenKegiatan?: AbsenKegiatan[];
@@ -66,6 +74,7 @@ function AbsenBadge({ hadir, total }: { hadir: number; total: number }) {
 }
 
 function RecordDetailCard({ record }: { record: RiwayatRecord }) {
+  const [showTranskrip, setShowTranskrip] = useState(false);
   return (
     <div className="rounded-xl border border-[var(--color-surface)] bg-[var(--color-secondary)] p-4 space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -88,9 +97,11 @@ function RecordDetailCard({ record }: { record: RiwayatRecord }) {
             )}
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          {record.canViewIjazah ? (
-            <Link href={`/ijazah/${record.riwayatId}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-text)] px-3 py-1.5 text-xs font-bold text-white hover:bg-[var(--color-text)]">
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          <Link href={`/admin/syahadah/${record.riwayatId}/transkrip`} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700">
+            <FileText className="h-3.5 w-3.5" /> Transkrip
+          </Link>
+          {record.canViewIjazah ? (            <Link href={`/ijazah/${record.riwayatId}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-text)] px-3 py-1.5 text-xs font-bold text-white hover:bg-[var(--color-text)]">
               <FileText className="h-3.5 w-3.5" /> Ijazah Online
             </Link>
           ) : (
@@ -128,6 +139,37 @@ function RecordDetailCard({ record }: { record: RiwayatRecord }) {
           )}
         </div>
       </div>
+      {record.transkripGabungan && (
+        <div>
+          <button
+            onClick={() => setShowTranskrip(!showTranskrip)}
+            className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            {showTranskrip ? "Tutup Transkrip Gabungan" : "Transkrip Gabungan"}
+            {showTranskrip ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          </button>
+          {showTranskrip && (
+            <div className="mt-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 space-y-2">
+              <p className="text-xs font-bold text-indigo-700 text-center">
+                Gabungan {record.transkripGabungan.dariDufah} + {record.transkripGabungan.sampaiDufah}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {record.transkripGabungan.nilaiList.map((n, idx) => (
+                  <span key={idx} className="inline-flex rounded border border-[var(--color-surface-dark)] bg-white px-2 py-1 text-xs text-[var(--color-text-muted)]">
+                    {n.mapelNama}: <strong className="ml-1">{n.skor}</strong>
+                  </span>
+                ))}
+                {record.transkripGabungan.rataRata && (
+                  <span className="inline-flex rounded border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-700">
+                    Rata-rata Gabungan: {record.transkripGabungan.rataRata}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div className="border-t border-[var(--color-surface-dark)] pt-3">
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">Rekap Absensi</p>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-3">

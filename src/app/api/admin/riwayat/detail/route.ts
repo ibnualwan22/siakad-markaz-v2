@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
-import { getRiwayatSantriRows } from "@/lib/app-data";
+import { getRiwayatSantriRows, getTranskripAkbarnas } from "@/lib/app-data";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -24,7 +24,16 @@ export async function GET(request: Request) {
   try {
     const groups = await getRiwayatSantriRows(dufah, { santriId });
     const group = groups.find((g: any) => g.santriId === santriId);
-    return NextResponse.json(group?.records || []);
+    const records = group?.records || [];
+    // Lampirkan transkrip gabungan Akbarnas (bulan 1 + bulan 2) bila ada
+    for (const rec of records) {
+      if ((rec.programNama || "").toLowerCase().includes("akbarnas")) {
+        rec.transkripGabungan = await getTranskripAkbarnas(santriId, rec.dufahNama);
+      } else {
+        rec.transkripGabungan = null;
+      }
+    }
+    return NextResponse.json(records);
   } catch (error) {
     console.error("Error fetching riwayat detail:", error);
     return NextResponse.json(

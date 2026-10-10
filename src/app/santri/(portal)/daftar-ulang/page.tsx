@@ -884,31 +884,6 @@ export default function SantriDaftarUlangPage() {
           </p>
         </div>
 
-        {/* Opsi Atribut */}
-        <label
-          className="rounded-xl p-3.5 flex items-start gap-3 cursor-pointer"
-          style={{
-            background: "var(--color-surface-light)",
-            boxShadow: "var(--shadow-inset-sm)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={isBeliAtribut}
-            onChange={(e) => setIsBeliAtribut(e.target.checked)}
-            className="mt-0.5 w-5 h-5 accent-teal-700 cursor-pointer shrink-0"
-          />
-          <span className="text-xs leading-relaxed" style={{ color: "var(--color-text)" }}>
-            <span className="font-bold">Ambil paket atribut</span> (dresscode, tote bag, pin, peci/khimar, malzamah, ta'birot).
-            <br />
-            <span style={{ color: "var(--color-text-muted)" }}>
-              {isBeliAtribut
-                ? "Harga program sudah termasuk paket atribut."
-                : "Tidak mengambil atribut — nominal dikurangi Rp 100.000."}
-            </span>
-          </span>
-        </label>
-
         {/* Selected Summary */}
         {selectedProgramData && (
           <div
@@ -997,72 +972,92 @@ export default function SantriDaftarUlangPage() {
         <div className="fixed bottom-20 lg:bottom-6 left-0 right-0 z-30 px-4 pointer-events-none">
           <div className="max-w-4xl mx-auto pointer-events-auto">
             <div
-              className="rounded-2xl p-3 flex items-center gap-3"
+              className="rounded-2xl p-4 space-y-3"
               style={{
-                background: "var(--bg-card)",
-                boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+                background: "#ffffff",
+                boxShadow: "0 -4px 28px rgba(0,0,0,0.25)",
                 border: "1px solid var(--color-surface-dark)",
               }}
             >
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
-                  Program terpilih
-                </p>
-                <p className="text-xs font-bold truncate" style={{ color: "var(--color-text)" }}>
-                  {selectedProgramData?.nama || "-"}
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
+                    Program terpilih
+                  </p>
+                  <p className="text-sm font-bold truncate" style={{ color: "var(--color-text)" }}>
+                    {selectedProgramData?.nama || "-"}
+                  </p>
+                </div>
+                {klaimTersedia ? (
+                  <button
+                    onClick={handleKlaim}
+                    disabled={submitting}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
+                    style={{
+                      background: "var(--color-primary)",
+                      color: "#fff",
+                      opacity: submitting ? 0.6 : 1,
+                    }}
+                  >
+                    {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                    Aktifkan Program
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!isAgreed || submitting}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
+                    style={
+                      !isAgreed || submitting
+                        ? {
+                            background: "var(--color-surface-dark)",
+                            color: "var(--color-text-subtle)",
+                          }
+                        : {
+                            background: "var(--color-primary)",
+                            color: "#fff",
+                          }
+                    }
+                  >
+                    {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                    Daftar Ulang
+                  </button>
+                )}
               </div>
-              {klaimTersedia ? (
-                <button
-                  onClick={handleKlaim}
-                  disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
-                  style={{
-                    background: "var(--color-primary)",
-                    color: "#fff",
-                    opacity: submitting ? 0.6 : 1,
-                  }}
-                >
-                  {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                  Aktifkan Program
-                </button>
-              ) : (
-                <button
-                  onClick={handleSubmit}
-                  disabled={!isAgreed || submitting}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0 self-start"
-                  style={
-                    !isAgreed || submitting
-                      ? {
-                          background: "var(--color-surface-dark)",
-                          color: "var(--color-text-subtle)",
-                        }
-                      : {
-                          background: "var(--color-primary)",
-                          color: "#fff",
-                        }
-                  }
-                >
-                  {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                  Daftar Ulang
-                </button>
+              {!klaimTersedia && (
+                <div className="space-y-2 pt-2" style={{ borderTop: "1px solid var(--color-surface-dark)" }}>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isBeliAtribut}
+                      onChange={(e) => setIsBeliAtribut(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 shrink-0"
+                      style={{ accentColor: "var(--color-primary)" }}
+                    />
+                    <span className="text-[11px] leading-snug" style={{ color: "var(--color-text)" }}>
+                      <span className="font-bold">Ambil paket atribut</span> (+Rp 100.000)
+                      <br />
+                      <span style={{ color: "var(--color-text-muted)" }}>
+                        Tanpa atribut — nominal dikurangi Rp 100.000.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isAgreed}
+                      onChange={(e) => setIsAgreed(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 shrink-0"
+                      style={{ accentColor: "var(--color-primary)" }}
+                    />
+                    <span className="text-[11px] leading-snug" style={{ color: "var(--color-text-muted)" }}>
+                      <span className="font-bold" style={{ color: "var(--color-text)" }}>Saya setuju</span> untuk
+                      tidak merefund atau mengalihkan pembayaran.
+                    </span>
+                  </label>
+                </div>
               )}
             </div>
-            {!klaimTersedia && (
-              <label className="flex items-start gap-2 cursor-pointer px-1">
-                <input
-                  type="checkbox"
-                  checked={isAgreed}
-                  onChange={(e) => setIsAgreed(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 shrink-0"
-                  style={{ accentColor: "var(--color-primary)" }}
-                />
-                <span className="text-[10px] leading-snug" style={{ color: "var(--color-text-muted)" }}>
-                  <span className="font-bold" style={{ color: "var(--color-text)" }}>Saya setuju</span> untuk
-                  tidak merefund atau mengalihkan pembayaran.
-                </span>
-              </label>
-            )}
           </div>
         </div>
       )}

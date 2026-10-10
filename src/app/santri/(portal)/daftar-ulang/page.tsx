@@ -754,9 +754,15 @@ export default function SantriDaftarUlangPage() {
 
                     {/* Harga */}
                     <div>
-                      <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
-                        {prog.hargaFormatted}
-                      </p>
+                      {klaimTersedia ? (
+                        <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-success)" }}>
+                          GRATIS
+                        </p>
+                      ) : (
+                        <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
+                          {prog.hargaFormatted}
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -1050,6 +1056,71 @@ export default function SantriDaftarUlangPage() {
       </div>
       )}
       </>
+      )}
+
+      {/* ===== FLOATING SUBMIT BAR: muncul setelah program dipilih ===== */}
+      {!pendingLoading && !pendingTagihan && selectedProgram && !result?.success && (
+        <div className="fixed bottom-20 lg:bottom-6 left-0 right-0 z-30 px-4 pointer-events-none">
+          <div className="max-w-4xl mx-auto pointer-events-auto">
+            <div
+              className="rounded-2xl p-3 flex items-center gap-3"
+              style={{
+                background: "var(--bg-card)",
+                boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+                border: "1px solid var(--color-surface-dark)",
+              }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
+                  Program terpilih
+                </p>
+                <p className="text-xs font-bold truncate" style={{ color: "var(--color-text)" }}>
+                  {selectedProgramData?.nama || "-"}
+                </p>
+              </div>
+              {klaimTersedia ? (
+                <button
+                  onClick={handleKlaim}
+                  disabled={submitting}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
+                  style={{
+                    background: "var(--color-primary)",
+                    color: "#fff",
+                    opacity: submitting ? 0.6 : 1,
+                  }}
+                >
+                  {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Aktifkan Program
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!isAgreed || submitting}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
+                  style={
+                    !isAgreed || submitting
+                      ? {
+                          background: "var(--color-surface-dark)",
+                          color: "var(--color-text-subtle)",
+                        }
+                      : {
+                          background: "var(--color-primary)",
+                          color: "#fff",
+                        }
+                  }
+                >
+                  {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Daftar Ulang
+                </button>
+              )}
+            </div>
+            {!klaimTersedia && !isAgreed && (
+              <p className="text-[10px] text-center mt-1.5" style={{ color: "var(--color-warning)" }}>
+                Centang persetujuan pada panel di bawah untuk mengaktifkan tombol.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { nama, dufahNama, isActive } = body;
+    const { nama, dufahNama, isActive, copySoalDariSesiId } = body;
 
     if (!nama || !dufahNama) {
       return NextResponse.json(
@@ -66,7 +66,35 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(newSesi, { status: 201 });
+    // Salin soal (beserta pilihan jawaban) dari sesi sumber, bila diminta
+    let soalDisalin = 0;
+    if (copySoalDariSesiId) {
+      const soalSumber = await prisma.soalTauzi.findMany({
+        where: { sesiTauziId: copySoalDariSesiId },
+        include: { jawabanList: true },
+        orderBy: [{ programId: "asc" }, { urutan: "asc" }],
+      });
+      for (const s of soalSumber) {
+        await prisma.soalTauzi.create({
+          data: {
+            sesiTauziId: newSesi.id,
+            programId: s.programId,
+            pertanyaan: s.pertanyaan,
+            urutan: s.urutan,
+            jawabanList: {
+              create: s.jawabanList.map((j) => ({
+                teks: j.teks,
+                isCorrect: j.isCorrect,
+                urutan: j.urutan,
+              })),
+            },
+          },
+        });
+        soalDisalin++;
+      }
+    }
+
+    return NextResponse.json({ ...newSesi, soalDisalin }, { status: 201 });
   } catch (error: any) {
     console.error("Error creating sesi tauzi:", error);
     return NextResponse.json(

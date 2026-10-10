@@ -11,7 +11,7 @@ export default function SesiTauziPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ nama: "", dufahNama: "", isActive: false });
+  const [formData, setFormData] = useState({ nama: "", dufahNama: "", isActive: false, copySoalDariSesiId: "" });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -48,7 +48,12 @@ export default function SesiTauziPage() {
 
       if (!res.ok) throw new Error((await res.json()).error);
       
-      toast.success("Sesi berhasil disimpan");
+      const saved = await res.json();
+      if (!editingId && saved.soalDisalin > 0) {
+        toast.success(`Sesi berhasil disimpan, ${saved.soalDisalin} soal disalin`);
+      } else {
+        toast.success("Sesi berhasil disimpan");
+      }
       setIsModalOpen(false);
       fetchData();
     } catch (error: any) {
@@ -73,10 +78,12 @@ export default function SesiTauziPage() {
   const openForm = (sesi?: any) => {
     if (sesi) {
       setEditingId(sesi.id);
-      setFormData({ nama: sesi.nama, dufahNama: sesi.dufahNama, isActive: sesi.isActive });
+      setFormData({ nama: sesi.nama, dufahNama: sesi.dufahNama, isActive: sesi.isActive, copySoalDariSesiId: "" });
     } else {
       setEditingId(null);
-      setFormData({ nama: "", dufahNama: "", isActive: false });
+      // Default: salin soal dari sesi terbaru
+      const latest = sesiList.length > 0 ? sesiList[0].id : "";
+      setFormData({ nama: "", dufahNama: "", isActive: false, copySoalDariSesiId: latest });
     }
     setIsModalOpen(true);
   };
@@ -154,6 +161,18 @@ export default function SesiTauziPage() {
                   {dufahList.map(d => <option key={d.nama} value={d.nama}>{d.nama}</option>)}
                 </select>
               </div>
+              {!editingId && sesiList.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>Salin Soal Dari Sesi</label>
+                  <select value={formData.copySoalDariSesiId} onChange={e => setFormData({ ...formData, copySoalDariSesiId: e.target.value })} className="neu-input w-full p-3 text-sm">
+                    <option value="">-- Jangan salin soal --</option>
+                    {sesiList.map(s => <option key={s.id} value={s.id}>{s.nama} ({s.dufahNama})</option>)}
+                  </select>
+                  <p className="text-[11px] mt-1.5" style={{ color: "var(--color-text-subtle)" }}>
+                    Soal beserta pilihan jawabannya akan disalin otomatis ke sesi baru.
+                  </p>
+                </div>
+              )}
               <label className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer" style={{ borderColor: "var(--color-surface-hover)" }}>
                 <input type="checkbox" checked={formData.isActive} onChange={e => setFormData({ ...formData, isActive: e.target.checked })} className="rounded text-[var(--color-primary)] focus:ring-[var(--color-primary)]" />
                 <span className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Sesi Aktif</span>

@@ -88,6 +88,12 @@ export default function HasilTauziPage({ hasEditAccess }: { hasEditAccess: boole
     const exportedData = filteredPesertaClient.map((p, index) => ({
       "No": index + 1,
       "Nama": p.santri.nama,
+      "Riwayat Terakhir": p.riwayatTerakhir
+        ? `${p.riwayatTerakhir.kelasNama || "-"} - ${p.riwayatTerakhir.dufahNomor}`
+        : "-",
+      "Nilai Akumulatif": p.riwayatTerakhir
+        ? (p.riwayatTerakhir.nilaiAkumulatif ?? "tidak ikut ujian")
+        : "-",
       "Nilai Tahriri": p.nilaiTahriri ?? "-",
       "Nilai Muqobalah": p.nilaiMuqobalah ?? "-",
       "Kategori": p.santri.bulanKe === 1 ? "Santri Baru" : "Santri Lama",
@@ -268,6 +274,19 @@ export default function HasilTauziPage({ hasEditAccess }: { hasEditAccess: boole
                             {p.santri.bulanKe === 1 ? "BARU" : "LAMA"}
                           </span>
                         </div>
+                        {p.riwayatTerakhir && (
+                          <div className="mt-1.5 text-[10px] leading-relaxed">
+                            <span className="font-bold text-slate-600">
+                              {p.riwayatTerakhir.kelasNama || "-"} - {p.riwayatTerakhir.dufahNomor}
+                            </span>
+                            <span className="text-slate-400"> • </span>
+                            {p.riwayatTerakhir.nilaiAkumulatif !== null && p.riwayatTerakhir.nilaiAkumulatif !== undefined ? (
+                              <span className="font-bold text-teal-700">Akumulatif: {p.riwayatTerakhir.nilaiAkumulatif}</span>
+                            ) : (
+                              <span className="italic text-slate-400">tidak ikut ujian</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       
                       <td className="px-6 py-4">

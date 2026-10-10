@@ -299,6 +299,19 @@ export default function InputNilaiTauziClient({ userName }: { userName: string }
                             {p.santri.bulanKe === 1 ? "BARU" : "LAMA"}
                           </span>
                         </div>
+                        {p.riwayatTerakhir && (
+                          <div className="mt-1.5 text-[10px] leading-relaxed">
+                            <span className="font-bold text-slate-600">
+                              {p.riwayatTerakhir.kelasNama || "-"} - {p.riwayatTerakhir.dufahNomor}
+                            </span>
+                            <span className="text-slate-400"> • </span>
+                            {p.riwayatTerakhir.nilaiAkumulatif !== null && p.riwayatTerakhir.nilaiAkumulatif !== undefined ? (
+                              <span className="font-bold text-teal-700">Akumulatif: {p.riwayatTerakhir.nilaiAkumulatif}</span>
+                            ) : (
+                              <span className="italic text-slate-400">tidak ikut ujian</span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center">
                         {p.sudahUjian ? (

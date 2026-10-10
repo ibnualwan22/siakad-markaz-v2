@@ -636,16 +636,15 @@ export default function SantriDaftarUlangPage() {
                 className="text-xs font-bold"
                 style={{ color: "var(--color-success)" }}
               >
-                Kuota Aktif — Pemilihan Program
+                Daftar Ulang — Tinggal Pilih Program
               </p>
               <p
                 className="text-[11px] mt-1 leading-relaxed"
                 style={{ color: "var(--color-text-muted)" }}
               >
                 Anda memiliki sisa kuota {sisaBulan ?? "-"} bulan
-                {berakhirDufah ? ` (berakhir ${berakhirDufah})` : ""}. Cukup
-                pilih program di bawah ini — gratis, tanpa pembayaran, dan
-                program Siakad Anda ikut diperbarui.
+                {berakhirDufah ? ` (berakhir ${berakhirDufah})` : ""}. Pilih
+                program untuk periode berikutnya di bawah ini.
               </p>
             </div>
           </div>
@@ -752,18 +751,14 @@ export default function SantriDaftarUlangPage() {
                       <span className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>{prog.tglProgramFormatted}</span>
                     </div>
 
-                    {/* Harga */}
-                    <div>
-                      {klaimTersedia ? (
-                        <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-success)" }}>
-                          GRATIS
-                        </p>
-                      ) : (
+                    {/* Harga: disembunyikan saat mode klaim */}
+                    {!klaimTersedia && (
+                      <div>
                         <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
                           {prog.hargaFormatted}
                         </p>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                   
                   {/* Selection Indicator overlay */}
@@ -785,26 +780,21 @@ export default function SantriDaftarUlangPage() {
         {/* Selected Summary */}
         {selectedProgramData && (
           <div
-            className="rounded-xl p-3.5 flex items-center justify-between"
+            className="rounded-xl p-3.5 flex items-center gap-3"
             style={{
               background: "var(--color-success-light)",
               boxShadow: "var(--shadow-inset-sm)",
             }}
           >
-            <div className="flex items-center gap-3">
-              <CheckCircle size={16} style={{ color: "var(--color-success)" }} />
-              <div>
-                <p className="text-xs font-bold" style={{ color: "var(--color-success)" }}>
-                  Program Terpilih
-                </p>
-                <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--color-text)" }}>
-                  {selectedProgramData?.nama}
-                </p>
-              </div>
+            <CheckCircle size={16} style={{ color: "var(--color-success)" }} />
+            <div>
+              <p className="text-xs font-bold" style={{ color: "var(--color-success)" }}>
+                Program Terpilih
+              </p>
+              <p className="text-[11px] font-semibold mt-0.5" style={{ color: "var(--color-text)" }}>
+                {selectedProgramData?.nama}
+              </p>
             </div>
-            <p className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
-              GRATIS
-            </p>
           </div>
         )}
 
@@ -890,7 +880,7 @@ export default function SantriDaftarUlangPage() {
             className="text-[11px] leading-relaxed"
             style={{ color: "var(--color-text-muted)" }}
           >
-            Pastikan pilihan program Anda sudah benar sebelum menekan tombol "Daftar Ulang Sekarang".
+            Pastikan pilihan program Anda sudah benar sebelum menekan tombol "Daftar Ulang" pada bar mengambang di bawah.
           </p>
         </div>
 
@@ -916,22 +906,6 @@ export default function SantriDaftarUlangPage() {
                 ? "Harga program sudah termasuk paket atribut."
                 : "Tidak mengambil atribut — nominal dikurangi Rp 100.000."}
             </span>
-          </span>
-        </label>
-
-        {/* Persetujuan */}
-        <label
-          className="flex items-start gap-2.5 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            checked={isAgreed}
-            onChange={(e) => setIsAgreed(e.target.checked)}
-            className="mt-0.5 w-5 h-5 accent-teal-700 cursor-pointer shrink-0"
-          />
-          <span className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
-            <span className="font-bold" style={{ color: "var(--color-text)" }}>Saya setuju</span> untuk
-            tidak merefund atau mengalihkan pembayaran.
           </span>
         </label>
 
@@ -1013,46 +987,6 @@ export default function SantriDaftarUlangPage() {
             </p>
           </div>
         )}
-
-        {/* Submit Button */}
-        <button
-          onClick={handleSubmit}
-          disabled={!selectedProgram || !isAgreed || submitting || result?.success}
-          className="w-full py-3.5 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all"
-          style={
-            !selectedProgram || !isAgreed || submitting || result?.success
-              ? {
-                  background: "var(--color-surface-dark)",
-                  color: "var(--color-text-subtle)",
-                  cursor: "not-allowed",
-                }
-              : {
-                  background: "var(--color-primary)",
-                  color: "#fff",
-                  boxShadow:
-                    "3px 3px 8px rgba(0,102,102,0.3), -2px -2px 6px rgba(0,133,133,0.15)",
-                }
-          }
-        >
-          {submitting ? (
-            <Loader2 size={18} className="animate-spin" />
-          ) : result?.success ? (
-            <>
-              <CheckCircle size={16} />
-              Pendaftaran Terkirim
-            </>
-          ) : (
-            <>
-              Daftar Ulang Sekarang
-              <ArrowRight size={16} />
-            </>
-          )}
-        </button>
-        {!isAgreed && selectedProgram && !result?.success && (
-          <p className="text-[11px] text-center" style={{ color: "var(--color-warning)" }}>
-            Centang persetujuan di atas untuk melanjutkan.
-          </p>
-        )}
       </div>
       )}
       </>
@@ -1096,7 +1030,7 @@ export default function SantriDaftarUlangPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={!isAgreed || submitting}
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0"
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 flex-shrink-0 self-start"
                   style={
                     !isAgreed || submitting
                       ? {
@@ -1114,10 +1048,20 @@ export default function SantriDaftarUlangPage() {
                 </button>
               )}
             </div>
-            {!klaimTersedia && !isAgreed && (
-              <p className="text-[10px] text-center mt-1.5" style={{ color: "var(--color-warning)" }}>
-                Centang persetujuan pada panel di bawah untuk mengaktifkan tombol.
-              </p>
+            {!klaimTersedia && (
+              <label className="flex items-start gap-2 cursor-pointer px-1">
+                <input
+                  type="checkbox"
+                  checked={isAgreed}
+                  onChange={(e) => setIsAgreed(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 shrink-0"
+                  style={{ accentColor: "var(--color-primary)" }}
+                />
+                <span className="text-[10px] leading-snug" style={{ color: "var(--color-text-muted)" }}>
+                  <span className="font-bold" style={{ color: "var(--color-text)" }}>Saya setuju</span> untuk
+                  tidak merefund atau mengalihkan pembayaran.
+                </span>
+              </label>
             )}
           </div>
         </div>

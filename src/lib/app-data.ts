@@ -820,66 +820,159 @@ export async function syncStatusKelulusanByProgramIds(programIds: string[]) {
   );
 }
 
-export async function getRiwayatSantriRows(targetDufah?: string) {
+/**
+ * Versi ringkas untuk tabel utama: hanya info santri + program/kelas + jumlah riwayat.
+ * Detail berat (nilai, absensi) dimuat on-demand via getRiwayatSantriDetail.
+ */
+export async function getRiwayatSantriList(
+  targetDufah?: string,
+  opts?: { status?: string; programId?: string; search?: string }
+) {
   if (!targetDufah) {
     return [];
   }
 
-  const santriInternalList = await prisma.santriInternal.findMany({
-    where: { dufahNama: targetDufah },
-    select: { id: true }
+  const riwayatWhere: any = { dufahNama: targetDufah };
+  if (opts?.programId) {
+    riwayatWhere.programId = opts.programId;
+  }
+
+  const riwayatList = await prisma.riwayatSantri.findMany({
+    where: riwayatWhere,
+    include: {
+      santri: { select: { nama: true } },
+      program: { select: { nama_indo: true } },
+      kelas: { select: { nama: true } },
+    },
   });
 
-  const santriIds = santriInternalList.map(s => s.id);
-
-  if (santriIds.length === 0) {
+  if (riwayatList.length === 0) {
     return [];
   }
 
-  const [masterSantriList, riwayatList] = await Promise.all([
-    getMasterSantriList(),
-    prisma.riwayatSantri.findMany({
-      where: {
-        santriId: { in: santriIds },
-      },
-      include: {
-        santri: true,
-        program: {
-          include: programInclude,
-        },
-        kelas: true,
-        nilaiList: {
-          include: {
-            mapel: true,
-          },
-        },
-        absenSakanList: true,
-        absenKelasList: true,
-        absenKegiatanList: {
-          include: {
-            kategori: true,
-          },
-        },
-      },
-      orderBy: {
-        dufahNama: "desc",
-      },
-    }),
-  ]);
+  const masterSantriList = await getMasterSantriList();
+  const masterMap = new Map(masterSantriList.map((ms) => [ms.id, ms]));
 
-  const masterMap = new Map<string, typeof masterSantriList[0]>();
+  const q = opts?.search?.trim().toLowerCase() || "";
+  const result: any[] = [];
+
+  for (const r of riwayatList) {
+    const ms: any = masterMap.get(r.santriId);
+
+    if (opts?.status === "aktif" && !ms?.isAktif) continue;
+    if (opts?.status === "nonaktif" && ms?.isAktif) continue;
+
+    const nama = ms?.nama || (r.santri as any)?.nama || "";
+    if (q && !nama.toLowerCase().includes(q)) continue;
+
+    result.push({
+      santriId: r.santriId,
+      nama: nama || "Tanpa Nama",
+      gender: ms?.gender ?? "-",
+      isAktif: ms?.isAktif ?? false,
+      lokasi: ms ? `${ms.sakan} / ${ms.kamar} / ${ms.nomorLemari}` : "-",
+      programNama: (r.program as any)?.nama_indo ?? "-",
+      kelasNama: (r.kelas as any)?.nama ?? "-",
+      riwayatId: r.id,
+    });
+  }
+
+  result.sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+  return result;
+}
+
+export async function getRiwayatSantriRows(
+  targetDufah?: string,
+  opts?: { status?: string; programId?: string; search?: string; santriId?: string }
+) {
+  if (!targetDufah) {
+    return [];
+  }
+
+  // Ambil semua riwayat pada dufah target — santri aktif maupun nonaktif.
+  // (Sebelumnya hanya mencari santri yang SAAT INI berdufah target, lalu membuang
+  // riwayat dufah berjalan milik santri aktif, sehingga nama tidak muncul.)
+  const riwayatWhere: any = { dufahNama: targetDufah };
+  if (opts?.programId) {
+    riwayatWhere.programId = opts.programId;
+  }
+  if (opts?.santriId) {
+    riwayatWhere.santriId = opts.santriId;
+  }
+
+  const riwayatList = await prisma.riwayatSantri.findMany({
+    where: riwayatWhere,
+    include: {
+      santri: true,
+      program: {
+        include: programInclude,
+      },
+      kelas: true,
+      nilaiList: {
+        include: {
+          mapel: true,
+        },
+      },
+      absenSakanList: true,
+      absenKelasList: true,
+      absenKegiatanList: {
+        include: {
+          kategori: true,
+        },
+      },
+    },
+    orderBy: {
+      dufahNama: "desc",
+    },
+  });
+
+  if (riwayatList.length === 0) {
+    return [];
+  }
+
+  const santriIds = [...new Set(riwayatList.map((r) => r.santriId))];
+  const masterSantriList = await getMasterSantriList();
+
+  const masterMap = new Map<string, (typeof masterSantriList)[0]>();
   for (const ms of masterSantriList) {
     masterMap.set(ms.id, ms);
+  }
+
+  // Untuk Akbarnas: ambil nilai dari dufah lain santri yang sama (penggabungan 2 dufah)
+  const akbarnasIds = santriIds.filter((id) => {
+    const r = riwayatList.find((x) => x.santriId === id);
+    return r?.program?.nama_indo?.toLowerCase().includes("akbarnas");
+  });
+  const nilaiLintasDufah = new Map<string, any[]>();
+  if (akbarnasIds.length > 0) {
+    const extraRiwayat = await prisma.riwayatSantri.findMany({
+      where: {
+        santriId: { in: akbarnasIds },
+        dufahNama: { not: targetDufah },
+        program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
+      },
+      include: { nilaiList: { include: { mapel: true } } },
+    });
+    for (const r of extraRiwayat) {
+      if (!nilaiLintasDufah.has(r.santriId)) nilaiLintasDufah.set(r.santriId, []);
+      nilaiLintasDufah.get(r.santriId)!.push(...r.nilaiList);
+    }
   }
 
   const groupsMap = new Map<string, any>();
 
   for (const riwayat of riwayatList) {
     const ms = masterMap.get(riwayat.santriId);
-    const isHistorical = !ms || !ms.isAktif || riwayat.dufahNama !== ms.dufahNama;
 
-    if (!isHistorical) {
-      continue;
+    // Filter status keaktifan
+    if (opts?.status === "aktif" && !ms?.isAktif) continue;
+    if (opts?.status === "nonaktif" && ms?.isAktif) continue;
+
+    // Filter pencarian nama (server-side)
+    if (opts?.search && opts.search.trim() !== "") {
+      const q = opts.search.trim().toLowerCase();
+      const nama = (ms?.nama || (riwayat.santri as any)?.nama || "").toLowerCase();
+      if (!nama.includes(q)) continue;
     }
 
     if (!groupsMap.has(riwayat.santriId)) {
@@ -887,6 +980,7 @@ export async function getRiwayatSantriRows(targetDufah?: string) {
         santriId: riwayat.santriId,
         nama: ms ? ms.nama : (riwayat.santri?.nama ?? "Tanpa Nama"),
         gender: ms?.gender ?? "-",
+        isAktif: ms?.isAktif ?? false,
         lokasi: ms ? `${ms.sakan} / ${ms.kamar} / ${ms.nomorLemari}` : "-",
         records: [],
       });
@@ -896,7 +990,28 @@ export async function getRiwayatSantriRows(targetDufah?: string) {
     const program = riwayat.program;
     const kelas = riwayat.kelas;
     const isAkbarnas = program?.nama_indo.toLowerCase().includes("akbarnas");
-    const nilaiList = riwayat.nilaiList ?? [];
+    let nilaiList: any[] = riwayat.nilaiList ?? [];
+
+    // Akbarnas: gabungkan nilai lintas dufah (aturan 2 dufah), konsisten dengan syahadah
+    if (isAkbarnas && nilaiLintasDufah.has(riwayat.santriId)) {
+      const semuaNilai = [...nilaiList, ...nilaiLintasDufah.get(riwayat.santriId)!];
+      const gabungan = calcAkbarnasGabungan(semuaNilai);
+      const merged: any[] = [];
+      const seen = new Set<string>();
+      for (const n of nilaiList) {
+        if (!seen.has(n.mapelId)) {
+          seen.add(n.mapelId);
+          merged.push({ ...n, nilaiAkhir: gabungan.get(n.mapelId) ?? n.nilaiAkhir });
+        }
+      }
+      for (const [mapelId, nilaiAkhir] of gabungan) {
+        if (!seen.has(mapelId)) {
+          const source = semuaNilai.find((n: any) => n.mapelId === mapelId);
+          if (source) merged.push({ ...source, nilaiAkhir });
+        }
+      }
+      nilaiList = merged;
+    }
 
     if (!isAkbarnas) {
       const effectiveUsbuainMode = riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0;
@@ -984,7 +1099,7 @@ export async function getRiwayatSantriRows(targetDufah?: string) {
       isUsbuain: (riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0) > 0,
       kelasNama: kelas?.nama ?? "-",
       kelasId: kelas?.id ?? null,
-      statusKelulusan: program && hasCompleteNilai ? status : "TIDAK_LULUS",
+      statusKelulusan: program && hasCompleteNilai ? status : "BELUM_LENGKAP",
       isTasmi: riwayat.is_tasmi ?? false,
       canPrintSyahadah: Boolean(program) && hasCompleteNilai && status !== "TIDAK_LULUS",
       canViewIjazah: Boolean(program) && hasCompleteNilai,
@@ -992,7 +1107,13 @@ export async function getRiwayatSantriRows(targetDufah?: string) {
         mapelNama: n.mapel.nama_indo,
         skor: n.nilaiAkhir ?? 0,
       })),
-      rataRata: nilaiList.length > 0 ? (nilaiList.reduce((acc: number, n: any) => acc + (n.nilaiAkhir ?? 0), 0) / nilaiList.length).toFixed(2) : null,
+      rataRata: (() => {
+        const items = accumulativeNilai.map((n: any) => {
+          const pm = program?.programMapels.find((p: any) => p.mapelId === n.mapelId);
+          return { score: (n.nilaiAkhir || 0) + (n.nilaiTambahan || 0), bobot: pm?.mapel.bobot ?? 1 };
+        });
+        return items.length > 0 ? calcAkumulatif(items).toFixed(2) : null;
+      })(),
       absenSakan: absenSakanSummary,
       absenKelasByHissoh,
       absenKegiatan: Array.from(kegiatanMap.values()),

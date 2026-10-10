@@ -210,7 +210,7 @@ export default function SantriRiwayatPage() {
                   {/* Download Syahadah */}
                   {r.canDownloadSyahadah && (
                     <Link
-                      href={`/cetak-online/${r.riwayatId}`}
+                      href={`/cetak/${r.riwayatId}`}
                       target="_blank"
                       className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all"
                       style={{

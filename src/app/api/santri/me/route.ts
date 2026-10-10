@@ -70,6 +70,35 @@ export async function GET() {
       return getNum(b.dufahNama) - getNum(a.dufahNama);
     });
 
+    // Akbarnas: gabungkan nilai lintas dufah (2 bulan) agar konsisten dengan syahadah.
+    // Tanpa ini, rata-rata di portal hanya dari 1 dufah dan tidak cocok dengan angka syahadah.
+    const akbarnasRecords = santri.riwayatRecords.filter((r: any) =>
+      r.program?.nama_indo?.toLowerCase().includes('akbarnas')
+    );
+    if (akbarnasRecords.length > 0) {
+      const allNilai = akbarnasRecords.flatMap((r: any) => r.nilaiList || []);
+      const gabungan = calcAkbarnasGabungan(allNilai);
+      for (const r of akbarnasRecords) {
+        const merged: any[] = [];
+        const seen = new Set<string>();
+        // Pertahankan struktur nilaiList per riwayat, tapi nilaiAkhir diganti hasil gabungan
+        for (const n of (r.nilaiList || [])) {
+          if (!seen.has(n.mapelId)) {
+            seen.add(n.mapelId);
+            merged.push({ ...n, nilaiAkhir: gabungan.get(n.mapelId) ?? n.nilaiAkhir });
+          }
+        }
+        // Tambahkan mapel yang hanya ada di dufah lain
+        for (const [mapelId, nilaiAkhir] of gabungan) {
+          if (!seen.has(mapelId)) {
+            const source = allNilai.find((n: any) => n.mapelId === mapelId);
+            if (source) merged.push({ ...source, nilaiAkhir });
+          }
+        }
+        r.nilaiList = merged;
+      }
+    }
+
     const riwayatResult = santri.riwayatRecords.map((riwayat) => {
       const program = riwayat.program;
       const isAkbarnas = program?.nama_indo.toLowerCase().includes('akbarnas') ?? false;

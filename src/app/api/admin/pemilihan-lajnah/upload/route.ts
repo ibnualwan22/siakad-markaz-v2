@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { randomUUID } from "crypto";
+import { v2 as cloudinary } from "cloudinary";
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDE_NAME,
+  api_key: process.env.CLOUDE_API_KEY,
+  api_secret: process.env.CLOUDE_API_SECRET,
+});
 
 const PERMISSION = "lajnah_manage";
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB
@@ -13,7 +17,8 @@ const ALLOWED: Record<string, string> = {
   "image/webp": "webp",
 };
 
-// POST /api/admin/pemilihan-lajnah/upload — upload foto paslon (disimpan di volume /uploads)
+// POST /api/admin/pemilihan-lajnah/upload — upload foto paslon ke Cloudinary
+// (server-side upload: browser kirim multipart/form-data, server teruskan ke Cloudinary)
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,12 +41,14 @@ export async function POST(req: Request) {
     if (file.size > MAX_SIZE) {
       return NextResponse.json({ error: "Ukuran foto maksimal 2MB" }, { status: 400 });
     }
-    const dir = path.join(process.cwd(), "public", "uploads", "pemilihan");
-    await mkdir(dir, { recursive: true });
-    const nama = `${randomUUID()}.${ext}`;
     const buf = Buffer.from(await file.arrayBuffer());
-    await writeFile(path.join(dir, nama), buf);
-    return NextResponse.json({ url: `/uploads/pemilihan/${nama}` });
+    const base64 = `data:${file.type};base64,${buf.toString("base64")}`;
+    const result = await cloudinary.uploader.upload(base64, {
+      folder: "pemilihan-lajnah",
+      resource_type: "image",
+      transformation: [{ quality: "auto:low", fetch_format: "auto" }],
+    });
+    return NextResponse.json({ url: result.secure_url });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Upload gagal" }, { status: 500 });
   }

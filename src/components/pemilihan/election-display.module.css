@@ -210,7 +210,7 @@
 .winnerPortrait { position: relative; width: min(100%, 350px); aspect-ratio: 4 / 5; justify-self: end; animation: portrait-reveal 1.2s cubic-bezier(.2,.7,.3,1) both; }
 .portraitHalo { position: absolute; inset: -15%; z-index: -1; background: radial-gradient(ellipse, #d6bb6740, #e5cb7710 50%, transparent 70%); border: 1px solid #d7be7333; border-radius: 50% 50% 5px 5px; transform: rotate(-6deg); }
 .portraitImage, .portraitPlaceholder { width: 100%; height: 100%; border: 1px solid #dac08380; background: #154d43; border-radius: 100px 100px 8px 8px; box-shadow: 0 30px 80px #001f2355; }
-.portraitImage { object-fit: contain; padding: 8px; }
+.portraitImage { object-fit: cover; object-position: top; padding: 0; }
 .portraitPlaceholder { display: flex; flex-direction: column; justify-content: center; align-items: center; color: #dfc789; background: radial-gradient(ellipse at 50% 0%, #43765a, #144c43 75%); }
 .portraitPlaceholder > span { font-size: 10px; letter-spacing: .2em; margin-top: 27px; }
 .portraitPlaceholder > strong { font-size: clamp(70px, 8vw, 130px); font-weight: 400; letter-spacing: -.08em; line-height: 1.1; }

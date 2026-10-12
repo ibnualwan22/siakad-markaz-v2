@@ -60,15 +60,16 @@ export async function sendWhatsAppMessage(target: string, message: string, force
 }
 
 /**
- * Mengirim pesan reminder WhatsApp menggunakan sesi KEDUA (WA_SESSION_ID2).
- * Dipisah dari sesi utama agar tidak mengganggu pengiriman laporan rekap.
+ * Mengirim pesan reminder WhatsApp menggunakan sesi KETIGA (WA_SESSION_ID3),
+ * khusus untuk reminder absen pengajar. Dipisah dari sesi laporan (sesi 1 & 2)
+ * agar tidak mengganggu pengiriman laporan rekap.
  */
 export async function sendReminderWhatsApp(
   target: string,
   message: string
 ): Promise<{ success: boolean; detail?: string }> {
   const apiKey = process.env.WA_API_KEY;
-  const sessionId = process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
+  const sessionId = process.env.WA_SESSION_ID3 || process.env.WA_SESSION_ID2 || process.env.WA_SESSION_ID || "default";
 
   if (!target || !target.trim()) {
     return { success: false, detail: "Nomor HP target kosong" };

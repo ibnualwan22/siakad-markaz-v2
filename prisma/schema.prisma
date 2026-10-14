@@ -110,6 +110,7 @@ model SantriInternal {
   suaraLajnahList      SuaraLajnah[]
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
   waOtpList             WaOtp[]
+  nadiHufadzPesertaList NadiHufadzPeserta[]
 }
 
 // OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
@@ -403,6 +404,8 @@ model User {
   checkoutApproverConfigs CheckoutApproverConfig[]
   checkoutApprovals       CheckoutApproval[]
   wifiAccount             WifiAccount?
+  nadiHufadzSetoranDisimak NadiHufadzSetoran[]
+  nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
 }
 
 model RolePermission {
@@ -1280,4 +1283,74 @@ model SuaraLajnah {
 
   @@unique([sesiId, santriId]) // 1 santri = 1 suara per sesi
   @@index([paslonId])
+}
+
+// ===== NADI HUFADZ =====
+// Peserta per dufah. Unique [santriId, dufahNama] membuat tiap dufah baru
+// otomatis bersih tanpa reset manual.
+model NadiHufadzPeserta {
+  id            String   @id @default(cuid())
+  santriId      String
+  dufahNama     String
+  tanggalDaftar DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  santri  SantriInternal      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  setoran NadiHufadzSetoran[]
+  tasmi   NadiHufadzTasmi?
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
+}
+
+// Catatan setoran harian. Satu record = satu kehadiran (maks 10 pertemuan).
+// penyimakId diisi otomatis dari admin yang submit.
+model NadiHufadzSetoran {
+  id          String   @id @default(cuid())
+  pesertaId   String
+  pertemuanKe Int
+  tanggal     DateTime @db.Date
+  juz         String?
+  surat       String?
+  ayat        String?
+  lulus       Boolean  @default(true)
+  penyimakId  String?
+  catatan     String?
+  createdAt   DateTime @default(now())
+
+  peserta  NadiHufadzPeserta @relation(fields: [pesertaId], references: [id], onDelete: Cascade)
+  penyimak User?             @relation(fields: [penyimakId], references: [id], onDelete: SetNull)
+
+  @@unique([pesertaId, pertemuanKe])
+  @@index([pesertaId])
+}
+
+// Hasil tasmi'. Hanya bisa diinput bila kehadiran >= 7.
+model NadiHufadzTasmi {
+  id        String   @id @default(cuid())
+  pesertaId String   @unique
+  juzTeks   String
+  predikat  String   // ممتاز | جيد جدا | جيد | مقبول
+  pengujiId String?
+  tanggal   DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  peserta NadiHufadzPeserta @relation(fields: [pesertaId], references: [id], onDelete: Cascade)
+  penguji User?             @relation(fields: [pengujiId], references: [id], onDelete: SetNull)
+}
+
+// Template cetak generik (Nadi Hufadz & program lain ke depan).
+// backgroundUrl = Cloudinary; fieldPositions = JSON koordinat per field:
+// { nama: {x, y, fontSize, align, maxWidth}, juz: {...}, predikat: {...}, periode: {...} }
+// x, y dalam persen terhadap background.
+model TemplateCetak {
+  id             String   @id @default(cuid())
+  programKey     String   @unique // mis. "nadi-hufadz"
+  nama           String
+  backgroundUrl  String?
+  backgroundId   String?
+  fieldPositions Json     @default("{}")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

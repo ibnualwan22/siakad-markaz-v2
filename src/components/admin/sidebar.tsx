@@ -84,6 +84,7 @@ const navigationGroups = [
       { href: "/admin/martabah-ula", label: "Martabah Ula", icon: Medal, permissionId: "martabah_ula" },
       { href: "/admin/haflah-wada", label: "Haflah Wada'", icon: Armchair, permissionId: "haflah_wada" },
       { href: "/admin/input-tasmi", label: "Input Tasmi'", icon: BookOpen, permissionId: "input_tasmi" },
+      { href: "/admin/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen, permissionId: "nadi_hufadz" },
       { href: "/admin/input-nilai-kelas", label: "Input Nilai", icon: BookOpen, permissionId: "input_nilai" },
       { href: "/admin/nilai-kosong", label: "Nilai Kosong", icon: AlertTriangle, permissionId: "monitor_nilai_kosong" },
       { href: "/admin/cetak-usbu", label: "Cetak Nilai Pekanan", icon: Printer, permissionId: "cetak_nilai_pekanan" },

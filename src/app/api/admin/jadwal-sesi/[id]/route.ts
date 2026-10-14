@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
-  if (!session || session.role !== "ADMIN") {
+  const hasPerm = await checkPermission("manajemen_sesi");
+  if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

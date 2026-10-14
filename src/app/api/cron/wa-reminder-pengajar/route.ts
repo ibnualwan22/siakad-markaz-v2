@@ -142,6 +142,37 @@ export async function GET(request: NextRequest) {
       absenPengajarHariIni.map((a) => `${a.userId}_${a.sesi}`)
     );
 
+    // ─── 6b. Cek badal hari ini — pengajar yang jadwalnya sudah dicover badal tidak perlu di-reminder ──
+    // Badal tercatat sebagai AbsenPengajar dengan isBadal=true:
+    //  - dicatat admin  -> pengajarDigantikanId terisi (langsung tahu siapa yang digantikan)
+    //  - dicatat pengajar via mode badal -> pengajarDigantikanId kosong, cari pengajar
+    //    terjadwal untuk kelas+sesi tersebut dari PengajarSesi / PengajarSesiProgram
+    const badalHariIni = await prisma.absenPengajar.findMany({
+      where: { tanggal: todayDate, isBadal: true },
+      select: { userId: true, sesi: true, kelasId: true, pengajarDigantikanId: true },
+    });
+
+    const sudahDibadalkanSet = new Set<string>();
+    for (const b of badalHariIni) {
+      if (b.pengajarDigantikanId) {
+        sudahDibadalkanSet.add(`${b.pengajarDigantikanId}_${b.sesi}`);
+      } else {
+        const terjadwal = pengajarSesiList.find(
+          (ps) => ps.kelas.id === b.kelasId && ps.sesi === b.sesi
+        );
+        if (terjadwal) {
+          sudahDibadalkanSet.add(`${terjadwal.user.id}_${b.sesi}`);
+        } else {
+          const terjadwalProgram = pengajarSesiProgramList.find(
+            (psp) => psp.sesi === b.sesi && psp.program.kelasList.some((k) => k.id === b.kelasId)
+          );
+          if (terjadwalProgram) {
+            sudahDibadalkanSet.add(`${terjadwalProgram.user.id}_${b.sesi}`);
+          }
+        }
+      }
+    }
+
     // ─── 7. Ambil semua ReminderLog hari ini yang SUKSES ─────────────────────
     const reminderLogsHariIni = await prisma.reminderLog.findMany({
       where: { 
@@ -172,6 +203,7 @@ export async function GET(request: NextRequest) {
         const key = `${ps.user.id}_${ps.sesi}`;
 
         if (sudahAbsenSet.has(key)) { totalSkip++; continue; }
+        if (sudahDibadalkanSet.has(key)) { totalSkip++; continue; }
         if (sudahDikirimSet.has(key)) { totalSkip++; continue; }
         if (!ps.user.noHp) { totalSkip++; continue; }
 
@@ -226,6 +258,7 @@ export async function GET(request: NextRequest) {
 
       const key = `${psp.user.id}_${psp.sesi}`;
       if (sudahAbsenSet.has(key)) { totalSkip++; continue; }
+      if (sudahDibadalkanSet.has(key)) { totalSkip++; continue; }
       if (sudahDikirimSet.has(key)) { totalSkip++; continue; }
       if (!psp.user.noHp) { totalSkip++; continue; }
 

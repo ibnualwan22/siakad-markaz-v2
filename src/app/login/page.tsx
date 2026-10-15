@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Lock, User } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [formData, setFormData] = useState({ username: "", password: "" });
+
+  // Tampilkan pesan jika sesi kedaluwarsa
+  useEffect(() => {
+    if (searchParams.get("expired") === "1") {
+      setErrorMsg("Sesi Anda telah berakhir. Silakan login kembali.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +40,16 @@ export default function LoginPage() {
       }
 
       toast.success("Login berhasil!");
-      router.push(data.redirect);
+      // Kembali ke halaman terakhir sebelum sesi habis (jika ada)
+      let target = data.redirect;
+      try {
+        const saved = sessionStorage.getItem("redirectAfterLogin");
+        if (saved && saved.startsWith("/") && !saved.startsWith("/login")) {
+          target = saved;
+          sessionStorage.removeItem("redirectAfterLogin");
+        }
+      } catch { /* abaikan */ }
+      router.push(target);
       router.refresh();
     } catch (error: any) {
       toast.error(error.message);

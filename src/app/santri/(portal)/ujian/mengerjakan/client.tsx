@@ -1,5 +1,18 @@
 "use client";
 
+// Helper: fetch dengan timeout paksa via AbortController.
+// Mencegah request hang selamanya saat koneksi "setengah mati".
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, X } from "lucide-react";
@@ -47,6 +60,7 @@ export default function ClientMengerjakanUjian() {
         if (parsed.sisaWaktuDetik === undefined && !parsed.predictedEndTime) {
           localStorage.removeItem(`exam_${sesiId}`);
           localStorage.removeItem(`exam_versions_${sesiId}`);
+          localStorage.removeItem(`exam_queue_${sesiId}`);
         } else {
           let remaining = 0;
           if (parsed.predictedEndTime) {
@@ -64,6 +78,26 @@ export default function ClientMengerjakanUjian() {
               currentVersions.current = new Map(Object.entries(parsedVers.current || {}));
               savedVersions.current = new Map(Object.entries(parsedVers.saved || {}));
             } catch(e) {}
+          }
+
+          // Restore antrean kirim yang belum selesai (selamat dari refresh)
+          const storedQueue = localStorage.getItem(`exam_queue_${sesiId}`);
+          if (storedQueue) {
+            try {
+              const arr = JSON.parse(storedQueue);
+              if (Array.isArray(arr)) pendingQueue.current = new Map(arr);
+            } catch(e) {}
+          }
+
+          // Hitung jawaban belum tersimpan agar peringatan tampil benar setelah refresh
+          {
+            let failed = 0;
+            currentVersions.current.forEach((curVer, soalId) => {
+              const savedVer = savedVersions.current.get(soalId) || 0;
+              if (savedVer < curVer) failed++;
+            });
+            setFailedSaveCount(failed);
+            setUnsavedCount(pendingQueue.current.size);
           }
 
           setExamDataSynced(parsed);
@@ -417,23 +451,35 @@ export default function ClientMengerjakanUjian() {
     setHasStarted(true);
   };
 
-  // ===== ROBUST SAVE SYSTEM =====
-  // Perbaikan dari bug jawaban hilang:
-  // 1. savedVersions: track VERSI jawaban (bukan hanya "pernah save") — jika jawaban berubah, versi naik
-  // 2. pendingQueue: Map (bukan single slot) — tidak ada jawaban yang ke-drop
-  // 3. Periodic sync setiap 45 detik — retry otomatis untuk jawaban gagal save
-  const isSaving = useRef(false);
-  const pendingQueue = useRef<Map<string, any>>(new Map()); // Map<soalId, payload> — SEMUA pending disimpan
-  const savedVersions = useRef<Map<string, number>>(new Map()); // Map<soalId, version> — versi terakhir yang berhasil di-save
-  const currentVersions = useRef<Map<string, number>>(new Map()); // Map<soalId, version> — versi terbaru di client
+  // ===== ROBUST SAVE SYSTEM (v2 — anti hang & anti deadlock) =====
+  // Perbaikan dari bug jawaban hilang / tidak terkirim:
+  // 1. fetchWithTimeout: SEMUA request dibatalkan paksa setelah 15 detik (AbortController).
+  //    fetch tanpa timeout bisa hang selamanya saat sinyal "setengah mati".
+  // 2. processQueue: while-loop dengan finally — flag isProcessing SELALU di-reset.
+  //    Menggantikan pola rekursif + safety timer yang bisa deadlock & race.
+  // 3. pendingQueue dipersist ke localStorage — selamat dari refresh.
+  // 4. Sync 45 detik: rebuild antrean dari selisih versi lalu proses.
+  //    Dijalankan juga 3 detik setelah halaman dimuat (tidak menunggu 45 detik).
+  const isProcessing = useRef(false);
+  const pendingQueue = useRef<Map<string, { payload: any; version: number }>>(new Map());
+  const savedVersions = useRef<Map<string, number>>(new Map());
+  const currentVersions = useRef<Map<string, number>>(new Map());
   const [unsavedCount, setUnsavedCount] = useState(0);
   const [failedSaveCount, setFailedSaveCount] = useState(0);
 
   const persistVersions = useCallback(() => {
-    localStorage.setItem(`exam_versions_${sesiId}`, JSON.stringify({
-      current: Object.fromEntries(currentVersions.current),
-      saved: Object.fromEntries(savedVersions.current)
-    }));
+    try {
+      localStorage.setItem(`exam_versions_${sesiId}`, JSON.stringify({
+        current: Object.fromEntries(currentVersions.current),
+        saved: Object.fromEntries(savedVersions.current)
+      }));
+    } catch (e) {}
+  }, [sesiId]);
+
+  const persistQueue = useCallback(() => {
+    try {
+      localStorage.setItem(`exam_queue_${sesiId}`, JSON.stringify([...pendingQueue.current.entries()]));
+    } catch (e) {}
   }, [sesiId]);
 
   const updateFailedCount = useCallback(() => {
@@ -446,113 +492,105 @@ export default function ClientMengerjakanUjian() {
     return failed;
   }, []);
 
-  const processSave = async (soalId: string, payload: any, version: number) => {
-    // Timeout paksa 15 detik — jika network hang terlalu lama, jangan block queue selamanya
-    const safetyTimer = setTimeout(() => {
-      if (isSaving.current) {
-        isSaving.current = false;
-        updateFailedCount();
-      }
-    }, 15000);
-
+  // Kirim SATU jawaban dengan timeout paksa. Return true jika tersimpan di DB.
+  const sendAnswer = useCallback(async (soalId: string, payload: any, version: number): Promise<boolean> => {
     try {
-      const res = await fetch("/api/santri/ujian/jawab", {
+      const res = await fetchWithTimeout("/api/santri/ujian/jawab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sesiId, soalId, ...payload })
-      });
+      }, 15000);
       if (res.ok) {
-        // Hanya tandai berhasil jika VERSI yang di-save masih cocok (belum berubah lagi)
         const curVer = currentVersions.current.get(soalId) || 0;
         if (version >= curVer) {
           savedVersions.current.set(soalId, version);
           persistVersions();
         }
+        return true;
       }
-    } catch (error) {
-      console.error("Gagal auto-save:", error);
-      // Jawaban gagal → TIDAK ditandai saved, akan di-retry oleh periodic sync
-    } finally {
-      clearTimeout(safetyTimer);
+      return false;
+    } catch (e) {
+      return false;
     }
+  }, [sesiId, persistVersions]);
 
-    // Proses antrian pending berikutnya (FIFO dari Map)
-    if (pendingQueue.current.size > 0) {
-      const entry = pendingQueue.current.entries().next().value as [string, any];
-      const nextSoalId = entry[0];
-      const nextPayload = entry[1];
-      pendingQueue.current.delete(nextSoalId);
+  // Proses antrean sampai habis. Flag SELALU di-reset via finally — anti deadlock.
+  const processQueue = useCallback(async () => {
+    if (isProcessing.current) return;
+    isProcessing.current = true;
+    try {
+      while (pendingQueue.current.size > 0) {
+        if (hasSubmitted.current) break;
+        const entry = pendingQueue.current.entries().next().value as [string, { payload: any; version: number }] | undefined;
+        if (!entry) break;
+        const [soalId, item] = entry;
+        pendingQueue.current.delete(soalId);
+        setUnsavedCount(pendingQueue.current.size);
+        persistQueue();
+        await sendAnswer(soalId, item.payload, item.version);
+      }
+    } finally {
+      isProcessing.current = false;
       setUnsavedCount(pendingQueue.current.size);
-      const nextVer = currentVersions.current.get(nextSoalId) || 0;
-      await processSave(nextSoalId, nextPayload, nextVer);
-    } else {
-      isSaving.current = false;
-      setUnsavedCount(0);
+      persistQueue();
       updateFailedCount();
     }
-  };
+  }, [sendAnswer, persistQueue, updateFailedCount]);
 
-  // Periodic Batch Sync — setiap 45 detik, kirim ulang jawaban yang belum tersimpan di DB
-  useEffect(() => {
-    if (!hasStarted || hasSubmitted.current || !sesiId) return;
-
-    const syncInterval = setInterval(async () => {
-      if (hasSubmitted.current || isSaving.current) return;
-
+  // Bangun ulang antrean dari selisih versi (dipakai periodic sync & setelah refresh)
+  const rebuildQueueFromVersions = useCallback(() => {
+    try {
       const stored = localStorage.getItem(`exam_${sesiId}`);
       if (!stored) return;
-
-      try {
-        const parsed = JSON.parse(stored);
-        if (!parsed.soal) return;
-
-        // Cari jawaban yang: (a) sudah diisi, DAN (b) versi di DB belum cocok versi terbaru
-        const needSync = parsed.soal.filter((s: any) => {
-          const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
-          if (!hasAnswer) return false;
-          const savedVer = savedVersions.current.get(s.soalId) || 0;
-          const curVer = currentVersions.current.get(s.soalId) || 0;
-          return savedVer < curVer; // Belum tersimpan atau sudah berubah sejak terakhir disimpan
-        });
-
-        if (needSync.length === 0) return;
-
-        // Kirim serial, max 10 per batch agar tidak membanjiri server
-        const batch = needSync.slice(0, 10);
-        for (const s of batch) {
-          if (hasSubmitted.current) break;
+      const parsed = JSON.parse(stored);
+      if (!parsed.soal) return;
+      let added = 0;
+      for (const s of parsed.soal) {
+        const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
+        if (!hasAnswer) continue;
+        const savedVer = savedVersions.current.get(s.soalId) || 0;
+        const curVer = currentVersions.current.get(s.soalId) || 0;
+        if (savedVer < curVer && !pendingQueue.current.has(s.soalId)) {
           const p: any = {};
           if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
           if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
           if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
           if (s.rpiId) p.rpiId = s.rpiId;
-          try {
-            const res = await fetch("/api/santri/ujian/jawab", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
-            });
-            if (res.ok) {
-              const curVer = currentVersions.current.get(s.soalId) || 0;
-              savedVersions.current.set(s.soalId, curVer);
-            }
-          } catch (e) { }
+          pendingQueue.current.set(s.soalId, { payload: p, version: curVer });
+          added++;
         }
-        
-        updateFailedCount();
-      } catch (e) {
-        console.error("[SYNC] Error:", e);
       }
-    }, 45000); // Setiap 45 detik
+      if (added > 0) {
+        setUnsavedCount(pendingQueue.current.size);
+        persistQueue();
+      }
+    } catch (e) {}
+  }, [sesiId, persistQueue]);
 
-    return () => clearInterval(syncInterval);
-  }, [hasStarted, sesiId]);
+  // Periodic sync setiap 45 detik + sekali 3 detik setelah mount (untuk kasus refresh)
+  useEffect(() => {
+    if (!hasStarted || hasSubmitted.current || !sesiId) return;
+
+    const doSync = async () => {
+      if (hasSubmitted.current) return;
+      rebuildQueueFromVersions();
+      await processQueue();
+    };
+
+    const initialTimer = setTimeout(doSync, 3000);
+    const syncInterval = setInterval(doSync, 45000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(syncInterval);
+    };
+  }, [hasStarted, sesiId, rebuildQueueFromVersions, processQueue]);
 
   // Flush sebelum submit: kirim SEMUA jawaban yang belum ter-confirm di DB
   const flushUnsavedAnswers = async () => {
-    // Tunggu save yang sedang berjalan selesai
+    // Tunggu antrean yang sedang diproses selesai (maks 15 detik)
     const start = Date.now();
-    while (isSaving.current && Date.now() - start < 15000) {
+    while (isProcessing.current && Date.now() - start < 15000) {
       await new Promise(r => setTimeout(r, 200));
     }
 
@@ -583,11 +621,11 @@ export default function ClientMengerjakanUjian() {
         if (s.rpiId) p.rpiId = s.rpiId;
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const res = await fetch("/api/santri/ujian/jawab", {
+            const res = await fetchWithTimeout("/api/santri/ujian/jawab", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ sesiId, soalId: s.soalId, ...p })
-            });
+            }, 15000);
             if (res.ok) break; // Berhasil, lanjut ke soal berikutnya
           } catch (e) {
             if (attempt === 0) await new Promise(r => setTimeout(r, 500)); // Tunggu 500ms sebelum retry
@@ -611,6 +649,7 @@ export default function ClientMengerjakanUjian() {
     if (sesiId) {
       localStorage.removeItem(`exam_${sesiId}`);
       localStorage.removeItem(`exam_versions_${sesiId}`);
+      localStorage.removeItem(`exam_queue_${sesiId}`);
     }
 
     // Keluar fullscreen
@@ -644,6 +683,7 @@ export default function ClientMengerjakanUjian() {
     if (sesiId) {
       localStorage.removeItem(`exam_${sesiId}`);
       localStorage.removeItem(`exam_versions_${sesiId}`);
+      localStorage.removeItem(`exam_queue_${sesiId}`);
     }
 
     if (document.fullscreenElement && document.exitFullscreen) {
@@ -692,15 +732,12 @@ export default function ClientMengerjakanUjian() {
     localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     persistVersions();
 
-    // Kirim ke DB — gunakan antrian Map (tidak pernah drop)
-    if (isSaving.current) {
-      pendingQueue.current.set(soalId, payload);
-      setUnsavedCount(pendingQueue.current.size);
-    } else {
-      isSaving.current = true;
-      processSave(soalId, payload, newVersion);
-    }
-  }, [sesiId, persistVersions]);
+    // Masukkan ke antrean (persist) lalu proses — anti deadlock, anti hang
+    pendingQueue.current.set(soalId, { payload, version: newVersion });
+    setUnsavedCount(pendingQueue.current.size);
+    persistQueue();
+    processQueue();
+  }, [sesiId, persistVersions, persistQueue, processQueue]);
 
   const toggleRagu = useCallback(() => {
     if (hasSubmitted.current) return;
@@ -726,14 +763,11 @@ export default function ClientMengerjakanUjian() {
     if (curSoal.jawabanTeks) payload.jawabanTeks = curSoal.jawabanTeks;
     if (curSoal.jawabanData && Object.keys(curSoal.jawabanData).length > 0) payload.jawabanData = curSoal.jawabanData;
 
-    if (isSaving.current) {
-      pendingQueue.current.set(curSoal.soalId, payload);
-      setUnsavedCount(pendingQueue.current.size);
-    } else {
-      isSaving.current = true;
-      processSave(curSoal.soalId, payload, newVersion);
-    }
-  }, [currentIdx, sesiId, persistVersions]);
+    pendingQueue.current.set(curSoal.soalId, { payload, version: newVersion });
+    setUnsavedCount(pendingQueue.current.size);
+    persistQueue();
+    processQueue();
+  }, [currentIdx, sesiId, persistVersions, persistQueue, processQueue]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);

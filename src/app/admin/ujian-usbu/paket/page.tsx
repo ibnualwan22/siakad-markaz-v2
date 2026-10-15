@@ -261,6 +261,7 @@ export default function SesiUjianPage() {
           </button>
         </div>
       ) : (
+        <>
         {/* Filter Duf'ah */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Filter Duf'ah:</label>
@@ -376,6 +377,7 @@ export default function SesiUjianPage() {
              </div>
           ))}
         </div>
+        </>
       )}
 
       {/* MODAL BUAT SESI */}

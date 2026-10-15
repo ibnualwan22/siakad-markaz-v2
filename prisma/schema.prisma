@@ -1367,10 +1367,11 @@ model HuffadzTasmi {
   surahNo      Int
   surahNama    String
   ayatDari     Int
+  surahSampaiNo   Int
+  surahSampaiNama String
   ayatSampai   Int
   juz          Int
   durasiMenit  Int      @default(0)
-  jumlahSalah  Int      @default(0)
   nilaiTahfidz Int
   nilaiTahsin  Int
   nilaiTartil  Int

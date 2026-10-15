@@ -11,10 +11,11 @@ interface TasmiRow {
   surahNo: number;
   surahNama: string;
   ayatDari: number;
+  surahSampaiNo: number;
+  surahSampaiNama: string;
   ayatSampai: number;
   juz: number;
   durasiMenit: number;
-  jumlahSalah: number;
   nilaiTahfidz: number;
   nilaiTahsin: number;
   nilaiTartil: number;
@@ -31,12 +32,6 @@ function fmtWaktu(iso: string): string {
       hour: "2-digit", minute: "2-digit",
     }).format(new Date(iso));
   } catch { return iso; }
-}
-
-function nowLocal(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const NILAI_FIELDS = [
@@ -64,22 +59,24 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
   const [santriId, setSantriId] = useState("");
   const [surahNo, setSurahNo] = useState(1);
   const [ayatDari, setAyatDari] = useState("1");
+  const [surahSampaiNo, setSurahSampaiNo] = useState(1);
   const [ayatSampai, setAyatSampai] = useState("7");
   const [juz, setJuz] = useState("1");
-  const [waktu, setWaktu] = useState(nowLocal());
   const [durasi, setDurasi] = useState("");
-  const [jmlSalah, setJmlSalah] = useState("0");
   const [nilai, setNilai] = useState<Record<string, string>>({
     nilaiTahfidz: "", nilaiTahsin: "", nilaiTartil: "", nilaiAdab: "",
   });
   const [catatan, setCatatan] = useState("");
 
   const surah = useMemo(() => SURAHS.find(s => s.no === surahNo)!, [surahNo]);
+  const surahSampai = useMemo(() => SURAHS.find(s => s.no === surahSampaiNo)!, [surahSampaiNo]);
 
   const onSurahChange = (no: number) => {
     const s = SURAHS.find(x => x.no === no)!;
     setSurahNo(no);
     setAyatDari("1");
+    // Surat sampai default = surat yang sama
+    setSurahSampaiNo(no);
     setAyatSampai(String(s.ayat));
     setJuz(String(s.juzAwal));
   };
@@ -110,9 +107,7 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     setEditingId(null);
     setSantriId("");
     onSurahChange(1);
-    setWaktu(nowLocal());
     setDurasi("");
-    setJmlSalah("0");
     setNilai({ nilaiTahfidz: "", nilaiTahsin: "", nilaiTartil: "", nilaiAdab: "" });
     setCatatan("");
   };
@@ -122,13 +117,10 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     setSantriId(row.santriId);
     setSurahNo(row.surahNo);
     setAyatDari(String(row.ayatDari));
+    setSurahSampaiNo(row.surahSampaiNo);
     setAyatSampai(String(row.ayatSampai));
     setJuz(String(row.juz));
-    const d = new Date(row.waktuSubmit);
-    const p = (n: number) => String(n).padStart(2, "0");
-    setWaktu(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`);
     setDurasi(String(row.durasiMenit));
-    setJmlSalah(String(row.jumlahSalah));
     setNilai({
       nilaiTahfidz: String(row.nilaiTahfidz),
       nilaiTahsin: String(row.nilaiTahsin),
@@ -153,8 +145,15 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     e.preventDefault();
     if (!santriId) return toast.error("Pilih santri");
     const aDari = parseInt(ayatDari), aSampai = parseInt(ayatSampai);
-    if (!aDari || !aSampai || aDari < 1 || aSampai < aDari || aSampai > surah.ayat) {
-      return toast.error(`Ayat harus 1-${surah.ayat} dan dari ≤ sampai`);
+    if (!aDari || aDari < 1 || aDari > surah.ayat) {
+      return toast.error(`Ayat awal harus 1-${surah.ayat}`);
+    }
+    if (!aSampai || aSampai < 1 || aSampai > surahSampai.ayat) {
+      return toast.error(`Ayat akhir harus 1-${surahSampai.ayat}`);
+    }
+    if (surahSampaiNo < surahNo) return toast.error("Surat akhir tidak boleh sebelum surat awal");
+    if (surahSampaiNo === surahNo && aSampai < aDari) {
+      return toast.error("Ayat akhir harus ≥ ayat awal");
     }
     const j = parseInt(juz);
     if (!j || j < 1 || j > 30) return toast.error("Juz harus 1-30");
@@ -167,18 +166,18 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
       const body = {
         santriId,
         surahNo,
-        surahNama: `${surah.nama}`,
+        surahNama: surah.nama,
         ayatDari: aDari,
+        surahSampaiNo,
+        surahSampaiNama: surahSampai.nama,
         ayatSampai: aSampai,
         juz: j,
         durasiMenit: parseInt(durasi) || 0,
-        jumlahSalah: parseInt(jmlSalah) || 0,
         nilaiTahfidz: parseInt(nilai.nilaiTahfidz),
         nilaiTahsin: parseInt(nilai.nilaiTahsin),
         nilaiTartil: parseInt(nilai.nilaiTartil),
         nilaiAdab: parseInt(nilai.nilaiAdab),
         catatan: catatan || null,
-        waktuSubmit: new Date(waktu).toISOString(),
       };
       const url = editingId ? `/api/admin/huffadz/tasmi/${editingId}` : "/api/admin/huffadz/tasmi";
       const r = await fetch(url, {
@@ -206,6 +205,13 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     );
   };
 
+  const rentangText = (r: TasmiRow) => {
+    if (r.surahSampaiNo === r.surahNo) {
+      return `${r.surahNama}: ${r.ayatDari}-${r.ayatSampai}`;
+    }
+    return `${r.surahNama}: ${r.ayatDari} → ${r.surahSampaiNama}: ${r.ayatSampai}`;
+  };
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-black text-gray-800 mb-1">Penilaian Tasmi' Huffadz</h1>
@@ -215,29 +221,22 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6 mb-8">
           <h2 className="font-black text-gray-800 mb-4">{editingId ? "Edit Penilaian" : "Input Penilaian Baru"}</h2>
 
-          <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Santri</label>
-              <select value={santriId} onChange={e => setSantriId(e.target.value)} required disabled={!!editingId}
-                className="w-full p-3 text-sm font-bold bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-50">
-                <option value="">— Pilih santri —</option>
-                {santriList.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Waktu</label>
-              <input type="datetime-local" value={waktu} onChange={e => setWaktu(e.target.value)} required
-                className="w-full p-3 text-sm font-bold bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
-            </div>
+          <div className="mb-4">
+            <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Santri</label>
+            <select value={santriId} onChange={e => setSantriId(e.target.value)} required disabled={!!editingId}
+              className="w-full p-3 text-sm font-bold bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-50">
+              <option value="">— Pilih santri —</option>
+              {santriList.map(s => <option key={s.id} value={s.id}>{s.nama}</option>)}
+            </select>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-4 mb-4">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Surat</label>
               <select value={surahNo} onChange={e => onSurahChange(parseInt(e.target.value))}
                 className="w-full p-3 text-sm font-bold bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
                 {SURAHS.map(s => (
-                  <option key={s.no} value={s.no}>{s.no}. {s.arab} — {s.nama} ({s.ayat} ayat)</option>
+                  <option key={s.no} value={s.no}>{s.nama}</option>
                 ))}
               </select>
             </div>
@@ -246,14 +245,31 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
               <input type="number" min={1} max={surah.ayat} value={ayatDari} onChange={e => setAyatDari(e.target.value)} required
                 className="w-full p-3 text-sm font-black text-center border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Sampai</label>
-              <input type="number" min={1} max={surah.ayat} value={ayatSampai} onChange={e => setAyatSampai(e.target.value)} required
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Sampai Surat</label>
+              <select value={surahSampaiNo} onChange={e => {
+                const no = parseInt(e.target.value);
+                const s = SURAHS.find(x => x.no === no)!;
+                setSurahSampaiNo(no);
+                setAyatSampai(String(s.ayat));
+              }}
+                className="w-full p-3 text-sm font-bold bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none">
+                {SURAHS.filter(s => s.no >= surahNo).map(s => (
+                  <option key={s.no} value={s.no}>{s.nama}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Ayat Sampai</label>
+              <input type="number" min={1} max={surahSampai.ayat} value={ayatSampai} onChange={e => setAyatSampai(e.target.value)} required
                 className="w-full p-3 text-sm font-black text-center border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
             </div>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Juz <span className="normal-case font-medium text-gray-400">(otomatis)</span></label>
               <input type="number" min={1} max={30} value={juz} onChange={e => setJuz(e.target.value)} required
@@ -262,11 +278,6 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Durasi (menit)</label>
               <input type="number" min={0} value={durasi} onChange={e => setDurasi(e.target.value)} placeholder="0"
-                className="w-full p-3 text-sm font-black text-center border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Jumlah Salah</label>
-              <input type="number" min={0} value={jmlSalah} onChange={e => setJmlSalah(e.target.value)}
                 className="w-full p-3 text-sm font-black text-center border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none" />
             </div>
           </div>
@@ -321,14 +332,13 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
           <button onClick={fetchRows} className="px-4 py-2 text-sm font-bold bg-gray-100 rounded-xl hover:bg-gray-200">Cari</button>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[900px]">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="bg-gray-50 text-xs uppercase text-gray-500">
                 <th className="px-4 py-3 text-left">Waktu</th>
                 <th className="px-4 py-3 text-left">Nama</th>
                 <th className="px-4 py-3 text-left">Surat / Juz</th>
                 <th className="px-4 py-3 text-center">Durasi</th>
-                <th className="px-4 py-3 text-center">Salah</th>
                 <th className="px-4 py-3 text-center">Tahfidz</th>
                 <th className="px-4 py-3 text-center">Tahsin</th>
                 <th className="px-4 py-3 text-center">Tartil</th>
@@ -338,19 +348,18 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Memuat...</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Memuat...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">Belum ada data</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Belum ada data</td></tr>
               ) : rows.map(r => (
                 <tr key={r.id} className="border-t hover:bg-gray-50">
                   <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{fmtWaktu(r.waktuSubmit)}</td>
                   <td className="px-4 py-3 font-bold text-gray-800">{r.santri.nama}</td>
                   <td className="px-4 py-3">
-                    <div className="font-bold text-gray-700">{r.surahNama}</div>
-                    <div className="text-xs text-gray-500">Ayat {r.ayatDari}-{r.ayatSampai} • Juz {r.juz}</div>
+                    <div className="font-bold text-gray-700">{rentangText(r)}</div>
+                    <div className="text-xs text-gray-500">Juz {r.juz}</div>
                   </td>
                   <td className="px-4 py-3 text-center">{r.durasiMenit} mnt</td>
-                  <td className="px-4 py-3 text-center font-black text-red-600">{r.jumlahSalah}</td>
                   <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahfidz)}</td>
                   <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahsin)}</td>
                   <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTartil)}</td>

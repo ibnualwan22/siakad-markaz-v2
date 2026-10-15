@@ -62,7 +62,24 @@ export async function GET(request: Request) {
   return NextResponse.json(list);
 }
 
-// POST — input penilaian baru
+function validasiRentang(b: any): string | null {
+  const sDari = Number(b.surahNo), sSampai = Number(b.surahSampaiNo);
+  const aDari = Number(b.ayatDari), aSampai = Number(b.ayatSampai);
+  if (!Number.isInteger(sDari) || sDari < 1 || sDari > 114) return "Surat awal tidak valid";
+  if (!Number.isInteger(sSampai) || sSampai < 1 || sSampai > 114) return "Surat akhir tidak valid";
+  if (sSampai < sDari) return "Surat akhir tidak boleh sebelum surat awal";
+  if (!Number.isInteger(aDari) || aDari < 1) return "Ayat awal tidak valid";
+  if (!Number.isInteger(aSampai) || aSampai < 1) return "Ayat akhir tidak valid";
+  if (sSampai === sDari && aSampai < aDari) return "Ayat akhir harus ≥ ayat awal";
+  const j = Number(b.juz);
+  if (!Number.isInteger(j) || j < 1 || j > 30) return "Juz harus 1-30";
+  for (const [k, v] of [["Tahfidz", b.nilaiTahfidz], ["Tahsin", b.nilaiTahsin], ["Tartil", b.nilaiTartil], ["Adab", b.nilaiAdab]] as const) {
+    if (!validNilai(Number(v))) return `Nilai ${k} harus 0-100`;
+  }
+  return null;
+}
+
+// POST — input penilaian baru (waktuSubmit otomatis = waktu server)
 export async function POST(request: Request) {
   const session = await getSession();
   const hasPerm = await checkPermission("huffadz_edit");
@@ -72,25 +89,13 @@ export async function POST(request: Request) {
 
   try {
     const b = await request.json();
-    const { santriId, surahNo, surahNama, ayatDari, ayatSampai, juz, durasiMenit,
-      jumlahSalah, nilaiTahfidz, nilaiTahsin, nilaiTartil, nilaiAdab, catatan, waktuSubmit } = b;
+    const { santriId, surahNo, surahNama, ayatDari } = b;
 
     if (!santriId || !surahNo || !surahNama) {
       return NextResponse.json({ error: "Santri dan surat wajib diisi" }, { status: 400 });
     }
-    const aDari = Number(ayatDari), aSampai = Number(ayatSampai);
-    if (!Number.isInteger(aDari) || !Number.isInteger(aSampai) || aDari < 1 || aSampai < aDari) {
-      return NextResponse.json({ error: "Rentang ayat tidak valid" }, { status: 400 });
-    }
-    const j = Number(juz);
-    if (!Number.isInteger(j) || j < 1 || j > 30) {
-      return NextResponse.json({ error: "Juz harus 1-30" }, { status: 400 });
-    }
-    for (const [k, v] of [["Tahfidz", nilaiTahfidz], ["Tahsin", nilaiTahsin], ["Tartil", nilaiTartil], ["Adab", nilaiAdab]] as const) {
-      if (!validNilai(Number(v))) {
-        return NextResponse.json({ error: `Nilai ${k} harus 0-100` }, { status: 400 });
-      }
-    }
+    const err = validasiRentang(b);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
 
     // Pastikan santri terdaftar di program Hufadz (dufah aktif)
     const dufahNama = await getActiveDufahName();
@@ -109,18 +114,18 @@ export async function POST(request: Request) {
         santriId,
         surahNo: Number(surahNo),
         surahNama: String(surahNama).slice(0, 100),
-        ayatDari: aDari,
-        ayatSampai: aSampai,
-        juz: j,
-        durasiMenit: Math.max(0, Number(durasiMenit) || 0),
-        jumlahSalah: Math.max(0, Number(jumlahSalah) || 0),
-        nilaiTahfidz: Number(nilaiTahfidz),
-        nilaiTahsin: Number(nilaiTahsin),
-        nilaiTartil: Number(nilaiTartil),
-        nilaiAdab: Number(nilaiAdab),
-        catatan: catatan ? String(catatan).slice(0, 500) : null,
+        ayatDari: Number(ayatDari),
+        surahSampaiNo: Number(b.surahSampaiNo),
+        surahSampaiNama: String(b.surahSampaiNama || surahNama).slice(0, 100),
+        ayatSampai: Number(b.ayatSampai),
+        juz: Number(b.juz),
+        durasiMenit: Math.max(0, Number(b.durasiMenit) || 0),
+        nilaiTahfidz: Number(b.nilaiTahfidz),
+        nilaiTahsin: Number(b.nilaiTahsin),
+        nilaiTartil: Number(b.nilaiTartil),
+        nilaiAdab: Number(b.nilaiAdab),
+        catatan: b.catatan ? String(b.catatan).slice(0, 500) : null,
         penilaiId: (session as any).userId || null,
-        ...(waktuSubmit ? { waktuSubmit: new Date(waktuSubmit) } : {}),
       },
       include: { santri: { select: { nama: true } } },
     });

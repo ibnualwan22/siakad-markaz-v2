@@ -292,18 +292,12 @@ export default function ClientMengerjakanUjian() {
       if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
     };
 
-    // 6. Periodic Focus Check — backup for devices where blur doesn't fire
-    //    DIMATIKAN di iOS karena hasFocus() sering false saat animasi keyboard
-    let focusCheckInterval: ReturnType<typeof setInterval> | undefined;
-    if (!isIOS) {
-      focusCheckInterval = setInterval(() => {
-        if (!document.hasFocus() && !document.hidden && !hasSubmitted.current && !showSummaryRef.current) {
-          if (isVirtualKeyboardOpen()) return;
-          if (keyboardDismissGraceRef.active) return; // Skip saat grace period keyboard
-          handleAutoSubmit("FOCUS_LOST");
-        }
-      }, 5000);
-    }
+    // 6. Periodic Focus Check — DIHAPUS 2026-10-15
+    //    Alasan: interval jalan tiap 5 detik di jadwal tetap TANPA grace period,
+    //    sehingga submit bisa terjadi 1-3 detik setelah santri pergi
+    //    (tergantung posisi tick interval), bahkan saat santri sudah kembali
+    //    dalam grace period. Blur timer (5 detik) sudah cukup menangani
+    //    kasus kehilangan fokus. Satu pemicu = satu timer = tidak ada race condition.
 
     // 7. Split-Screen Detection (Android only)
     //    Bandingkan innerHeight saat ini vs baseline saat mulai ujian
@@ -369,7 +363,6 @@ export default function ClientMengerjakanUjian() {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientationChange);
       window.visualViewport?.removeEventListener("resize", handleVisualViewportChange);
-      if (focusCheckInterval) clearInterval(focusCheckInterval);
       if (blurTimer) clearTimeout(blurTimer);
       if (visibilityTimer) clearTimeout(visibilityTimer);
     };

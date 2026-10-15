@@ -142,6 +142,14 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
     fokusInput();
   }, [fokusInput, sesiAktif]);
 
+  // Jaga fokus input saat petugas kembali ke halaman (mis. setelah pindah aplikasi).
+  // Penting untuk scanner Bluetooth: hasil scan hanya masuk jika input sedang fokus.
+  useEffect(() => {
+    const onWindowFocus = () => fokusInput();
+    window.addEventListener("focus", onWindowFocus);
+    return () => window.removeEventListener("focus", onWindowFocus);
+  }, [fokusInput]);
+
   const stopCamera = useCallback(async () => {
     try {
       if (qrRef.current) {

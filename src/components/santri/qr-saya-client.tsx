@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
-import { Maximize2, X } from "lucide-react";
+import { ScanLine, X, Sun } from "lucide-react";
 
 export function QrSayaClient({
   nama,
@@ -13,7 +13,58 @@ export function QrSayaClient({
   payload: string | null;
   error: string | null;
 }) {
-  const [zoom, setZoom] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const wakeLockRef = useRef<any>(null);
+
+  // Wake Lock: jaga layar tetap menyala saat Mode Scan
+  const requestWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      }
+    } catch { /* abaikan jika tidak didukung */ }
+  };
+  const releaseWakeLock = () => {
+    wakeLockRef.current?.release?.().catch(() => {});
+    wakeLockRef.current = null;
+  };
+
+  // Fullscreen saat masuk Mode Scan
+  const enterScanMode = async () => {
+    setScanMode(true);
+    requestWakeLock();
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch { /* abaikan jika ditolak */ }
+  };
+  const exitScanMode = () => {
+    setScanMode(false);
+    releaseWakeLock();
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch { /* abaikan */ }
+  };
+
+  // Keluar Mode Scan jika fullscreen dibatalkan manual (tombol back HP)
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement && scanMode) {
+        setScanMode(false);
+        releaseWakeLock();
+      }
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [scanMode]);
+
+  // Cleanup saat unmount
+  useEffect(() => {
+    return () => releaseWakeLock();
+  }, []);
 
   if (error || !payload) {
     return (
@@ -39,29 +90,46 @@ export function QrSayaClient({
           Jangan bagikan ke orang lain.
         </p>
         <button
-          onClick={() => setZoom(true)}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white"
+          onClick={enterScanMode}
+          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white"
         >
-          <Maximize2 size={16} /> Perbesar
+          <ScanLine size={16} /> Mode Scan
         </button>
       </div>
 
-      {zoom && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-6"
-          onClick={() => setZoom(false)}
-        >
+      {scanMode && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white p-6">
+          {/* Tombol tutup */}
           <button
-            className="absolute right-4 top-4 rounded-full bg-white/20 p-2 text-white"
-            onClick={() => setZoom(false)}
-            aria-label="Tutup"
+            className="absolute right-4 top-4 rounded-full bg-gray-100 p-3 text-gray-700 shadow"
+            onClick={exitScanMode}
+            aria-label="Tutup Mode Scan"
           >
             <X size={24} />
           </button>
-          <div className="rounded-2xl bg-white p-6" onClick={(e) => e.stopPropagation()}>
-            <QRCode value={payload} size={320} />
-            <p className="mt-3 text-center font-semibold text-gray-900">{nama}</p>
+
+          {/* QR sebesar mungkin */}
+          <div className="w-full max-w-[85vw] sm:max-w-[420px]">
+            <QRCode
+              value={payload}
+              size={512}
+              style={{ width: "100%", height: "auto" }}
+            />
           </div>
+
+          <p className="mt-4 text-center text-lg font-bold text-gray-900">{nama}</p>
+
+          {/* Instruksi brightness */}
+          <div className="mt-6 flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+            <Sun size={20} className="text-amber-500 shrink-0" />
+            <p className="text-sm font-medium text-amber-800">
+              Naikkan brightness HP hingga maksimal agar mudah terbaca scanner
+            </p>
+          </div>
+
+          <p className="mt-3 text-xs text-gray-400">
+            Ketuk tombol × di atas untuk keluar dari Mode Scan
+          </p>
         </div>
       )}
     </div>

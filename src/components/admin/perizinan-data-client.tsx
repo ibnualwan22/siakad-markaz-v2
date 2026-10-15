@@ -38,6 +38,8 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
   const [search, setSearch] = useState("");
   const [filterTipe, setFilterTipe] = useState("HARIAN,TABIROT");
   const [filterStatus, setFilterStatus] = useState("AKTIF,MENUNGGU");
+  const [filterDufah, setFilterDufah] = useState("ACTIVE");
+  const [dufahList, setDufahList] = useState<string[]>([]);
 
   const [selectedTasrih, setSelectedTasrih] = useState<TasrihDetail | null>(null);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
@@ -51,13 +53,20 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
 
   useEffect(() => {
     fetchData();
-  }, [filterTipe, filterStatus]);
+  }, [filterTipe, filterStatus, filterDufah]);
+
+  useEffect(() => {
+    fetch("/api/admin/dufah")
+      .then(r => r.ok ? r.json() : [])
+      .then(j => setDufahList(Array.isArray(j) ? j.map((d: any) => d.nama || d) : []))
+      .catch(() => {});
+  }, []);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
       const apiStatus = filterStatus === "KADALUARSA" ? "ALL" : filterStatus;
-      const res = await fetch(`/api/admin/perizinan?tipe=${filterTipe}&status=${apiStatus}`);
+      const res = await fetch(`/api/admin/perizinan?tipe=${filterTipe}&status=${apiStatus}&dufah=${filterDufah}`);
       if (!res.ok) throw new Error("Gagal load data");
       const json = await res.json();
       // Mark rombongan: count how many records share the same grupTasrihId
@@ -211,6 +220,11 @@ export default function PerizinanDataClient({ permissions }: { permissions: stri
 
       <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
         <div className="flex gap-2 w-full md:w-auto">
+          <select value={filterDufah} onChange={(e) => setFilterDufah(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none w-full md:w-auto">
+            <option value="ACTIVE">Dufah Aktif</option>
+            <option value="ALL">Semua Dufah</option>
+            {dufahList.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="px-3 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none w-full md:w-auto">
             <option value="ALL">Semua Status</option>
             <option value="AKTIF,MENUNGGU">Aktif & Menunggu</option>

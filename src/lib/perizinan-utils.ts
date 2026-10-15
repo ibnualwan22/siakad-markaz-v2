@@ -85,7 +85,10 @@ export async function processAutoAbsensiIzin(
     const isFullLibur = await isHariLiburFull(date);
 
     // 1. Absen Kelas (Eager Injection dengan pengecekan Hari Libur)
+    // TABIROT dikecualikan: hanya untuk absen ta'birot
+    const isTabirotOnly = (tipeIzin as any) === "TABIROT";
     for (const sesi of sesiList) {
+      if (isTabirotOnly) break;
       if (isFullLibur || await isSesiLibur(date, sesi)) continue;
       
       const existingKelas = await prisma.absenKelas.findUnique({
@@ -114,8 +117,9 @@ export async function processAutoAbsensiIzin(
       }
     }
     
-    // 3. Absen Kegiatan (Eager inject, khusus KEGIATAN/HARIAN/BERHARI_HARI/KELUAR_PARE)
-    if (tipeIzin === "BERHARI_HARI" || tipeIzin === "HARIAN" || tipeIzin === "KELUAR_PARE") {
+    // 3. Absen Kegiatan (Eager inject, khusus BERHARI_HARI/KELUAR_PARE)
+    // HARIAN dikecualikan: hanya untuk absen kelas. TABIROT dikecualikan: hanya untuk absen ta'birot.
+    if (tipeIzin === "BERHARI_HARI" || tipeIzin === "KELUAR_PARE") {
        const activeKegiatanSesi = await prisma.sesiAbsenKegiatan.findMany({
          where: { 
             isClosed: false,
@@ -141,8 +145,9 @@ export async function processAutoAbsensiIzin(
        }
     }
 
-    // 4. Absen Ta'birot (Eager inject, khusus TABIROT/HARIAN/BERHARI_HARI/KELUAR_PARE)
-    if (riwayat?.santriId && (tipeIzin === "BERHARI_HARI" || tipeIzin === "HARIAN" || (tipeIzin as any) === "TABIROT" || tipeIzin === "KELUAR_PARE")) {
+    // 4. Absen Ta'birot (Eager inject, khusus TABIROT/BERHARI_HARI/KELUAR_PARE)
+    // HARIAN dikecualikan: hanya untuk absen kelas
+    if (riwayat?.santriId && (tipeIzin === "BERHARI_HARI" || (tipeIzin as any) === "TABIROT" || tipeIzin === "KELUAR_PARE")) {
        const activeTabirot = await prisma.kelompokTabirot.findMany({
          where: { 
             isActive: true,

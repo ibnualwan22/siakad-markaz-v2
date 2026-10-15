@@ -4,16 +4,82 @@ import { getSession } from "@/lib/auth";
 import { parseWibDateString } from "@/lib/jadwal-sesi";
 import { generateNomorTasrih, processAutoAbsensiIzin } from "@/lib/perizinan-utils";
 import { TipeIzin } from "@prisma/client";
+import { getActiveDufahName } from "@/lib/absensi";
+
+
+// Aturan overlap antar tipe izin:
+// - HARIAN hanya untuk absen kelas, TABIROT hanya untuk absen ta'birot -> keduanya boleh bareng
+// - BERHARI_HARI / KELUAR_PARE mencakup semua jenis absen -> overlap dengan apapun
+function isTipeOverlapping(tipeBaru: string, tipeExisting: string): boolean {
+  const mencakupSemua = (t: string) => t === "BERHARI_HARI" || t === "KELUAR_PARE";
+  if (mencakupSemua(tipeBaru) || mencakupSemua(tipeExisting)) return true;
+  return tipeBaru === tipeExisting;
+}
+
+// Normalisasi rentang tanggal: HARIAN/TABIROT hanya 1 hari
+function getRentang(tipe: string, mulai: Date, selesai: Date | null): { start: Date; end: Date } {
+  if (tipe === "HARIAN" || tipe === "TABIROT" || !selesai) {
+    return { start: mulai, end: mulai };
+  }
+  return { start: mulai, end: selesai };
+}
+
+function isRentangOverlap(a: { start: Date; end: Date }, b: { start: Date; end: Date }): boolean {
+  return a.start <= b.end && b.start <= a.end;
+}
+
+
+// Tandai SELESAI untuk izin yang sudah kedaluwarsa (lazy, dijalankan saat GET)
+// - HARIAN/TABIROT: kedaluwarsa jika tanggalMulai < hari ini
+// - BERHARI_HARI: kedaluwarsa jika tanggalSelesai < hari ini
+// - KELUAR_PARE: kedaluwarsa jika tanggalSelesai diisi dan < hari ini (null = masih berjalan)
+async function autoExpireIzin() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  await prisma.perizinan.updateMany({
+    where: {
+      statusIzin: { in: ["AKTIF", "MENUNGGU"] },
+      OR: [
+        {
+          tipeIzin: { in: ["HARIAN", "TABIROT"] },
+          tanggalMulai: { lt: today },
+        },
+        {
+          tipeIzin: "BERHARI_HARI",
+          tanggalSelesai: { lt: today },
+        },
+        {
+          tipeIzin: "KELUAR_PARE",
+          tanggalSelesai: { not: null, lt: today },
+        },
+      ],
+    },
+    data: { statusIzin: "SELESAI" },
+  });
+}
 
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Lazy auto-expire: tandai SELESAI untuk izin yang sudah lewat tanggalnya
+  try { await autoExpireIzin(); } catch (e) { console.error("autoExpireIzin:", e); }
 
   const { searchParams } = new URL(request.url);
   const tipe = searchParams.get("tipe");
   const status = searchParams.get("status");
   const sakan = searchParams.get("sakan");
   const kelasId = searchParams.get("kelasId");
+  const dufahParam = searchParams.get("dufah");
+
+  // Default: filter ke dufah aktif. "ALL" untuk semua dufah (riwayat).
+  let dufahFilter: string | null = null;
+  if (!dufahParam || dufahParam === "ACTIVE") {
+    dufahFilter = await getActiveDufahName();
+  } else if (dufahParam !== "ALL") {
+    dufahFilter = dufahParam;
+  }
 
   let whereClause: any = {};
   if (tipe && tipe !== "ALL") {
@@ -33,6 +99,9 @@ export async function GET(request: Request) {
   }
 
   if (kelasId && kelasId !== "ALL") whereClause.riwayat = { kelasId: kelasId };
+  if (dufahFilter) {
+    whereClause.riwayat = { ...(whereClause.riwayat || {}), dufahNama: dufahFilter };
+  }
 
   try {
     const data = await prisma.perizinan.findMany({
@@ -80,7 +149,33 @@ export async function POST(request: Request) {
     const operations = [];
     const grupTasrihId = crypto.randomUUID();
 
+    const rentangBaru = getRentang(actualTipeIzin, tglMulai, tglSelesai);
+
     for (const riwayatId of riwayatIds) {
+      // Validasi anti-duplikat: cek izin AKTIF/MENUNGGU yang overlap
+      const izinExisting = await prisma.perizinan.findMany({
+        where: {
+          riwayatId,
+          statusIzin: { in: ["AKTIF", "MENUNGGU"] },
+        },
+        select: { tipeIzin: true, tanggalMulai: true, tanggalSelesai: true },
+      });
+
+      for (const ex of izinExisting) {
+        if (!isTipeOverlapping(actualTipeIzin, ex.tipeIzin)) continue;
+        const rentangEx = getRentang(ex.tipeIzin, ex.tanggalMulai, ex.tanggalSelesai);
+        if (isRentangOverlap(rentangBaru, rentangEx)) {
+          const santri = await prisma.riwayatSantri.findUnique({
+            where: { id: riwayatId },
+            select: { santri: { select: { nama: true } } },
+          });
+          return NextResponse.json(
+            { error: `Santri ${santri?.santri?.nama || riwayatId} sudah memiliki izin ${ex.tipeIzin} yang bertabrakan tanggalnya` },
+            { status: 400 }
+          );
+        }
+      }
+
       const nomorTasrih = await generateNomorTasrih(tglMulai);
       
       const newIzin = await prisma.perizinan.create({

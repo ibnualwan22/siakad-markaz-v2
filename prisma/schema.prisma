@@ -1355,3 +1355,32 @@ model TemplateCetak {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }
+
+// Penilaian Tasmi' Markaz Huffadz — form penilaian harian.
+// Predikat dihitung (tidak disimpan): <70 مقبول | <80 جيد | <90 جيد جدا | else امتياز
+model HuffadzTasmi {
+  id           String   @id @default(cuid())
+  santriId     String
+  waktuSubmit  DateTime @default(now())
+  surahNo      Int
+  surahNama    String
+  ayatDari     Int
+  ayatSampai   Int
+  juz          Int
+  durasiMenit  Int      @default(0)
+  jumlahSalah  Int      @default(0)
+  nilaiTahfidz Int
+  nilaiTahsin  Int
+  nilaiTartil  Int
+  nilaiAdab    Int
+  catatan      String?
+  penilaiId    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  santri  SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  penilai User?          @relation(fields: [penilaiId], references: [id], onDelete: SetNull)
+
+  @@index([santriId])
+  @@index([waktuSubmit])
+}

@@ -164,16 +164,18 @@ export default function JadwalSesiPage() {
         </div>
       </div>
 
-      <div className="flex space-x-2 border-b border-gray-200">
-        <button onClick={() => setActiveTab("GLOBAL")} className={`px-4 py-2 font-bold ${activeTab === "GLOBAL" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Global (1-6)</button>
-        <button onClick={() => setActiveTab("TAMBAHAN")} className={`px-4 py-2 font-bold ${activeTab === "TAMBAHAN" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Tambahan (7-10)</button>
-        <button onClick={() => setActiveTab("TAQWIM")} className={`px-4 py-2 font-bold ${activeTab === "TAQWIM" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Taqwim</button>
+      <div className="flex space-x-2 border-b border-gray-200 overflow-x-auto">
+        <button onClick={() => setActiveTab("GLOBAL")} className={`px-4 py-2 font-bold whitespace-nowrap ${activeTab === "GLOBAL" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Global (1-6)</button>
+        <button onClick={() => setActiveTab("TAMBAHAN")} className={`px-4 py-2 font-bold whitespace-nowrap ${activeTab === "TAMBAHAN" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Tambahan (7-10)</button>
+        <button onClick={() => setActiveTab("TAQWIM")} className={`px-4 py-2 font-bold whitespace-nowrap ${activeTab === "TAQWIM" ? "border-b-2 border-emerald-500 text-emerald-600" : "text-gray-500"}`}>Sesi Taqwim</button>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
       ) : activeTab === "GLOBAL" ? (
-        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        <div>
+          {/* Desktop: tabel */}
+          <div className="hidden md:block bg-white rounded-2xl shadow-sm border overflow-hidden">
             <table className="w-full text-sm text-left">
               <thead className="bg-gray-50 border-b">
                 <tr>
@@ -192,34 +194,92 @@ export default function JadwalSesiPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          {/* Mobile: kartu */}
+          <div className="md:hidden space-y-3">
+            {jadwalList.map((j) => (
+              <div key={j.id} className="bg-white rounded-2xl shadow-sm border p-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold">{j.sesi}</p>
+                  <p className="text-sm text-gray-600">{j.jamBuka} - {j.jamTutup}</p>
+                  <p className="text-xs text-gray-500">Toleransi {j.toleransiMenit} menit</p>
+                </div>
+                <button
+                  onClick={() => {setEditingJadwal(j); setIsModalOpen(true)}}
+                  className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm"
+                >
+                  <Edit3 size={16} /> Edit
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       ) : activeTab === "TAMBAHAN" ? (
         <div className="space-y-4">
           <div className="flex justify-end">
             <button onClick={() => {setEditingTambahan({ isActive: true, toleransiMenit: 15, jamBuka: '16:00', jamTutup: '17:30' }); setIsModalTambahanOpen(true)}} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex gap-2"><Plus size={18}/> Tambah Sesi Dinamis</button>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-4">Program</th><th className="px-6 py-4">Sesi</th><th className="px-6 py-4">Waktu</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {tambahanList.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-bold text-indigo-600">{t.program?.nama_indo}</td>
-                    <td className="px-6 py-4 font-bold">{t.sesi}</td>
-                    <td className="px-6 py-4">{t.jamBuka} - {t.jamTutup} ({t.toleransiMenit}m)</td>
-                    <td className="px-6 py-4">{t.isActive ? "Aktif" : "Nonaktif"}</td>
-                    <td className="px-6 py-4 flex gap-2">
-                      <button onClick={() => {setEditingTambahan(t); setIsModalTambahanOpen(true)}} className="text-blue-600"><Edit3 size={18} /></button>
-                      <button onClick={() => handleDeleteTambahan(t.id)} className="text-red-600"><Trash2 size={18} /></button>
-                    </td>
+          <div>
+            {/* Desktop: tabel */}
+            <div className="hidden md:block bg-white rounded-2xl shadow-sm border overflow-hidden">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-6 py-4">Program</th><th className="px-6 py-4">Sesi</th><th className="px-6 py-4">Waktu</th><th className="px-6 py-4">Status</th><th className="px-6 py-4">Aksi</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {tambahanList.map((t) => (
+                    <tr key={t.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 font-bold text-indigo-600">{t.program?.nama_indo}</td>
+                      <td className="px-6 py-4 font-bold">{t.sesi}</td>
+                      <td className="px-6 py-4">{t.jamBuka} - {t.jamTutup} ({t.toleransiMenit}m)</td>
+                      <td className="px-6 py-4">{t.isActive ? "Aktif" : "Nonaktif"}</td>
+                      <td className="px-6 py-4 flex gap-2">
+                        <button onClick={() => {setEditingTambahan(t); setIsModalTambahanOpen(true)}} className="text-blue-600"><Edit3 size={18} /></button>
+                        <button onClick={() => handleDeleteTambahan(t.id)} className="text-red-600"><Trash2 size={18} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Mobile: kartu */}
+            <div className="md:hidden space-y-3">
+              {tambahanList.map((t) => (
+                <div key={t.id} className="bg-white rounded-2xl shadow-sm border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-indigo-600">{t.program?.nama_indo}</p>
+                      <p className="font-bold text-sm mt-0.5">{t.sesi}</p>
+                      <p className="text-sm text-gray-600">{t.jamBuka} - {t.jamTutup} ({t.toleransiMenit}m)</p>
+                      <p className="text-xs mt-1">
+                        <span className={`px-2 py-0.5 rounded-full font-bold ${t.isActive ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                          {t.isActive ? "Aktif" : "Nonaktif"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => {setEditingTambahan(t); setIsModalTambahanOpen(true)}}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-sm"
+                    >
+                      <Edit3 size={16} /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTambahan(t.id)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-50 text-red-700 font-bold text-sm"
+                    >
+                      <Trash2 size={16} /> Hapus
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {tambahanList.length === 0 && (
+                <p className="text-center text-sm text-gray-500 py-8">Belum ada sesi tambahan.</p>
+              )}
+            </div>
           </div>
         </div>
       ) : (

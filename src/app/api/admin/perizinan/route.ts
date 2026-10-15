@@ -165,12 +165,38 @@ export async function POST(request: Request) {
         if (!isTipeOverlapping(actualTipeIzin, ex.tipeIzin)) continue;
         const rentangEx = getRentang(ex.tipeIzin, ex.tanggalMulai, ex.tanggalSelesai);
         if (isRentangOverlap(rentangBaru, rentangEx)) {
-          const santri = await prisma.riwayatSantri.findUnique({
-            where: { id: riwayatId },
-            select: { santri: { select: { nama: true } } },
-          });
+          const [santri, izinLengkap] = await Promise.all([
+            prisma.riwayatSantri.findUnique({
+              where: { id: riwayatId },
+              select: { santri: { select: { nama: true } } },
+            }),
+            prisma.perizinan.findFirst({
+              where: {
+                riwayatId,
+                tipeIzin: ex.tipeIzin,
+                statusIzin: { in: ["AKTIF", "MENUNGGU"] },
+              },
+              select: { createdBy: true },
+              orderBy: { createdAt: "desc" },
+            }),
+          ]);
+          let namaPencatat = "admin";
+          if (izinLengkap?.createdBy) {
+            const userPencatat = await prisma.user.findUnique({
+              where: { id: izinLengkap.createdBy },
+              select: { nama: true, username: true },
+            });
+            namaPencatat = userPencatat?.nama || userPencatat?.username || "admin";
+          }
+          const namaSantri = santri?.santri?.nama || riwayatId;
+          const labelTipe: Record<string, string> = {
+            HARIAN: "harian",
+            TABIROT: "ta'birot",
+            BERHARI_HARI: "berhari-hari",
+            KELUAR_PARE: "keluar pare",
+          };
           return NextResponse.json(
-            { error: `Santri ${santri?.santri?.nama || riwayatId} sudah memiliki izin ${ex.tipeIzin} yang bertabrakan tanggalnya` },
+            { error: `Santri atas nama ${namaSantri} telah mendapatkan izin ${labelTipe[ex.tipeIzin] || ex.tipeIzin} oleh ${namaPencatat}` },
             { status: 400 }
           );
         }

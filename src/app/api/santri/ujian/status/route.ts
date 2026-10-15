@@ -15,10 +15,28 @@ export async function GET(req: Request) {
 
     const sesi = await prisma.sesiUjianSantri.findUnique({
       where: { id: sesiId },
-      select: { status: true }
+      select: {
+        status: true,
+        tambahanMenit: true,
+        paket: {
+          select: {
+            sesiGlobal: { select: { durasiMenit: true, waktuMulai: true } }
+          }
+        }
+      }
     });
 
     if (!sesi) return NextResponse.json({ status: "NOT_FOUND" });
+
+    // Hitung sisa waktu versi server (sudah termasuk tambahanMenit terbaru)
+    let sisaWaktuDetik: number | null = null;
+    const wMulai = sesi.paket?.sesiGlobal?.waktuMulai;
+    const durasiMenit = sesi.paket?.sesiGlobal?.durasiMenit;
+    if (wMulai && durasiMenit) {
+      const totalDetik = (durasiMenit + (sesi.tambahanMenit || 0)) * 60;
+      const wSelesai = new Date(wMulai).getTime() + totalDetik * 1000;
+      sisaWaktuDetik = Math.max(0, Math.floor((wSelesai - Date.now()) / 1000));
+    }
 
     // Update unsaved count if provided and session is ongoing
     if (unsavedCountStr !== null && sesi.status === "MENGERJAKAN") {
@@ -29,7 +47,7 @@ export async function GET(req: Request) {
       });
     }
 
-    return NextResponse.json({ status: sesi.status });
+    return NextResponse.json({ status: sesi.status, sisaWaktuDetik });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

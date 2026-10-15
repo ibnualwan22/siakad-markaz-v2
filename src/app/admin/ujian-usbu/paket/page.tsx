@@ -21,6 +21,14 @@ export default function SesiUjianPage() {
   const [isSimulasi, setIsSimulasi] = useState(false);
   const [namaSesi, setNamaSesi] = useState("");
   const [filterDufah, setFilterDufah] = useState("SEMUA");
+
+  // Bulk tambah waktu
+  const [bulkSesi, setBulkSesi] = useState<any>(null);
+  const [bulkMenit, setBulkMenit] = useState("15");
+  const [bulkPaketIds, setBulkPaketIds] = useState<string[]>([]);
+  const [bulkCounts, setBulkCounts] = useState<Record<string, number>>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
   
   // Program Selection
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
@@ -179,6 +187,50 @@ export default function SesiUjianPage() {
       toast.success(!currentState ? "Hak akses review dibuka" : "Hak akses review ditutup");
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  const openBulkWaktu = async (sesi: any) => {
+    setBulkSesi(sesi);
+    setBulkMenit("15");
+    setBulkPaketIds(sesi.paketUjianList.map((p: any) => p.id));
+    setBulkConfirm(false);
+    setBulkCounts({});
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/sesi/tambah-waktu-bulk?sesiId=${sesi.id}`);
+      const data = await res.json();
+      if (res.ok && data.counts) setBulkCounts(data.counts);
+    } catch {}
+  };
+
+  const closeBulkWaktu = () => {
+    setBulkSesi(null);
+    setBulkConfirm(false);
+  };
+
+  const toggleBulkPaket = (paketId: string) => {
+    setBulkPaketIds(prev => prev.includes(paketId) ? prev.filter(id => id !== paketId) : [...prev, paketId]);
+  };
+
+  const execBulkWaktu = async () => {
+    const menit = parseInt(bulkMenit);
+    if (!menit || menit < 1 || menit > 120) return toast.error("Menit harus 1-120");
+    if (bulkPaketIds.length === 0) return toast.error("Pilih minimal satu kelas");
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/admin/ujian-usbu/sesi/tambah-waktu-bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paketIds: bulkPaketIds, menit })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal");
+      toast.success(`+${menit} menit untuk ${data.updated} santri`);
+      closeBulkWaktu();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -353,6 +405,11 @@ export default function SesiUjianPage() {
                      <><Play size={18} fill="currentColor"/> Buka & Mulai Timer</>
                    )}
                  </button>
+                 {sesi.isActive && (
+                   <button onClick={() => openBulkWaktu(sesi)} className="w-14 items-center justify-center flex shrink-0 bg-white border-2 border-gray-200 text-orange-500 hover:bg-orange-50 hover:border-orange-200 rounded-xl transition-all" title="Tambah waktu untuk santri di sesi ini">
+                     <Clock size={20}/>
+                   </button>
+                 )}
                  {!sesi.isActive && (
                    <button onClick={() => handleRefreshSoal(sesi.id)} className="w-14 items-center justify-center flex shrink-0 bg-white border-2 border-gray-200 text-blue-500 hover:bg-blue-50 hover:border-blue-200 rounded-xl transition-all" title="Refresh Soal dari Bank Soal">
                      <RefreshCw size={20}/>
@@ -380,10 +437,61 @@ export default function SesiUjianPage() {
         </>
       )}
 
+      {/* MODAL BULK TAMBAH WAKTU */}
+      {bulkSesi && (
+        <div className="fixed inset-0 z-[100] flex p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-lg m-auto shadow-2xl overflow-hidden border border-gray-100 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="px-6 py-5 border-b flex justify-between items-center bg-orange-50/80">
+              <div>
+                <h2 className="text-lg font-black text-gray-800">Tambah Waktu Sesi</h2>
+                <p className="text-xs text-gray-500 font-medium mt-0.5">{bulkSesi.nama} — berlaku untuk yang sedang mengerjakan</p>
+              </div>
+              <button onClick={closeBulkWaktu} className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition-colors">✕</button>
+            </div>
+            {!bulkConfirm ? (
+              <div className="p-6">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Pilih kelas:</p>
+                <div className="space-y-2 mb-5 max-h-56 overflow-y-auto pr-1">
+                  {bulkSesi.paketUjianList.map((paket: any) => (
+                    <label key={paket.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:border-orange-300 cursor-pointer transition-colors">
+                      <input type="checkbox" checked={bulkPaketIds.includes(paket.id)} onChange={() => toggleBulkPaket(paket.id)} className="w-5 h-5 rounded accent-orange-500" />
+                      <span className="flex-1 text-sm font-bold text-gray-700">{paket.program.nama_indo}</span>
+                      <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">{bulkCounts[paket.id] ?? "…"} mengerjakan</span>
+                    </label>
+                  ))}
+                </div>
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Tambah (menit):</label>
+                <input type="number" min="1" max="120" value={bulkMenit} onChange={e => setBulkMenit(e.target.value)} className="w-full p-3.5 text-2xl font-black text-center text-orange-600 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 outline-none mb-5" />
+                <button onClick={() => setBulkConfirm(true)} disabled={bulkPaketIds.length === 0} className="w-full py-3.5 rounded-xl font-bold text-sm bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-40 transition-all">
+                  Lanjut
+                </button>
+              </div>
+            ) : (
+              <div className="p-6">
+                <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-5">
+                  <p className="text-sm text-gray-700 font-medium leading-relaxed">
+                    Terapkan <strong className="text-orange-600">+{bulkMenit} menit</strong> ke{" "}
+                    <strong>{bulkPaketIds.reduce((s: number, id: string) => s + (bulkCounts[id] || 0), 0)} santri</strong>{" "}
+                    di <strong>{bulkPaketIds.length} kelas</strong> yang sedang mengerjakan?
+                  </p>
+                  <p className="text-xs text-gray-500 mt-2">Waktu bersifat akumulasi. Timer di HP santri otomatis terupdate.</p>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setBulkConfirm(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all">Kembali</button>
+                  <button onClick={execBulkWaktu} disabled={bulkLoading} className="flex-1 py-3 rounded-xl font-bold text-sm bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 transition-all">
+                    {bulkLoading ? "..." : "Ya, Terapkan"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* MODAL BUAT SESI */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto py-12">
-          <div className="bg-white rounded-3xl w-full max-w-4xl flex flex-col shadow-2xl overflow-hidden border border-gray-100">
+        <div className="fixed inset-0 z-[100] flex p-4 bg-black/60 backdrop-blur-md overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-4xl m-auto flex flex-col shadow-2xl overflow-hidden border border-gray-100 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             
             <div className="px-8 py-6 border-b flex justify-between items-center bg-gray-50/80">
               <div>

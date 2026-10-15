@@ -43,6 +43,10 @@ export default function ClientMengerjakanUjian() {
 
   // Anti-cheat refs
   const hasSubmitted = useRef(false);
+  const timeLeftRef = useRef<number>(0);
+
+  // Mirror timeLeft ke ref agar polling bisa baca nilai terbaru tanpa stale closure
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
   const wakeLockRef = useRef<any>(null);
   const baselineHeightRef = useRef<number>(0);
@@ -392,8 +396,10 @@ export default function ClientMengerjakanUjian() {
     }
   }, [timeLeft, hasStarted, examData]);
 
-  // Polling Real-Time Force Submit Detection
-  // Mengecek ke server setiap 30 detik apakah sesi ini sudah dipaksa submit oleh admin
+  // Polling Real-Time (15 detik):
+  // 1. Deteksi tutup paksa oleh admin → halaman langsung dialihkan ke hasil
+  // 2. Sinkronisasi tambahan waktu dari pengawas → timer HP otomatis bertambah
+  // 3. Pengaman waktu habis versi server → auto-submit walau timer HP belum nol
   useEffect(() => {
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
@@ -403,7 +409,10 @@ export default function ClientMengerjakanUjian() {
         const res = await fetch(`/api/santri/ujian/status?sesiId=${sesiId}&unsaved=${currentFailed}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (data.status && data.status !== "MENGERJAKAN" && !hasSubmitted.current) {
+        if (hasSubmitted.current) return;
+
+        // 1. Tutup paksa oleh admin
+        if (data.status && data.status !== "MENGERJAKAN") {
           hasSubmitted.current = true;
           // Keluar fullscreen
           if (document.fullscreenElement && document.exitFullscreen) {
@@ -411,13 +420,43 @@ export default function ClientMengerjakanUjian() {
           }
           toast.error("Ujian telah diakhiri oleh Pengawas/Admin.");
           router.replace(`/santri/ujian/hasil?s=${sesiId}`);
+          return;
+        }
+
+        // 2 & 3. Sinkronisasi waktu dari server
+        if (typeof data.sisaWaktuDetik === "number") {
+          const serverSisa = data.sisaWaktuDetik;
+          // Pengaman: server bilang waktu habis → paksa timer HP ke 0,
+          // efek auto-submit yang sudah ada akan menangani sisanya
+          if (serverSisa <= 0) {
+            timeLeftRef.current = 0;
+            setTimeLeft(0);
+            return;
+          }
+          // Tambahan waktu dari pengawas: server > HP (toleransi 60 detik drift)
+          const clientSisa = timeLeftRef.current;
+          if (serverSisa > clientSisa + 60) {
+            const added = Math.round((serverSisa - clientSisa) / 60);
+            timeLeftRef.current = serverSisa;
+            setTimeLeft(serverSisa);
+            try {
+              const stored = localStorage.getItem(`exam_${sesiId}`);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                parsed.predictedEndTime = Date.now() + serverSisa * 1000;
+                parsed.sisaWaktuDetik = serverSisa;
+                localStorage.setItem(`exam_${sesiId}`, JSON.stringify(parsed));
+              }
+            } catch {}
+            toast.success(`Pengawas menambahkan ${added} menit.`);
+          }
         }
       } catch (err) {
         // Abaikan error jaringan saat polling
       }
     };
 
-    const interval = setInterval(pullStatus, 30000);
+    const interval = setInterval(pullStatus, 15000);
     return () => clearInterval(interval);
   }, [hasStarted, sesiId, router]);
 

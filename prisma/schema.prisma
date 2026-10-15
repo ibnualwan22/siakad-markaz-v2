@@ -111,6 +111,7 @@ model SantriInternal {
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
   waOtpList             WaOtp[]
   nadiHufadzPesertaList NadiHufadzPeserta[]
+  huffadzTasmiList      HuffadzTasmi[]
 }
 
 // OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
@@ -406,6 +407,7 @@ model User {
   wifiAccount             WifiAccount?
   nadiHufadzSetoranDisimak NadiHufadzSetoran[]
   nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
+  huffadzTasmiDinilai      HuffadzTasmi[]
 }
 
 model RolePermission {

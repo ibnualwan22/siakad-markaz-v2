@@ -9,19 +9,22 @@ import { useEffect } from "react";
 export function FetchInterceptor() {
   useEffect(() => {
     // Hindari double-patch (StrictMode)
-    if ((window as any).__fetchPatched) return;
-    (window as any).__fetchPatched = true;
+    const w = window as unknown as Record<string, unknown>;
+    if (w.__fetchPatched) return;
+    w.__fetchPatched = true;
 
     const originalFetch = window.fetch.bind(window);
 
-    window.fetch = async (...args) => {
+    window.fetch = async (...args: Parameters<typeof fetch>): Promise<Response> => {
       const res = await originalFetch(...args);
 
       if (res.status === 401) {
         // Simpan halaman terakhir agar bisa kembali setelah login
         try {
           sessionStorage.setItem("redirectAfterLogin", window.location.pathname + window.location.search);
-        } catch { /* abaikan */ }
+        } catch {
+          /* abaikan */
+        }
         // Redirect ke login dengan penanda expired (hindari loop jika sudah di login)
         if (!window.location.pathname.startsWith("/login")) {
           window.location.href = "/login?expired=1";

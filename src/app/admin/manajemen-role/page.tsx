@@ -103,6 +103,8 @@ const AVAILABLE_PERMISSIONS = [
   { id: "pengaturan_syahadah_edit", label: "Pengaturan Syahadah (Aksi)", desc: "Akses mengubah pengaturan syahadah (Kop, TTD, Bobot Mapel)", category: "Divisi Syahadah", type: "aksi" },
   { id: "nadi_hufadz", label: "Nadi Hufadz (Lihat)", desc: "Akses melihat data Nadi Hufadz", category: "Divisi Syahadah", type: "lihat" },
   { id: "nadi_hufadz_edit", label: "Nadi Hufadz (Aksi)", desc: "Akses mengelola peserta, setoran, tasmi', template & cetak Nadi Hufadz", category: "Divisi Syahadah", type: "aksi" },
+  { id: "huffadz", label: "Tasmi' Huffadz (Lihat)", desc: "Akses melihat penilaian tasmi' Markaz Huffadz", category: "Divisi Syahadah", type: "lihat" },
+  { id: "huffadz_edit", label: "Tasmi' Huffadz (Aksi)", desc: "Akses input, edit & hapus penilaian tasmi' Markaz Huffadz", category: "Divisi Syahadah", type: "aksi" },
   { id: "input_tasmi", label: "Input Tasmi' (Lihat)", desc: "Akses melihat status tasmi' santri dan input nilai kolom tasmi'", category: "Divisi Syahadah", type: "lihat" },
   { id: "input_tasmi_edit", label: "Input Tasmi' (Aksi)", desc: "Akses mem-bypass otomatisasi centang status tasmi' secara manual", category: "Divisi Syahadah", type: "aksi" },
   { id: "tasmi_config", label: "Konfigurasi Tasmi' (Aksi)", desc: "Akses mengatur kolom mana dari mapel mana saja yang menjadi syarat mutlak Tasmi'", category: "Divisi Syahadah", type: "aksi" },

@@ -76,6 +76,7 @@ export async function GET(req: Request) {
         tabCloseCount: true,
         alasanSubmit: true,
         unsavedClient: true,
+        tambahanMenit: true,
         _count: {
           select: {
             jawabanList: true  // total jawaban (termasuk kosong)

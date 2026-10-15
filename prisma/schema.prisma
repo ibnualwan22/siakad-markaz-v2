@@ -925,6 +925,7 @@ model SesiUjianSantri {
   tabCloseCount Int       @default(0)
   alasanSubmit  String?
   unsavedClient Int       @default(0) // Jumlah jawaban yg diisi santri tapi belum terkirim ke server
+  tambahanMenit Int       @default(0) // Tambahan waktu per santri (menit), 0 = tidak ada
   createdAt     DateTime  @default(now())
 
   paket         PaketUjian    @relation(fields: [paketId], references: [id], onDelete: Cascade)

@@ -45,7 +45,7 @@ export async function POST(req: Request) {
       if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programIds, programPaketMap, isSimulasi } = await req.json();
+    const { usbuKe, durasiMenit, acakSoal, acakOpsi, programIds, programPaketMap, isSimulasi, namaSesi: namaCustom } = await req.json();
 
     const selectedPrograms = programIds || (programPaketMap ? Object.keys(programPaketMap) : []);
 
@@ -58,7 +58,9 @@ export async function POST(req: Request) {
     if (!dufah) return NextResponse.json({ error: "Tidak ada target Duf'ah yang aktif. Harap atur di menu Konteks Aktif." }, { status: 400 });
 
     const kodeAkses = generateCode();
-    const namaSesi = `Ujian Usbu' ${usbuKe} - ${dufah}`;
+    const namaSesi = (namaCustom && String(namaCustom).trim())
+      ? String(namaCustom).trim().slice(0, 100)
+      : `Ujian Usbu' ${usbuKe} - ${dufah}`;
 
     const newSesi = await prisma.$transaction(async (tx) => {
       // 1. Create SesiUjianGlobal

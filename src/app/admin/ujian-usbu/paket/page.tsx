@@ -19,6 +19,8 @@ export default function SesiUjianPage() {
   const [acakSoal, setAcakSoal] = useState(true);
   const [acakOpsi, setAcakOpsi] = useState(true);
   const [isSimulasi, setIsSimulasi] = useState(false);
+  const [namaSesi, setNamaSesi] = useState("");
+  const [filterDufah, setFilterDufah] = useState("SEMUA");
   
   // Program Selection
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
@@ -76,6 +78,7 @@ export default function SesiUjianPage() {
     setUsbuKe("1");
     setDurasiMenit("120");
     setIsSimulasi(false);
+    setNamaSesi("");
     setSelectedPrograms(programList.map(p => p.id));
     setIsModalOpen(true);
   };
@@ -99,6 +102,7 @@ export default function SesiUjianPage() {
       acakSoal,
       acakOpsi,
       isSimulasi,
+      namaSesi: namaSesi.trim() || undefined,
       programIds: selectedPrograms
     };
 
@@ -257,8 +261,25 @@ export default function SesiUjianPage() {
           </button>
         </div>
       ) : (
+        {/* Filter Duf'ah */}
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
+          <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Filter Duf'ah:</label>
+          <select
+            value={filterDufah}
+            onChange={e => setFilterDufah(e.target.value)}
+            className="p-2.5 text-sm font-bold bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          >
+            <option value="SEMUA">Semua Duf'ah</option>
+            {[...new Set(sesiList.map((s: any) => s.dufahNama))].map((d: any) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-400 font-medium">
+            {filterDufah === "SEMUA" ? sesiList.length : sesiList.filter((s: any) => s.dufahNama === filterDufah).length} sesi ditampilkan
+          </span>
+        </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {sesiList.map(sesi => (
+          {sesiList.filter((sesi: any) => filterDufah === "SEMUA" || sesi.dufahNama === filterDufah).map(sesi => (
              <div key={sesi.id} className={`rounded-2xl overflow-hidden transition-all duration-300 shadow-sm border-2 ${sesi.isActive ? 'border-green-400 shadow-green-100/50 transform -translate-y-1' : 'border-gray-200 bg-white hover:shadow-gray-200/50'}`}>
                <div className={`p-5 flex gap-4 items-center justify-between border-b ${sesi.isActive ? 'bg-gradient-to-r from-emerald-500 to-green-400 text-white border-green-500' : 'bg-gray-50 text-gray-800 border-gray-100'}`}>
                  <div>
@@ -378,6 +399,19 @@ export default function SesiUjianPage() {
                   <div className="w-full p-3 text-sm font-black bg-blue-50 text-blue-800 rounded-xl border border-blue-100 flex items-center gap-2">
                     <CheckSquare size={16} /> {activeDufah}
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-2 text-gray-500">Nama / Label Sesi <span className="normal-case font-medium text-gray-400">(opsional)</span></label>
+                  <input
+                    type="text"
+                    value={namaSesi}
+                    onChange={e => setNamaSesi(e.target.value)}
+                    placeholder='cth: Susulan — sakit, Gelombang 2'
+                    maxLength={100}
+                    className="w-full p-3.5 text-sm font-bold bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  />
+                  <p className="text-[11px] text-gray-400 mt-2 font-medium leading-relaxed">Kosongkan untuk nama otomatis. Label tampil di monitoring & review.</p>
                 </div>
                 
                 <div>

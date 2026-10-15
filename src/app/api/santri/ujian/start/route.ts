@@ -278,9 +278,10 @@ export async function POST(req: Request) {
     } else if (sesi.status !== "MENGERJAKAN") {
       return NextResponse.json({ error: "Ujian ini sudah diselesaikan" }, { status: 400 });
     } else {
-      // Jika resume sesi, pastikan timer belum habis (waktuMulai + durasi + 5mnt toleransi)
+      // Jika resume sesi, pastikan timer belum habis (waktuMulai + durasi + tambahan + 5mnt toleransi)
       const durasiReal = paket.sesiGlobal.durasiMenit;
-      const batasWaktu = new Date(sesi.waktuMulai.getTime() + (durasiReal + 5) * 60000);
+      const tambahan = sesi.tambahanMenit || 0;
+      const batasWaktu = new Date(sesi.waktuMulai.getTime() + (durasiReal + tambahan + 5) * 60000);
       if (new Date() > batasWaktu) {
         // Auto-submit from server context
         await prisma.sesiUjianSantri.update({
@@ -293,7 +294,8 @@ export async function POST(req: Request) {
 
     const serverNow = new Date().getTime();
     const wMulai = new Date(paket.sesiGlobal.waktuMulai!).getTime();
-    const durasiDetik = paket.sesiGlobal.durasiMenit * 60;
+    const tambahanMenit = sesi.tambahanMenit || 0;
+    const durasiDetik = (paket.sesiGlobal.durasiMenit + tambahanMenit) * 60;
     const wSelesai = wMulai + (durasiDetik * 1000);
     const sisaWaktuDetik = Math.max(0, Math.floor((wSelesai - serverNow) / 1000));
 

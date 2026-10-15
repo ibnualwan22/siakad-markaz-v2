@@ -43,6 +43,8 @@ export default function MonitoringPengejaanPage() {
   const [filterKelas, setFilterKelas] = useState("SEMUA");
   const deferredFilterKelas = useDeferredValue(filterKelas);
   const [sisaGlobalStr, setSisaGlobalStr] = useState<string>("");
+  const [tambahWaktuInputs, setTambahWaktuInputs] = useState<Record<string, string>>({});
+  const [savingWaktu, setSavingWaktu] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -71,6 +73,32 @@ export default function MonitoringPengejaanPage() {
       else if (data.length > 0) setSelectedPaket(data[0].id);
     } catch {
       toast.error("Gagal memuat daftar ujian");
+    }
+  };
+
+  const handleSetTambahWaktu = async (sesiSantriId: string) => {
+    const val = tambahWaktuInputs[sesiSantriId];
+    const menit = Number(val);
+    if (val === undefined || val === "" || !Number.isInteger(menit) || menit < 0 || menit > 120) {
+      return toast.error("Masukkan angka bulat 0-120 menit");
+    }
+    if (!confirm(`Atur tambahan waktu ${menit} menit untuk santri ini?`)) return;
+    setSavingWaktu(prev => ({ ...prev, [sesiSantriId]: true }));
+    try {
+      const res = await fetch("/api/admin/ujian-usbu/monitoring/tambah-waktu", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sesiUjianSantriId: sesiSantriId, tambahanMenit: menit })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(data.message);
+      setTambahWaktuInputs(prev => { const n = { ...prev }; delete n[sesiSantriId]; return n; });
+      if (selectedPaket) fetchMonitoringData(selectedPaket, false);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSavingWaktu(prev => ({ ...prev, [sesiSantriId]: false }));
     }
   };
 
@@ -255,6 +283,7 @@ export default function MonitoringPengejaanPage() {
                   <th className="px-6 py-4">Durasi</th>
                   <th className="px-6 py-4 text-center">Belum Tersimpan</th>
                   <th className="px-6 py-4 text-center">Deteksi Cheat Tab</th>
+                  <th className="px-6 py-4 text-center">Tambah Waktu</th>
                   <th className="px-6 py-4 text-right">Aksi</th>
                 </tr>
               </thead>
@@ -326,6 +355,35 @@ export default function MonitoringPengejaanPage() {
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-600 border border-rose-100" title="Terdeteksi keluar dari layar fullscreen ujian">
                           <ShieldAlert size={12}/> {d.tabCloseCount}x Pelanggaran
                         </div>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {d.status === "MENGERJAKAN" ? (
+                        <div className="flex items-center justify-center gap-1.5">
+                          <input
+                            type="number"
+                            min={0}
+                            max={120}
+                            placeholder={String(d.tambahanMenit || 0)}
+                            value={tambahWaktuInputs[d.id] ?? ""}
+                            onChange={e => setTambahWaktuInputs(prev => ({ ...prev, [d.id]: e.target.value }))}
+                            className="w-16 p-1.5 text-xs font-bold text-center border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                            title="Tambahan menit (0-120)"
+                          />
+                          <span className="text-[10px] text-gray-400 font-bold">mnt</span>
+                          <button
+                            onClick={() => handleSetTambahWaktu(d.id)}
+                            disabled={savingWaktu[d.id]}
+                            className="px-2 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
+                            title="Simpan tambahan waktu"
+                          >
+                            {savingWaktu[d.id] ? "..." : (d.tambahanMenit > 0 ? `+${d.tambahanMenit}m ✓` : "Set")}
+                          </button>
+                        </div>
+                      ) : d.tambahanMenit > 0 ? (
+                        <span className="text-xs font-bold text-blue-600">+{d.tambahanMenit} mnt</span>
                       ) : (
                         <span className="text-gray-300">-</span>
                       )}

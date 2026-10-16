@@ -61,7 +61,8 @@ async function getBelumTercatat(sesi: { kategoriId: string; createdAt: Date }) {
   const today = new Date(sesi.createdAt);
   today.setHours(0, 0, 0, 0);
 
-  const santriList = (await getActiveRiwayatListForAbsen()).filter((s) => !s.isCheckedOut);
+  // KSU dikecualikan dari usulan ALPHA: mereka pengurus acara, pasti hadir, tidak ikut direkap
+  const santriList = (await getActiveRiwayatListForAbsen()).filter((s) => !s.isCheckedOut && s.kategori !== "KSU");
   const santriIds = santriList.map((s) => s.riwayatId);
 
   const records = await prisma.absenKegiatan.findMany({

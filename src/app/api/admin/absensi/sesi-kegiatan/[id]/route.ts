@@ -44,7 +44,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     });
 
     // AUTO-ALPHA LOGIC
-    const santriList = await getActiveRiwayatListForAbsen();
+    // KSU dikecualikan: mereka pengurus acara, pasti hadir, tidak ikut direkap ALPHA
+    const santriList = (await getActiveRiwayatListForAbsen()).filter((s) => s.kategori !== "KSU");
     const santriIds = santriList.map(s => s.riwayatId);
     const today = new Date(sesi.createdAt);
     today.setHours(0,0,0,0);

@@ -52,6 +52,7 @@ type SantriData = {
 type StatusData = {
   masaAktif?: {
     sisaKoutaBulan?: number;
+    sisaBulanBerjalan?: number;
     berakhirPadaDufahNama?: string;
     dufahSekarangSistem?: {
       id: number;
@@ -191,7 +192,8 @@ export default function SantriDashboardPage() {
     });
   };
 
-  const sisaBulan = statusData?.masaAktif?.sisaKoutaBulan;
+  // Tampilan "bulan tersisa" memakai sisa terhadap dufah berjalan (fallback ke lama bila API belum update)
+  const sisaBulan = statusData?.masaAktif?.sisaBulanBerjalan ?? statusData?.masaAktif?.sisaKoutaBulan;
   const berakhirDufah = adjustDufahName(statusData?.masaAktif?.berakhirPadaDufahNama);
   const dufahSekarang = adjustDufahName(statusData?.masaAktif?.dufahSekarangSistem?.nama);
 

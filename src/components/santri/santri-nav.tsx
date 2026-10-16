@@ -256,9 +256,9 @@ export function SantriSidebar({
 export function SantriBottomNav() {
   const pathname = usePathname();
 
-  // Hanya tampilkan 5 icon utama di bottom nav agar tidak berjejalan (sisanya di sidemenu / menu cepat)
-  const bottomItems = baseNavItems.filter((item: any) => 
-    ["Beranda", "Absensi", "Absen Mandiri", "Nilai", "Perizinan"].includes(item.label)
+  // 6 icon di bottom nav: QR Saya ditambahkan agar mudah diakses saat scan kehadiran
+  const bottomItems = baseNavItems.filter((item: any) =>
+    ["Beranda", "QR Saya", "Absensi", "Absen Mandiri", "Nilai", "Perizinan"].includes(item.label)
   );
 
   return (

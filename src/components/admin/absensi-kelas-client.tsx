@@ -82,24 +82,22 @@ function computeSessionState(jadwalConfig: any, programList: any[], targetKelasI
     }
   }
 
-  programIds.forEach(programId => {
-    const isTaqwimDate = jadwalConfig.taqwim?.tanggalList?.some((t: any) => t.programId === programId && t.tanggal.startsWith(tanggal));
-    if (isTaqwimDate) {
-      const taqwimConf = jadwalConfig.taqwim?.configs?.find((c: any) => c.programId === programId && c.isActive);
-      if (taqwimConf) {
-        const s1Idx = finalJadwal.findIndex(j => j.sesi === "SESI_1" && j.programId === programId);
-        if (s1Idx !== -1) {
-          finalJadwal[s1Idx] = {
-            ...finalJadwal[s1Idx],
-            jamBuka: taqwimConf.jamBuka,
-            jamTutup: taqwimConf.jamTutup,
-            toleransiMenit: taqwimConf.toleransiMenit,
-            label: "Sesi Taqwim"
-          };
-        }
-      }
-    }
-  });
+  // Taqwim kini global: satu konfigurasi + daftar tanggal untuk semua program.
+  // Di hari taqwim hanya ada satu sesi (SESI_1 dioverride menjadi Sesi Taqwim,
+  // sesi lain disembunyikan dari form).
+  const isTaqwimDate = jadwalConfig.taqwim?.tanggalList?.some((t: any) => t.tanggal.startsWith(tanggal));
+  const taqwimConf = jadwalConfig.taqwim?.config;
+  if (isTaqwimDate && taqwimConf && taqwimConf.isActive) {
+    finalJadwal = finalJadwal
+      .filter((j: any) => j.sesi === "SESI_1")
+      .map((j: any) => ({
+        ...j,
+        jamBuka: taqwimConf.jamBuka,
+        jamTutup: taqwimConf.jamTutup,
+        toleransiMenit: taqwimConf.toleransiMenit,
+        label: "Sesi Taqwim"
+      }));
+  }
 
 
   for (const jadwal of finalJadwal) {
@@ -168,9 +166,10 @@ function resolveJamTutup(jadwalSesiList: any, activeSession: string | null, acti
     }
   }
   let j: any = null;
-  if (activeSession === "SESI_1" && pId) {
-    const isTaqwim = jadwalSesiList.taqwim?.tanggalList?.some((t: any) => t.programId === pId && t.tanggal.startsWith(tanggal));
-    if (isTaqwim) j = jadwalSesiList.taqwim?.configs?.find((c: any) => c.programId === pId && c.isActive);
+  if (activeSession === "SESI_1") {
+    const isTaqwim = jadwalSesiList.taqwim?.tanggalList?.some((t: any) => t.tanggal.startsWith(tanggal));
+    const taqwimConf = jadwalSesiList.taqwim?.config;
+    if (isTaqwim && taqwimConf && taqwimConf.isActive) j = taqwimConf;
   }
   if (!j && pId && jadwalSesiList.sesiTambahan) j = jadwalSesiList.sesiTambahan.find((x: any) => x.sesi === activeSession && x.programId === pId);
   if (!j) j = jadwalSesiList.globalSesi?.find((x: any) => x.sesi === activeSession);
@@ -985,11 +984,12 @@ export function AbsensiKelasClient({
                         }
                       }
                       let j = null;
-                      // Cek taqwim override terlebih dahulu (selalu cek, bukan hanya untuk SESI_1)
-                      if (activeSession === "SESI_1" && pId) {
-                        const isTaqwimDate = jadwalSesiList.taqwim?.tanggalList?.some((t: any) => t.programId === pId && t.tanggal.startsWith(tanggal));
-                        if (isTaqwimDate) {
-                          j = jadwalSesiList.taqwim?.configs?.find((c: any) => c.programId === pId && c.isActive);
+                      // Cek taqwim override terlebih dahulu (kini global, bukan per program)
+                      if (activeSession === "SESI_1") {
+                        const isTaqwimDate = jadwalSesiList.taqwim?.tanggalList?.some((t: any) => t.tanggal.startsWith(tanggal));
+                        const taqwimConf = jadwalSesiList.taqwim?.config;
+                        if (isTaqwimDate && taqwimConf && taqwimConf.isActive) {
+                          j = taqwimConf;
                         }
                       }
                       if (!j && pId && jadwalSesiList.sesiTambahan) j = jadwalSesiList.sesiTambahan.find((x: any) => x.sesi === activeSession && x.programId === pId);

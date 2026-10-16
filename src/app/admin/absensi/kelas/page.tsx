@@ -26,14 +26,14 @@ export default async function AbsensiKelasPage() {
   let allPengajarSesi: any[] = []; // Untuk Admin Backup Mode (PengajarSesi kelas reguler)
   let allPengajarSesiProgram: any[] = []; // Untuk Admin Backup Mode (PengajarSesiProgram level program)
   
-  // Ambil data Taqwim hari ini
+  // Ambil data Taqwim hari ini (kini global: satu tanggal berlaku untuk semua program)
   const { getTodayWibString, parseWibDateString } = await import("@/lib/absensi");
   const todayWib = parseWibDateString(getTodayWibString());
-  const taqwimToday = await prisma.tanggalTaqwim.findMany({
+  const taqwimToday = await prisma.tanggalTaqwim.findFirst({
     where: { tanggal: todayWib },
-    select: { programId: true }
+    select: { id: true }
   });
-  const taqwimProgramIds = taqwimToday.map((t: any) => t.programId);
+  const isTaqwimToday = !!taqwimToday;
   
   if (session) {
     if (session.role !== "ADMIN") {
@@ -74,38 +74,16 @@ export default async function AbsensiKelasPage() {
           });
         });
         
-        // Logika Override Taqwim
-        if (taqwimProgramIds.length > 0) {
-          let isWaliKelasInTaqwimProgram = false;
-          
-          // Cek apakah guru ini adalah Wali Kelas di salah satu program taqwim
-          for (const prog of programList) {
-            if (taqwimProgramIds.includes(prog.id)) {
-              const kelasIdsInProgram = prog.kelasList.map((k:any) => k.id);
-              if (session.kelasId && kelasIdsInProgram.includes(session.kelasId)) {
-                isWaliKelasInTaqwimProgram = true;
-                break;
-              }
-            }
-          }
-
-          if (isWaliKelasInTaqwimProgram && session.kelasId) {
-            // Guru adalah Wali Kelas di program taqwim:
-            // Hapus SEMUA SESI_1 reguler (dari program manapun) karena hari ini digantikan Taqwim
+        // Logika Override Taqwim (global: hari taqwim berlaku untuk semua program)
+        if (isTaqwimToday) {
+          if (session.kelasId) {
+            // Wali Kelas: hapus SEMUA SESI_1 reguler karena hari ini digantikan Taqwim,
+            // lalu pasang SESI_1 khusus untuk kelasnya (Taqwim)
             teacherSessions = teacherSessions.filter(ts => ts.sesi !== "SESI_1");
-            // Pasang SESI_1 khusus untuk kelas Wali Kelas (Taqwim)
             teacherSessions.push({ sesi: "SESI_1", kelasId: session.kelasId });
           } else {
-            // Guru bukan Wali Kelas taqwim — hapus saja SESI_1 di program yang taqwim
-            for (const prog of programList) {
-              if (taqwimProgramIds.includes(prog.id)) {
-                const kelasIdsInProgram = prog.kelasList.map((k:any) => k.id);
-                teacherSessions = teacherSessions.filter(ts => {
-                  if (ts.sesi === "SESI_1" && kelasIdsInProgram.includes(ts.kelasId)) return false;
-                  return true;
-                });
-              }
-            }
+            // Bukan wali kelas: tidak ada sesi mengajar di hari taqwim
+            teacherSessions = teacherSessions.filter(ts => ts.sesi !== "SESI_1");
           }
         }
 
@@ -133,13 +111,8 @@ export default async function AbsensiKelasPage() {
       });
       
       // Admin backup mode juga harus merefleksikan Taqwim
-      if (taqwimProgramIds.length > 0) {
-        for (const prog of programList) {
-          if (taqwimProgramIds.includes(prog.id)) {
-            const kelasIdsInProgram = prog.kelasList.map((k:any) => k.id);
-            allPengajarSesi = allPengajarSesi.filter(ps => !(ps.sesi === "SESI_1" && kelasIdsInProgram.includes(ps.kelasId)));
-          }
-        }
+      if (isTaqwimToday) {
+        allPengajarSesi = allPengajarSesi.filter(ps => ps.sesi !== "SESI_1");
       }
     }
   }

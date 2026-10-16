@@ -6,14 +6,14 @@ import toast from "react-hot-toast";
 
 type JadwalSesi = { id: string; sesi: string; label: string; jamBuka: string; jamTutup: string; toleransiMenit: number; isActive: boolean; };
 type SesiTambahan = { id: string; programId: string; sesi: string; jamBuka: string; jamTutup: string; toleransiMenit: number; isActive: boolean; program?: { nama_indo: string } };
-type SesiTaqwim = { id: string; programId: string; jamBuka: string; jamTutup: string; toleransiMenit: number; isActive: boolean; program?: { nama_indo: string } };
+type SesiTaqwim = { id: string; jamBuka: string; jamTutup: string; toleransiMenit: number; isActive: boolean };
 
 export default function JadwalSesiPage() {
   const [activeTab, setActiveTab] = useState("GLOBAL");
   
   const [jadwalList, setJadwalList] = useState<JadwalSesi[]>([]);
   const [tambahanList, setTambahanList] = useState<SesiTambahan[]>([]);
-  const [taqwimList, setTaqwimList] = useState<SesiTaqwim[]>([]);
+  const [taqwimConfig, setTaqwimConfig] = useState<SesiTaqwim | null>(null);
   const [tanggalTaqwimList, setTanggalTaqwimList] = useState<any[]>([]);
   const [programList, setProgramList] = useState<any[]>([]);
 
@@ -48,7 +48,7 @@ export default function JadwalSesiPage() {
       
       setJadwalList(data1);
       setTambahanList(data2);
-      setTaqwimList(data3.taqwimList || []);
+      setTaqwimConfig(data3.config || null);
       setTanggalTaqwimList(data3.tanggalList || []);
       setProgramList(prog);
     } catch (error: any) {
@@ -106,7 +106,7 @@ export default function JadwalSesiPage() {
 
   const handleSaveTaqwim = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingTaqwim?.programId || !editingTaqwim.jamBuka || !editingTaqwim.jamTutup) return;
+    if (!editingTaqwim?.jamBuka || !editingTaqwim.jamTutup) return;
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/admin/sesi-taqwim", {
@@ -120,21 +120,30 @@ export default function JadwalSesiPage() {
     } catch (e: any) { toast.error(e.message); } finally { setIsSubmitting(false); }
   };
 
-  const handleDeleteTaqwim = async (id: string) => {
-    if (!confirm("Hapus konfigurasi taqwim ini?")) return;
+  const handleToggleTaqwim = async () => {
+    if (!taqwimConfig) {
+      setEditingTaqwim({ isActive: true, toleransiMenit: 15, jamBuka: "08:30", jamTutup: "09:30" });
+      setIsModalTaqwimOpen(true);
+      return;
+    }
+    setIsSubmitting(true);
     try {
-      await fetch(`/api/admin/sesi-taqwim?id=${id}`, { method: "DELETE" });
-      toast.success("Terhapus");
+      const res = await fetch("/api/admin/sesi-taqwim", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...taqwimConfig, isActive: !taqwimConfig.isActive })
+      });
+      if (!res.ok) throw new Error("Gagal menyimpan");
+      toast.success(taqwimConfig.isActive ? "Taqwim dinonaktifkan" : "Taqwim diaktifkan untuk semua program");
       fetchData();
-    } catch (e) { toast.error("Gagal menghapus"); }
+    } catch (e: any) { toast.error(e.message); } finally { setIsSubmitting(false); }
   }
 
-  const handleAddTanggal = async (programId: string) => {
+  const handleAddTanggal = async () => {
     if (!newTanggal) return;
     try {
       await fetch("/api/admin/sesi-taqwim/tanggal", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ programId, tanggal: newTanggal })
+        body: JSON.stringify({ tanggal: newTanggal })
       });
       toast.success("Tanggal ditambahkan");
       setNewTanggal("");
@@ -284,37 +293,43 @@ export default function JadwalSesiPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex justify-end">
-            <button onClick={() => {setEditingTaqwim({ isActive: true, toleransiMenit: 15, jamBuka: '08:00', jamTutup: '09:30' }); setIsModalTaqwimOpen(true)}} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex gap-2"><Plus size={18}/> Tambah Konfigurasi Taqwim</button>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {taqwimList.map((t) => (
-              <div key={t.id} className="bg-white rounded-2xl shadow-sm border p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-lg text-indigo-600">{t.program?.nama_indo}</h3>
-                  <div className="flex gap-2">
-                     <button onClick={() => {setEditingTaqwim(t); setIsModalTaqwimOpen(true)}} className="text-blue-600"><Edit3 size={16} /></button>
-                     <button onClick={() => handleDeleteTaqwim(t.id)} className="text-red-600"><Trash2 size={16} /></button>
-                  </div>
-                </div>
-                <p className="text-sm"><strong>Override Sesi 1:</strong> {t.jamBuka} - {t.jamTutup} (Dispensasi {t.toleransiMenit}m)</p>
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-sm font-bold mb-2">Tanggal Berlakunya Taqwim:</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                     {tanggalTaqwimList.filter(d => d.programId === t.programId).map(d => (
-                       <span key={d.id} className="bg-gray-100 px-2 py-1 rounded text-xs flex items-center gap-1">
-                         {new Date(d.tanggal).toISOString().split('T')[0]} 
-                         <button onClick={() => handleDeleteTanggal(d.id)} className="text-red-500"><XCircle size={12}/></button>
-                       </span>
-                     ))}
-                  </div>
-                  <div className="flex gap-2">
-                     <input type="date" value={newTanggal} onChange={e => setNewTanggal(e.target.value)} className="border px-2 py-1 text-sm rounded w-full" />
-                     <button onClick={() => handleAddTanggal(t.programId)} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">Tambah</button>
-                  </div>
-                </div>
+          <div className="bg-white rounded-2xl shadow-sm border p-4 md:p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-2">
+              <div>
+                <h3 className="font-bold text-lg">Konfigurasi Taqwim Global</h3>
+                <p className="text-sm text-gray-500">Berlaku untuk semua program &amp; kelas. Satu kali aktif, langsung aktif semua.</p>
               </div>
-            ))}
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${taqwimConfig?.isActive ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                  {taqwimConfig?.isActive ? "Aktif" : "Nonaktif"}
+                </span>
+                <button onClick={handleToggleTaqwim} disabled={isSubmitting} className={`${taqwimConfig?.isActive ? "bg-gray-500" : "bg-emerald-600"} text-white px-4 py-2 rounded-lg font-bold`}>
+                  {taqwimConfig?.isActive ? "Nonaktifkan" : "Aktifkan"}
+                </button>
+                <button onClick={() => {setEditingTaqwim(taqwimConfig || { isActive: true, toleransiMenit: 15, jamBuka: "08:30", jamTutup: "09:30" }); setIsModalTaqwimOpen(true)}} className="border px-4 py-2 rounded-lg font-bold flex gap-2"><Edit3 size={18}/> Edit</button>
+              </div>
+            </div>
+            {taqwimConfig ? (
+              <p className="text-sm"><strong>Sesi Taqwim:</strong> {taqwimConfig.jamBuka} - {taqwimConfig.jamTutup} (Toleransi {taqwimConfig.toleransiMenit} menit)</p>
+            ) : (
+              <p className="text-sm text-gray-500">Belum ada konfigurasi. Klik "Aktifkan" atau "Edit" untuk membuat.</p>
+            )}
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-sm font-bold mb-2">Tanggal Berlakunya Taqwim (semua program):</p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                 {tanggalTaqwimList.map(d => (
+                   <span key={d.id} className="bg-gray-100 px-2 py-1 rounded text-xs flex items-center gap-1">
+                     {new Date(d.tanggal).toISOString().split('T')[0]}
+                     <button onClick={() => handleDeleteTanggal(d.id)} className="text-red-500"><XCircle size={12}/></button>
+                   </span>
+                 ))}
+                 {tanggalTaqwimList.length === 0 && <span className="text-xs text-gray-400">Belum ada tanggal.</span>}
+              </div>
+              <div className="flex gap-2 max-w-md">
+                 <input type="date" value={newTanggal} onChange={e => setNewTanggal(e.target.value)} className="border px-2 py-1 text-sm rounded w-full" />
+                 <button onClick={() => handleAddTanggal()} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">Tambah</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -379,13 +394,7 @@ export default function JadwalSesiPage() {
       {isModalTaqwimOpen && editingTaqwim && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="bg-white rounded-xl w-full max-w-sm p-6 space-y-4">
-            <h2 className="font-bold text-lg">{editingTaqwim.id ? "Edit" : "Tambah"} Konfigurasi Taqwim</h2>
-            <div><label className="text-xs font-bold">Program</label>
-              <select value={editingTaqwim.programId || ""} onChange={e => setEditingTaqwim({...editingTaqwim, programId: e.target.value})} className="w-full border p-2 rounded" disabled={!!editingTaqwim.id}>
-                <option value="">-- Pilih Program --</option>
-                {programList.map(p => <option key={p.id} value={p.id}>{p.nama_indo}</option>)}
-              </select>
-            </div>
+            <h2 className="font-bold text-lg">Konfigurasi Taqwim</h2>
             <div><label className="text-xs font-bold">Jam Buka Sesi Taqwim</label><input type="text" placeholder="15:30" maxLength={5} value={editingTaqwim.jamBuka || ""} onChange={e => {
               let val = e.target.value.replace(/[^0-9:]/g, '');
               if (val.length === 2 && !val.includes(':') && e.target.value.length > (editingTaqwim.jamBuka || "" || '').length) val += ':';

@@ -17,14 +17,15 @@ export async function GET() {
       orderBy: { sesi: 'asc' }
     });
 
-    const taqwimConfigs = await prisma.sesiTaqwim.findMany();
+    // Taqwim kini global: satu konfigurasi + daftar tanggal untuk semua program
+    const taqwimConfig = await prisma.sesiTaqwim.findFirst();
     const taqwimTanggal = await prisma.tanggalTaqwim.findMany();
 
     return NextResponse.json({
       globalSesi,
       sesiTambahan,
       taqwim: {
-        configs: taqwimConfigs,
+        config: taqwimConfig,
         tanggalList: taqwimTanggal
       }
     });

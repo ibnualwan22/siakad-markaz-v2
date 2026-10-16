@@ -62,19 +62,16 @@ export default async function JadwalSayaPage() {
     }
   });
 
-    // 4. Cek apakah programnya punya Taqwim
+    // 4. Cek Taqwim (kini global: satu konfigurasi + tanggal untuk semua program)
   const allTaqwimDates = await prisma.tanggalTaqwim.findMany({
-    where: { programId: { in: Array.from(programIds) } },
     orderBy: { tanggal: 'asc' }
   });
-  
-  const taqwimConfigs = await prisma.sesiTaqwim.findMany({
-    where: { programId: { in: Array.from(programIds) }, isActive: true }
-  });
-  
+
+  const taqwimConfig = await prisma.sesiTaqwim.findFirst();
+
   const todayWibStr = getTodayWibString(); // YYYY-MM-DD
   const todayWib = parseWibDateString(todayWibStr);
-  const taqwimProgramIdsToday = allTaqwimDates.filter(t => t.tanggal.toISOString().startsWith(todayWibStr)).map(t => t.programId);
+  const taqwimHariIni = !!taqwimConfig?.isActive && allTaqwimDates.some(t => t.tanggal.toISOString().startsWith(todayWibStr));
 
 
   // 5. Susun Jadwal
@@ -104,30 +101,18 @@ export default async function JadwalSayaPage() {
     let isTaqwim = false;
     let isWaliKelasTaqwim = false;
 
-    // Logika Sesi 1 Taqwim Override
-    if (sesi === "SESI_1") {
-      // Cek apakah ada program dari jadwal dia / wali kelas yang Taqwim hari ini
-      const isProgTaqwim = kelasTujuan && taqwimProgramIdsToday.includes(kelasTujuan.programId);
-      const isWaliTaqwim = waliKelasData && taqwimProgramIdsToday.includes(waliKelasData.programId);
+    // Logika Sesi 1 Taqwim Override (global)
+    if (sesi === "SESI_1" && taqwimHariIni && taqwimConfig) {
+      isTaqwim = true;
+      jamBuka = taqwimConfig.jamBuka;
+      jamTutup = taqwimConfig.jamTutup;
+      label = "Sesi Taqwim";
 
-      if (isProgTaqwim || isWaliTaqwim) {
-        isTaqwim = true;
-        // Cari config Taqwim
-        const progId = (isWaliTaqwim && waliKelasData) ? waliKelasData.programId : (kelasTujuan?.programId);
-        const config = taqwimConfigs.find(c => c.programId === progId);
-        
-        if (config) {
-          jamBuka = config.jamBuka;
-          jamTutup = config.jamTutup;
-          label = "Sesi Taqwim";
-        }
-
-        if (isWaliTaqwim) {
-           kelasTujuan = waliKelasData; // Wali kelas mengajar di kelasnya
-           isWaliKelasTaqwim = true;
-        } else {
-           kelasTujuan = null; // Pengajar biasa dihapus jadwalnya hari ini
-        }
+      if (waliKelasData) {
+        kelasTujuan = waliKelasData; // Wali kelas mengisi taqwim di kelasnya
+        isWaliKelasTaqwim = true;
+      } else {
+        kelasTujuan = null; // Pengajar biasa ditiadakan jadwalnya hari ini
       }
     }
 
@@ -184,25 +169,23 @@ export default async function JadwalSayaPage() {
 
 
   // 6. Tambahkan Kartu Info Taqwim Permanen untuk Wali Kelas
-  if (waliKelasData) {
-    const config = taqwimConfigs.find(c => c.programId === waliKelasData.programId);
-    if (config) {
-      const dates = allTaqwimDates.filter(d => d.programId === waliKelasData.programId);
-      const dateStrings = dates.map(d => {
-         const tgl = d.tanggal.toISOString().split('T')[0];
-         return new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-      });
-      
-      jadwalItems.unshift({
-        sesi: "TAQWIM_INFO",
-        label: "Jadwal Khusus Taqwim",
-        jamBuka: config.jamBuka,
-        jamTutup: config.jamTutup,
-        kelas: waliKelasData.nama,
-        isTaqwimInfo: dates.length > 0 ? "Aktif pada: " + dateStrings.join(', ') : "Belum ada tanggal aktif",
-        isSpecialTaqwimCard: true
-      });
-    }
+  if (waliKelasData && taqwimConfig) {
+    const dateStrings = allTaqwimDates.map(d => {
+       const tgl = d.tanggal.toISOString().split('T')[0];
+       return new Date(tgl).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    });
+
+    jadwalItems.unshift({
+      sesi: "TAQWIM_INFO",
+      label: "Jadwal Khusus Taqwim",
+      jamBuka: taqwimConfig.jamBuka,
+      jamTutup: taqwimConfig.jamTutup,
+      kelas: waliKelasData.nama,
+      isTaqwimInfo: !taqwimConfig.isActive
+        ? "Taqwim sedang nonaktif"
+        : (dateStrings.length > 0 ? "Aktif pada: " + dateStrings.join(', ') : "Belum ada tanggal aktif"),
+      isSpecialTaqwimCard: true
+    });
   }
 
   return (

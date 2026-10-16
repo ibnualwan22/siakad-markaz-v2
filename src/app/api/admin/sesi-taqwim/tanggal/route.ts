@@ -13,21 +13,21 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { programId, tanggal } = body;
+    const { tanggal } = body;
 
-    if (!programId || !tanggal) {
+    if (!tanggal) {
       return NextResponse.json({ error: "Parameter tidak lengkap" }, { status: 400 });
     }
 
     const parsedDate = parseWibDateString(tanggal);
 
+    // Tanggal taqwim kini global (berlaku untuk semua program)
     const data = await prisma.tanggalTaqwim.upsert({
       where: {
-        programId_tanggal: { programId, tanggal: parsedDate }
+        tanggal: parsedDate
       },
       update: {}, // do nothing if exists
       create: {
-        programId,
         tanggal: parsedDate
       }
     });
@@ -49,7 +49,7 @@ export async function DELETE(request: Request) {
   try {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
-    
+
     if (!id) {
       return NextResponse.json({ error: "ID tidak valid" }, { status: 400 });
     }

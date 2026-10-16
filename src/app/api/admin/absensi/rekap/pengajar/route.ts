@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     const records = await prisma.absenPengajar.findMany({
       where: whereClause,
       include: {
-        user: { select: { id: true, nama: true, username: true } },
+        user: { select: { id: true, nama: true, username: true, kelasId: true } },
         kelas: { select: { id: true, nama: true, program: { select: { id: true, nama_indo: true } } } },
         pengajarDigantikan: { select: { id: true, nama: true } },
         beritaAcara: true,
@@ -65,8 +65,11 @@ export async function GET(request: Request) {
       }
     });
 
-    // Fetch SesiTaqwim untuk mendeteksi kelas Taqwim (masih dipakai untuk label sesi)
-    const sesiTaqwimList = await prisma.sesiTaqwim.findMany({ where: { isActive: true } });
+    // Taqwim kini global: deteksi berdasarkan TANGGAL, bukan konfigurasi per program.
+    // (Sebelumnya label & skip ALPHA memakai "program punya config aktif" sehingga bocor ke hari biasa
+    //  dan ALPHA hilang total untuk program-program tersebut.)
+    const tanggalTaqwimList = await prisma.tanggalTaqwim.findMany({ select: { tanggal: true } });
+    const taqwimDateSet = new Set(tanggalTaqwimList.map(t => t.tanggal.toISOString().split("T")[0]));
 
     // Fetch kelas-kelas yang punya ketua kelas aktif (beritaAcara aktif)
     const activeKetuaList = await prisma.ketuaKelas.findMany({
@@ -86,14 +89,20 @@ export async function GET(request: Request) {
       // rekap yang sudah ada. Nilai null berarti tidak terlambat (sudah dihitung saat submit).
       const terlambatMenit = r.terlambatMenit ?? 0;
 
-      const isTaqwimClass = r.kelas.program?.id && sesiTaqwimList.some(t => t.programId === r.kelas.program!.id);
+      const tglStr = r.tanggal.toISOString().split("T")[0];
+      // Record taqwim = SESI_1 yang diinput pada tanggal taqwim (SESI_1 "dipinjam" jadi sesi taqwim)
+      const isTaqwimRecord = r.sesi === "SESI_1" && taqwimDateSet.has(tglStr);
+      // Apakah pengisi adalah wali kelas dari kelas tersebut
+      const isWaliKelas = !!(r.user as any).kelasId && (r.user as any).kelasId === r.kelasId;
 
       return {
         id: r.id,
         pengajar: r.user.nama,
         kelas: isProgramLevel ? `Program ${r.kelas.program?.nama_indo}` : r.kelas.nama,
-        tanggal: r.tanggal.toISOString().split("T")[0],
-        sesi: isTaqwimClass ? "SESI_TAQWIM" : r.sesi,
+        tanggal: tglStr,
+        sesi: isTaqwimRecord ? "SESI_TAQWIM" : r.sesi,
+        isTaqwim: isTaqwimRecord,
+        isWaliKelas,
         materi: r.materi || "-",
         waktuMulai: r.waktuMulai,
         waktuSelesai: r.waktuSelesai,
@@ -164,10 +173,12 @@ export async function GET(request: Request) {
     });
 
     for (const tgl of activeDates) {
+      // Di hari taqwim tidak ada sesi mengajar reguler (hanya satu sesi taqwim yang diisi
+      // wali kelas), jadi tidak ada ALPHA untuk sesi mengajar. Di hari biasa ALPHA jalan normal.
+      const isTaqwimDay = taqwimDateSet.has(tgl);
+      if (isTaqwimDay) continue;
+
       for (const teacher of pengajarSesi) {
-        // Jika kelas ini adalah bagian dari program Taqwim, jangan generate ALPHA
-        const isTaqwimClass = sesiTaqwimList.some(t => t.programId === teacher.kelas.programId);
-        if (isTaqwimClass) continue;
 
         // Jika kelas sudah diajar (baik oleh guru asli maupun badal), jangan anggap guru asli ALPHA
         const classWasTaught = records.some(r => r.kelasId === teacher.kelasId && r.sesi === teacher.sesi && r.tanggal.toISOString().split("T")[0] === tgl);

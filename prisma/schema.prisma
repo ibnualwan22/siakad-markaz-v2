@@ -19,8 +19,6 @@ model Program {
   kelasList                   Kelas[]
   syahadahLayout              SyahadahLayout?
   sesiTambahanList            SesiTambahanProgram[]
-  sesiTaqwim                  SesiTaqwim?
-  tanggalTaqwimList           TanggalTaqwim[]
   pengajarSesiProgramList     PengajarSesiProgram[]
   soalTauziList               SoalTauzi[]
   pesertaTauziList            PesertaTauzi[]
@@ -493,21 +491,15 @@ model SesiTambahanProgram {
 
 model SesiTaqwim {
   id             String  @id @default(cuid())
-  programId      String  @unique
   jamBuka        String
   jamTutup       String
   toleransiMenit Int     @default(15)
   isActive       Boolean @default(true)
-  program        Program @relation(fields: [programId], references: [id], onDelete: Cascade)
 }
 
 model TanggalTaqwim {
-  id        String   @id @default(cuid())
-  programId String
-  tanggal   DateTime @db.Date
-  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
-
-  @@unique([programId, tanggal])
+  id      String   @id @default(cuid())
+  tanggal DateTime @db.Date @unique
 }
 
 model PengajarSesiProgram {

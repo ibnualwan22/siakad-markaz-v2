@@ -232,18 +232,35 @@ export async function POST(request: Request) {
       // === Hitung terlambatMenit server-side ===
       let terlambatMenit: number | null = null;
       if (!absenPengajar.isBadal && !absenPengajar.isAsisten && absenPengajar.waktuMulai && absenPengajar.waktuMulai !== "-") {
-        // Resolve jadwal buka dari JadwalSesi / SesiTambahanProgram
-        const jadwalSesi = await prisma.jadwalSesi.findUnique({ where: { sesi: sesi as any } });
-        let jadwalBuka: string | null = jadwalSesi?.jamBuka ?? null;
+        let jadwalBuka: string | null = null;
+        let graceMenit = 5;
 
-        // Fallback: SesiTambahanProgram
-        if (!jadwalBuka && actualKelasId) {
-          const kelas = await prisma.kelas.findUnique({ where: { id: actualKelasId }, select: { programId: true } });
-          if (kelas?.programId) {
-            const tambahan = await prisma.sesiTambahanProgram.findFirst({
-              where: { programId: kelas.programId, sesi: sesi as any, isActive: true }
-            });
-            if (tambahan) jadwalBuka = tambahan.jamBuka;
+        // Prioritas 1: Hari taqwim -> pakai jam & toleransi taqwim global.
+        // (Bug sebelumnya: taqwim dibandingkan dengan jam sesi biasa sehingga wali kelas
+        //  selalu tercatat telat saat mengisi di jam taqwim.)
+        const taqwimConfig = await prisma.sesiTaqwim.findFirst({ where: { isActive: true } });
+        if (taqwimConfig && (sesi as string) === "SESI_1") {
+          const taqwimDate = await prisma.tanggalTaqwim.findFirst({ where: { tanggal: parsedDate } });
+          if (taqwimDate) {
+            jadwalBuka = taqwimConfig.jamBuka;
+            graceMenit = taqwimConfig.toleransiMenit ?? 15;
+          }
+        }
+
+        // Prioritas 2: Resolve jadwal buka dari JadwalSesi / SesiTambahanProgram
+        if (!jadwalBuka) {
+          const jadwalSesi = await prisma.jadwalSesi.findUnique({ where: { sesi: sesi as any } });
+          jadwalBuka = jadwalSesi?.jamBuka ?? null;
+
+          // Fallback: SesiTambahanProgram
+          if (!jadwalBuka && actualKelasId) {
+            const kelas = await prisma.kelas.findUnique({ where: { id: actualKelasId }, select: { programId: true } });
+            if (kelas?.programId) {
+              const tambahan = await prisma.sesiTambahanProgram.findFirst({
+                where: { programId: kelas.programId, sesi: sesi as any, isActive: true }
+              });
+              if (tambahan) jadwalBuka = tambahan.jamBuka;
+            }
           }
         }
 
@@ -251,7 +268,7 @@ export async function POST(request: Request) {
           const [hM, mM] = absenPengajar.waktuMulai.split(":").map(Number);
           const [hB, mB] = jadwalBuka.split(":").map(Number);
           const diff = (hM * 60 + mM) - (hB * 60 + mB);
-          if (diff > 5) terlambatMenit = diff - 5; // Grace period 5 menit
+          if (diff > graceMenit) terlambatMenit = diff - graceMenit;
         }
       }
 

@@ -20,6 +20,7 @@ export default function SantriNoWaPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const [noWa, setNoWa] = useState("");
   const [otp, setOtp] = useState("");
+  const [otpTarget, setOtpTarget] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -62,6 +63,7 @@ export default function SantriNoWaPage() {
       if (d.success) {
         setStep(2);
         setInfo(d.message);
+        setOtpTarget(d.otpTarget || "");
       } else {
         setError(d.error || "Gagal mengirim kode OTP.");
       }
@@ -196,7 +198,7 @@ export default function SantriNoWaPage() {
           ) : (
             <>
               <div className="text-sm text-gray-600">
-                Kode OTP dikirim ke <b className="font-mono">{noWa}</b>.
+                Kode OTP dikirim ke <b className="font-mono">{otpTarget || noWa}</b>.
               </div>
               <label className="block">
                 <span className="text-sm font-semibold">Kode OTP (6 angka)</span>

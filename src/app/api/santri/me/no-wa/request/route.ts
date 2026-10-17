@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
     const santri = await prisma.santriInternal.findUnique({
       where: { id: session.santriId },
-      select: { id: true },
+      select: { id: true, noWaSantri: true },
     });
     if (!santri) {
       return NextResponse.json({ error: 'Santri tidak ditemukan' }, { status: 404 });
@@ -61,6 +61,11 @@ export async function POST(request: Request) {
 
     const otp = generateOtp();
 
+    // KEAMANAN: OTP dikirim ke nomor LAMA yang terdaftar (bukan nomor baru).
+    // Ini membuktikan yang meminta perubahan memang pemilik nomor saat ini.
+    // Jika belum ada nomor terdaftar (pertama kali), kirim ke nomor baru.
+    const otpTarget = santri.noWaSantri || normalized;
+
     // Bersihkan OTP lama, simpan yang baru
     await prisma.waOtp.deleteMany({ where: { santriId: session.santriId } });
     await prisma.waOtp.create({
@@ -73,7 +78,7 @@ export async function POST(request: Request) {
     });
 
     const terkirim = await sendFonnte(
-      normalized,
+      otpTarget,
       `Kode verifikasi WhatsApp *Siakad Markaz Arabiyah*: *${otp}*\n\nBerlaku ${OTP_TTL_MIN} menit. Jangan berikan kode ini ke siapapun.`
     );
 
@@ -87,7 +92,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Kode OTP dikirim ke ${normalized}. Berlaku ${OTP_TTL_MIN} menit.`,
+      otpTarget,
+      message: santri.noWaSantri
+        ? `Kode OTP dikirim ke nomor lama Anda (${otpTarget}). Berlaku ${OTP_TTL_MIN} menit.`
+        : `Kode OTP dikirim ke ${otpTarget}. Berlaku ${OTP_TTL_MIN} menit.`,
     });
   } catch (error) {
     console.error('Error request OTP WA:', error);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { sendReminderWhatsApp, formatReminderMessage, delay } from "@/lib/whatsapp";
 import { getTodayWibString, parseWibDateString } from "@/lib/absensi";
+import { isSesiLibur } from "@/lib/hari-libur";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Maksimal 60 detik untuk menghindari timeout Vercel
@@ -65,15 +66,19 @@ export async function GET(request: NextRequest) {
     type SesiInfo = { sesi: string; jamTutup: string; toleransiMenit: number };
 
     // Sesi global yang sudah lewat (untuk pengajar kelas reguler / PengajarSesi)
-    const passedGlobalSessions = globalSesiList.filter((s) => {
+    // Sesi yang libur hari ini (HariLibur; mendukung libur sebagian sesi) dilewati
+    const passedGlobalSessions: SesiInfo[] = [];
+    for (const s of globalSesiList) {
       const tutupMenit = timeToMinutes(s.jamTutup) + s.toleransiMenit;
       const selisih = nowMinutes - tutupMenit;
-      return selisih > 0 && selisih <= MAKS_JEDA_MENIT;
-    }).map((s): SesiInfo => ({
-      sesi: s.sesi as string,
-      jamTutup: s.jamTutup,
-      toleransiMenit: s.toleransiMenit,
-    }));
+      if (!(selisih > 0 && selisih <= MAKS_JEDA_MENIT)) continue;
+      if (await isSesiLibur(todayDate, s.sesi)) continue;
+      passedGlobalSessions.push({
+        sesi: s.sesi as string,
+        jamTutup: s.jamTutup,
+        toleransiMenit: s.toleransiMenit,
+      });
+    }
 
     // Sesi tambahan per-program yang sudah lewat (untuk PengajarSesiProgram)
     // Dikelompokkan per-programId agar bisa dicari dengan cepat
@@ -82,17 +87,18 @@ export async function GET(request: NextRequest) {
     for (const st of sesiTambahanList) {
       const tutupMenit = timeToMinutes(st.jamTutup) + st.toleransiMenit;
       const selisih = nowMinutes - tutupMenit;
-      if (selisih > 0 && selisih <= MAKS_JEDA_MENIT) {
-        if (!passedSesiTambahanByProgram.has(st.programId)) {
-          passedSesiTambahanByProgram.set(st.programId, []);
-        }
-        passedSesiTambahanByProgram.get(st.programId)!.push({
-          sesi: st.sesi as string,
-          jamTutup: st.jamTutup,
-          toleransiMenit: st.toleransiMenit,
-          programId: st.programId,
-        });
+      if (!(selisih > 0 && selisih <= MAKS_JEDA_MENIT)) continue;
+      // Lewati sesi yang libur hari ini
+      if (await isSesiLibur(todayDate, st.sesi)) continue;
+      if (!passedSesiTambahanByProgram.has(st.programId)) {
+        passedSesiTambahanByProgram.set(st.programId, []);
       }
+      passedSesiTambahanByProgram.get(st.programId)!.push({
+        sesi: st.sesi as string,
+        jamTutup: st.jamTutup,
+        toleransiMenit: st.toleransiMenit,
+        programId: st.programId,
+      });
     }
 
     // Untuk backward compatibility: kumpulan semua sesi yang perlu dicek
@@ -105,7 +111,7 @@ export async function GET(request: NextRequest) {
     if (passedGlobalSessions.length === 0 && passedSesiTambahanByProgram.size === 0) {
       return NextResponse.json({
         success: true,
-        message: "Tidak ada sesi yang perlu dicek saat ini.",
+        message: "Tidak ada sesi yang perlu dicek saat ini (sesi libur dilewati).",
         nowMinutes,
       });
     }

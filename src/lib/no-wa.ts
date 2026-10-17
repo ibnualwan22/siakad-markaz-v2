@@ -35,23 +35,26 @@ export function generateOtp(): string {
 }
 
 export async function sendFonnte(target: string, message: string): Promise<boolean> {
-  const token = process.env.FONNTE_TOKEN;
+  // Via gateway WA self-hosted (nama dipertahankan agar pemanggil tidak berubah)
+  const base = process.env.WA_GATEWAY_URL || "http://100.94.148.88:3100";
+  const token = process.env.WA_GATEWAY_TOKEN;
   if (!token) {
-    console.error("FONNTE_TOKEN belum diset di environment");
+    console.error("WA_GATEWAY_TOKEN belum diset di environment");
     return false;
   }
   try {
-    const res = await fetch("https://api.fonnte.com/send", {
+    const res = await fetch(`${base}/api/send/text`, {
       method: "POST",
-      headers: { Authorization: token },
-      body: new URLSearchParams({ target, message }),
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ to: target, text: message }),
     });
     if (!res.ok) {
-      console.error("Fonnte error:", res.status, await res.text().then((t) => t.slice(0, 200)));
+      console.error("WA gateway error:", res.status, await res.text().then((t) => t.slice(0, 200)));
     }
     return res.ok;
   } catch (e) {
-    console.error("Gagal kirim Fonnte:", e);
+    console.error("Gagal kirim WA gateway:", e);
     return false;
   }
 }
+

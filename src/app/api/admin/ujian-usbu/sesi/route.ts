@@ -110,7 +110,8 @@ export async function POST(req: Request) {
             soalId: s.id,
             urutan: index + 1,
             bobotSnapshot: s.bobot,
-            kunciJawabanSnapshot: s.kunciJawaban
+            kunciJawabanSnapshot: s.kunciJawaban,
+            pertanyaanSnapshot: s.pertanyaan
           }))
         });
       }

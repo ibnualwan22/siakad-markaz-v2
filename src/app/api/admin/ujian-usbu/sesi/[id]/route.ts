@@ -97,7 +97,8 @@ export async function PUT(
               soalId: s.id,
               urutan: index + 1,
               bobotSnapshot: s.bobot,
-              kunciJawabanSnapshot: s.kunciJawaban
+              kunciJawabanSnapshot: s.kunciJawaban,
+              pertanyaanSnapshot: s.pertanyaan
             }))
           });
           totalSoalBaru += soalList.length;

@@ -116,7 +116,7 @@ export async function GET(req: Request) {
         tipeSoal: soal.tipeSoal,
         mapelNama: soal.mapel.nama_indo || soal.mapel.nama,
         bobot: spRef?.bobotSnapshot ?? soal.bobot,
-        pertanyaan: soal.pertanyaan,
+        pertanyaan: spRef?.pertanyaanSnapshot ?? soal.pertanyaan,
         kunciJawaban: spRef?.kunciJawabanSnapshot ?? soal.kunciJawaban,
         opsiList: soal.opsiList,
         dataTambahan: soal.dataTambahan ? (typeof soal.dataTambahan === 'string' ? JSON.parse(soal.dataTambahan) : soal.dataTambahan) : null,

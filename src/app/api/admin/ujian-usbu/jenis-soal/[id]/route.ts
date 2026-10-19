@@ -44,24 +44,27 @@ export async function GET(req: Request, { params }: any) {
 export async function DELETE(req: Request, { params }: any) {
   try {
     const { id } = await params;
-    let deletedCount = 0;
     
-    await prisma.$transaction(async (tx) => {
-      // 1. Delete all assigned questions first (CASCADE automatically handles OpsiSoalUsbu and SoalUsbuAssignment)
-      const res = await tx.bankSoalUsbu.deleteMany({
-        where: { jenisSoalId: id }
-      });
-      deletedCount = res.count;
-      
-      // 2. Delete the JenisSoal
-      await tx.jenisSoal.delete({
-        where: { id },
-      });
+    // PROTEKSI: Tolak hapus jika masih ada soal di dalamnya
+    // User harus hapus soal satu per satu secara manual dulu
+    const soalCount = await prisma.bankSoalUsbu.count({
+      where: { jenisSoalId: id }
     });
     
-    return NextResponse.json({ success: true, deletedSoalCount: deletedCount });
+    if (soalCount > 0) {
+      return NextResponse.json({ 
+        error: `Tidak bisa hapus jenis soal! Masih ada ${soalCount} soal di dalamnya. Hapus soal satu per satu terlebih dahulu.` 
+      }, { status: 400 });
+    }
+    
+    // Aman: tidak ada soal, boleh hapus jenis soalnya
+    await prisma.jenisSoal.delete({
+      where: { id },
+    });
+    
+    return NextResponse.json({ success: true, deletedSoalCount: 0 });
   } catch (error: any) {
     console.error("DELETE JenisSoal Error:", error);
-    return NextResponse.json({ error: "Gagal menghapus jenis soal beserta isinya" }, { status: 500 });
+    return NextResponse.json({ error: "Gagal menghapus jenis soal" }, { status: 500 });
   }
 }

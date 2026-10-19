@@ -92,9 +92,15 @@ export async function PUT(req: Request) {
     }
 
     // @ts-ignore
+    // FIX race condition: tandai aiGraded=true saat manusia mengkoreksi,
+    // agar background AI grading tidak menimpa nilai manual.
+    // Jika nilai dihapus (null), buka kembali untuk AI (aiGraded=false).
     const jaw = await prisma.jawabanUjianSantri.update({
       where: { id },
-      data: { nilaiManual }
+      data: {
+        nilaiManual,
+        aiGraded: nilaiManual !== null ? true : false,
+      }
     });
 
     if (jaw && jaw.sesiId) {

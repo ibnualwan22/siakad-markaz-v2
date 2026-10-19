@@ -75,9 +75,12 @@ async function runBackgroundAutoGrade(paketId?: string) {
             if (finalScore > bobot) finalScore = bobot;
             if (finalScore < 0) finalScore = 0;
 
+            // FIX race condition: conditional update — hanya tulis jika
+            // nilaiManual masih null DAN aiGraded masih false.
+            // Jika pengajar sudah koreksi manual di tengah jalan, skip.
             // @ts-ignore
-            await prisma.jawabanUjianSantri.update({
-              where: { id: jaw.id },
+            const updateResult = await prisma.jawabanUjianSantri.updateMany({
+              where: { id: jaw.id, nilaiManual: null, aiGraded: false },
               // @ts-ignore
               data: {
                 nilaiManual: finalScore,
@@ -86,25 +89,31 @@ async function runBackgroundAutoGrade(paketId?: string) {
               }
             });
 
-            if (jaw.sesiId) uniqueSesiIds.add(jaw.sesiId);
-            totalProcessed++;
+            if (updateResult.count > 0) {
+              if (jaw.sesiId) uniqueSesiIds.add(jaw.sesiId);
+              totalProcessed++;
+            } else {
+              console.log(`[BULK-AI] Skip ${jaw.id}: sudah dikoreksi manual`);
+            }
           } else {
+            // FIX: conditional update juga untuk error case
             // @ts-ignore
-            await prisma.jawabanUjianSantri.update({
-              where: { id: jaw.id },
+            await prisma.jawabanUjianSantri.updateMany({
+              where: { id: jaw.id, nilaiManual: null, aiGraded: false },
               // @ts-ignore
-              data: { 
+              data: {
                  aiGraded: true, // MUST BE TRUE TO BREAK OUT OF QUEUE
-                 aiFeedback: `[ERROR] ${result?.error || "Gagal mendapatkan respon AI"}` 
+                 aiFeedback: `[ERROR] ${result?.error || "Gagal mendapatkan respon AI"}`
               }
             });
             totalErrors++;
           }
         } catch (err: any) {
           console.error(`[BULK-AI] Error pada jawaban ${jaw.id}:`, err);
+          // FIX: conditional update untuk exception case juga
           // @ts-ignore
-          await prisma.jawabanUjianSantri.update({
-             where: { id: jaw.id },
+          await prisma.jawabanUjianSantri.updateMany({
+             where: { id: jaw.id, nilaiManual: null, aiGraded: false },
              // @ts-ignore
              data: { aiGraded: true, aiFeedback: `[FATAL] ${err.message || String(err)}` }
           }).catch(console.error);

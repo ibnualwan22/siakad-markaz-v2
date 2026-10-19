@@ -562,9 +562,11 @@ async function autoGradeEssaysBackground(jawabanIds: string[], sesiId: string) {
           if (finalScore > soal.bobot) finalScore = soal.bobot;
           if (finalScore < 0) finalScore = 0;
 
+          // FIX race condition: conditional update — skip jika
+          // pengajar sudah koreksi manual di tengah jalan
           // @ts-ignore
-          await prisma.jawabanUjianSantri.update({
-            where: { id: jawId },
+          await prisma.jawabanUjianSantri.updateMany({
+            where: { id: jawId, nilaiManual: null, aiGraded: false },
             // @ts-ignore
             data: { nilaiManual: finalScore, aiGraded: true, aiFeedback: result.feedback || null }
           });

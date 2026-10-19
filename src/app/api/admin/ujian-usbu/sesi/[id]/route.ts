@@ -57,6 +57,20 @@ export async function PUT(
       // We can let the background process or a manual "Force Submit" button in monitoring handle the scoring logic to avoid timeout here if there are many students
       
     } else if (action === "REFRESH_SOAL") {
+      // GUARD: Blokir jika sesi sudah memiliki jawaban santri
+      const jmlJawaban = await prisma.jawabanUjianSantri.count({
+        where: {
+          sesi: {
+            paket: { sesiGlobalId: id }
+          }
+        }
+      });
+      if (jmlJawaban > 0) {
+        return NextResponse.json({ 
+          error: `Tidak bisa refresh soal! Sesi ini sudah memiliki ${jmlJawaban} jawaban santri. Soal terkunci untuk keamanan.` 
+        }, { status: 400 });
+      }
+
       // Re-generate SoalPaket dari BankSoalUsbu terbaru untuk semua PaketUjian dalam sesi ini
       const paketList = await prisma.paketUjian.findMany({
         where: { sesiGlobalId: id },
@@ -81,7 +95,9 @@ export async function PUT(
             data: soalList.map((s, index) => ({
               paketId: paket.id,
               soalId: s.id,
-              urutan: index + 1
+              urutan: index + 1,
+              bobotSnapshot: s.bobot,
+              kunciJawabanSnapshot: s.kunciJawaban
             }))
           });
           totalSoalBaru += soalList.length;

@@ -85,7 +85,15 @@ export async function GET(req: Request) {
     });
 
     // 4. Transform data: Soal -> array of answers from students
+    // Gunakan snapshot bobot/kunci dari SoalPaket (tidak terpengaruh perubahan bank soal)
+    const soalToPaket = new Map<string, any>();
+    for (const sp of soalPakets) {
+      if (!soalToPaket.has(sp.soal.id)) {
+        soalToPaket.set(sp.soal.id, sp);
+      }
+    }
     const result = Array.from(uniqueSoals.values()).map(soal => {
+      const spRef = soalToPaket.get(soal.id);
       const studentAnswers = sesiSantris.map(sesi => {
         const jaw = sesi.jawabanList.find(j => j.soalId === soal.id);
         
@@ -107,9 +115,9 @@ export async function GET(req: Request) {
         id: soal.id,
         tipeSoal: soal.tipeSoal,
         mapelNama: soal.mapel.nama_indo || soal.mapel.nama,
-        bobot: soal.bobot,
+        bobot: spRef?.bobotSnapshot ?? soal.bobot,
         pertanyaan: soal.pertanyaan,
-        kunciJawaban: soal.kunciJawaban,
+        kunciJawaban: spRef?.kunciJawabanSnapshot ?? soal.kunciJawaban,
         opsiList: soal.opsiList,
         dataTambahan: soal.dataTambahan ? (typeof soal.dataTambahan === 'string' ? JSON.parse(soal.dataTambahan) : soal.dataTambahan) : null,
         jawabanSantri: studentAnswers

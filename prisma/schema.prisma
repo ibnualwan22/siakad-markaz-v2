@@ -900,6 +900,9 @@ model SoalPaket {
   paketId String
   soalId  String
   urutan  Int
+  // Snapshot saat sesi dibuat - tidak berubah meski bank soal diubah
+  bobotSnapshot Float?
+  kunciJawabanSnapshot String?
 
   paket   PaketUjian   @relation(fields: [paketId], references: [id], onDelete: Cascade)
   soal    BankSoalUsbu @relation(fields: [soalId], references: [id], onDelete: Cascade)

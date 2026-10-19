@@ -103,12 +103,14 @@ export async function POST(req: Request) {
           }
         });
 
-        // 3. Assign soal to this paket
+        // 3. Assign soal to this paket (dengan snapshot bobot & kunci)
         await tx.soalPaket.createMany({
           data: soalList.map((s: any, index: number) => ({
             paketId: paket.id,
             soalId: s.id,
-            urutan: index + 1
+            urutan: index + 1,
+            bobotSnapshot: s.bobot,
+            kunciJawabanSnapshot: s.kunciJawaban
           }))
         });
       }

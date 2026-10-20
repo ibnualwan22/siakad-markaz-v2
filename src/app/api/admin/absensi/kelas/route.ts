@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { parseWibDateString, getActiveRiwayatListForAbsen } from "@/lib/absensi";
+import { parseWibDateString, getActiveRiwayatListForAbsen, getTodayWibString } from "@/lib/absensi";
 import { getSession } from "@/lib/auth";
+import { resolveSesiWindowServer, menitWibSekarang, formatMenit } from "@/lib/sesi-window";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -97,6 +98,54 @@ export async function POST(request: Request) {
         { error: "Sesi login telah berakhir. Silakan login ulang untuk menyimpan data pengajar." },
         { status: 401 }
       );
+    }
+
+    // === Fase 2: validasi jendela waktu simpan ===
+    // Pemanggil tanpa sesi login tidak boleh menulis apa pun.
+    if (!userSession) {
+      return NextResponse.json(
+        { error: "Sesi login telah berakhir. Silakan login ulang." },
+        { status: 401 }
+      );
+    }
+    // simpanSusulan=true bila simpan non-admin lolos lewat jatah susulan (2d).
+    let simpanSusulan = false;
+    if (userSession.role !== "ADMIN") {
+      // ADMIN dikecualikan: susulan & koreksi manual adalah alur resmi.
+      if (tanggal !== getTodayWibString()) {
+        return NextResponse.json(
+          { error: "Absensi hanya dapat disimpan untuk tanggal hari ini." },
+          { status: 403 }
+        );
+      }
+      // Resolusi program dari kelasId payload (untuk override sesi program)
+      let programIdValidasi: string | null = null;
+      if (kelasId && kelasId.startsWith("PROGRAM_")) {
+        programIdValidasi = kelasId.replace("PROGRAM_", "");
+      } else if (kelasId && kelasId !== "ALL" && kelasId !== "UNASSIGNED") {
+        const kls = await prisma.kelas.findUnique({ where: { id: kelasId }, select: { programId: true } });
+        programIdValidasi = kls?.programId ?? null;
+      }
+      const jendela = await resolveSesiWindowServer(sesi, programIdValidasi, parsedDate);
+      if (jendela) {
+        const kini = menitWibSekarang();
+        const akhirJendela = jendela.tutupMenit + jendela.toleransiMenit;
+        if (kini < jendela.bukaMenit || kini > akhirJendela) {
+          // Jatah simpan susulan: khusus payload bertanda susulan (jalur
+          // pemulihan draf Fase 1), paling lambat 60 menit setelah jendela
+          // berakhir, tetap di hari yang sama.
+          if (payload.susulan === true && kini > akhirJendela && kini <= akhirJendela + 60) {
+            simpanSusulan = true;
+          } else {
+            return NextResponse.json(
+              { error: `Di luar jendela sesi. Simpan absen ${(sesi as string).replace("_", " ")} hanya dapat dilakukan pukul ${formatMenit(jendela.bukaMenit)}\u2013${formatMenit(akhirJendela)}.` },
+              { status: 403 }
+            );
+          }
+        }
+      }
+      // Jendela tidak ter-resolve (sesi tak terkonfigurasi) -> simpan diizinkan:
+      // validasi tidak boleh memblokir sesi yang memang tidak punya konfigurasi.
     }
 
     // --- AUTO-JIT IZIN LOGIC ---
@@ -294,6 +343,7 @@ export async function POST(request: Request) {
             isBadal: absenPengajar.isBadal ?? false,
             isAsisten: absenPengajar.isAsisten ?? false,
             pengajarDigantikanId: absenPengajar.pengajarDigantikanId || null,
+            disimpanSusulan: simpanSusulan,
           },
           create: {
             userId: targetUserId,
@@ -311,6 +361,7 @@ export async function POST(request: Request) {
             isBadal: absenPengajar.isBadal ?? false,
             isAsisten: absenPengajar.isAsisten ?? false,
             pengajarDigantikanId: absenPengajar.pengajarDigantikanId || null,
+            disimpanSusulan: simpanSusulan,
           }
         })
       );

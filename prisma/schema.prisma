@@ -467,6 +467,7 @@ model AbsenPengajar {
   isBadal              Boolean   @default(false)
   isAsisten            Boolean   @default(false)
   pengajarDigantikanId String?
+  disimpanSusulan      Boolean   @default(false)
   pengajarDigantikan   User?     @relation("PengajarDigantikan", fields: [pengajarDigantikanId], references: [id], onDelete: SetNull)
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)

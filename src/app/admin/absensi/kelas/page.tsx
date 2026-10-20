@@ -131,6 +131,7 @@ export default async function AbsensiKelasPage() {
         programList={programList} 
         allowedClassIds={allowedClassIds} 
         userRole={session?.role}
+        userId={session?.userId}
         teacherSessions={teacherSessions}
         allPengajarSesi={allPengajarSesi}
         allPengajarSesiProgram={allPengajarSesiProgram}

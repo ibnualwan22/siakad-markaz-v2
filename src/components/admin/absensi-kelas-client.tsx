@@ -233,6 +233,71 @@ function clearFormCache(tanggal: string, sesi: string, kelasId: string) {
   try { localStorage.removeItem(getCacheKey(tanggal, sesi, kelasId)); } catch { }
 }
 
+// === Draf absen santri (Fase 1) ===
+// Tanda santri yang belum tersimpan dicadangkan ke localStorage per pengguna,
+// agar tidak hilang saat switch sesi / reload / pindah kelas. Draf menyimpan
+// juga "base" = potret marks server saat pengajar mulai mengedit, sebagai
+// pembanding aturan pemulihan (server menang bila sudah berubah).
+type MarksMap = Record<string, { status: string; keterangan: string }>;
+type MarksDraft = { marks: MarksMap; base: MarksMap; disimpanPada: string };
+
+function getDraftKey(userId: string, tanggal: string, sesi: string, kelasId: string): string {
+  return `absen_santri_draft_${userId}_${tanggal}_${sesi}_${kelasId}`;
+}
+function saveMarksDraft(userId: string, tanggal: string, sesi: string, kelasId: string, marks: MarksMap, base: MarksMap) {
+  try {
+    const d: MarksDraft = { marks, base, disimpanPada: new Date().toISOString() };
+    localStorage.setItem(getDraftKey(userId, tanggal, sesi, kelasId), JSON.stringify(d));
+  } catch { }
+}
+function loadMarksDraft(userId: string, tanggal: string, sesi: string, kelasId: string): MarksDraft | null {
+  try {
+    const raw = localStorage.getItem(getDraftKey(userId, tanggal, sesi, kelasId));
+    return raw ? (JSON.parse(raw) as MarksDraft) : null;
+  } catch { return null; }
+}
+function clearMarksDraft(userId: string, tanggal: string, sesi: string, kelasId: string) {
+  try { localStorage.removeItem(getDraftKey(userId, tanggal, sesi, kelasId)); } catch { }
+}
+function listMarksDrafts(userId: string, tanggal: string): { sesi: string; kelasId: string; disimpanPada: string; jumlah: number }[] {
+  const hasil: { sesi: string; kelasId: string; disimpanPada: string; jumlah: number }[] = [];
+  try {
+    const prefix = `absen_santri_draft_${userId}_${tanggal}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      const sisa = key.slice(prefix.length); // "{SESI_X}_{kelasId}"
+      const parts = sisa.split("_");
+      if (parts.length < 3) continue;
+      const sesi = `${parts[0]}_${parts[1]}`;
+      const kelasId = parts.slice(2).join("_");
+      const d = loadMarksDraft(userId, tanggal, sesi, kelasId);
+      if (d) hasil.push({ sesi, kelasId, disimpanPada: d.disimpanPada, jumlah: Object.keys(d.marks).length });
+    }
+  } catch { }
+  return hasil;
+}
+function purgeExpiredDrafts(userId: string, tanggalHariIni: string) {
+  try {
+    const prefix = `absen_santri_draft_${userId}_`;
+    const kunci: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) kunci.push(key);
+    }
+    kunci.forEach((key) => {
+      const tgl = key.slice(prefix.length, prefix.length + 10); // YYYY-MM-DD
+      if (tgl < tanggalHariIni) localStorage.removeItem(key);
+    });
+  } catch { }
+}
+function marksSama(a: MarksMap, b: MarksMap): boolean {
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => b[k] && a[k].status === b[k].status && (a[k].keterangan || "") === (b[k].keterangan || ""));
+}
+
 type SantriAbsenTarget = {
   riwayatId: string;
   santriId: string;
@@ -255,6 +320,7 @@ export function AbsensiKelasClient({
   programList,
   allowedClassIds = null,
   userRole,
+  userId,
   teacherSessions = [],
   allPengajarSesi = [],
   allPengajarSesiProgram = []
@@ -262,6 +328,7 @@ export function AbsensiKelasClient({
   programList: any[];
   allowedClassIds?: string[] | null;
   userRole?: string;
+  userId?: string;
   teacherSessions?: { sesi: string; kelasId: string; isProgramLevel?: boolean; programId?: string; programNama?: string }[];
   allPengajarSesi?: { sesi: string; kelasId: string; user: { id: string; nama: string } }[];
   allPengajarSesiProgram?: { sesi: string; programId: string; user: { id: string; nama: string }; program: { id: string; nama_indo: string } }[];
@@ -300,6 +367,13 @@ export function AbsensiKelasClient({
   const [asistenTargetKelasId, setAsistenTargetKelasId] = useState("");
   const [isSaved, setIsSaved] = useState(false); // Indikator apakah absen sudah tersimpan
 
+  // Fase 1: mode pemulihan draf + daftar draf tertunda + basis server per sesi/kelas
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const isRecoveryModeRef = useRef(false);
+  const [pendingDrafts, setPendingDrafts] = useState<{ sesi: string; kelasId: string; disimpanPada: string; jumlah: number }[]>([]);
+  const [confirmingDiscard, setConfirmingDiscard] = useState<string | null>(null);
+  const serverBaseRef = useRef<Record<string, MarksMap>>({});
+
   // Admin Backup Mode
   const [showAdminPengajarForm, setShowAdminPengajarForm] = useState(false);
   const [selectedAdminPengajarId, setSelectedAdminPengajarId] = useState("");
@@ -323,6 +397,7 @@ export function AbsensiKelasClient({
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
   useEffect(() => { isBadalModeRef.current = isBadalMode; }, [isBadalMode]);
   useEffect(() => { isAsistenModeRef.current = isAsistenMode; }, [isAsistenMode]);
+  useEffect(() => { isRecoveryModeRef.current = isRecoveryMode; }, [isRecoveryMode]);
 
   const viewTasrih = async (nomorTasrih: string) => {
     try {
@@ -510,7 +585,7 @@ export function AbsensiKelasClient({
       if (activeSesis.length > 0) {
         if (prevMasihAktif) {
           // Jika sedang dalam mode Badal atau Asisten, jangan ganggu — pertahankan state saat ini
-          if (isBadalModeRef.current || isAsistenModeRef.current) {
+          if (isBadalModeRef.current || isAsistenModeRef.current || isRecoveryModeRef.current) {
             nextSesi = prevSession;
             nextKelasId = prevClassId;
           } else {
@@ -636,6 +711,35 @@ export function AbsensiKelasClient({
     saveFormCache(tanggal, sesi, kelasId, data);
   }, [isTeacher, tanggal, sesi, kelasId, materi, atribut, kecerdasan]);
 
+  // Fase 1: daftar draf tertunda milik pengguna ini untuk hari ini (banner pemulihan)
+  const refreshPendingDrafts = useCallback(() => {
+    if (!isTeacher || !userId || !tanggal) { setPendingDrafts([]); return; }
+    const semua = listMarksDrafts(userId, tanggal);
+    setPendingDrafts(semua.filter((d) => !(d.sesi === sesi && d.kelasId === kelasId)));
+  }, [isTeacher, userId, tanggal, sesi, kelasId]);
+
+  useEffect(() => { refreshPendingDrafts(); }, [refreshPendingDrafts]);
+
+  // Fase 1: buang draf dari tanggal-tanggal lampau
+  useEffect(() => {
+    if (userId && tanggal) purgeExpiredDrafts(userId, tanggal);
+  }, [userId, tanggal]);
+
+  // Fase 1: tulis draf absen santri seketika saat ada perubahan belum tersimpan.
+  // Pengaman loadedSessionRef sama seperti cache form: jangan menulis data sesi
+  // lama ke kunci sesi baru sebelum data sesi baru selesai dimuat.
+  useEffect(() => {
+    if (!isTeacher || !userId || !tanggal || !sesi || !kelasId) return;
+    if (loadedSessionRef.current.sesi !== sesi || loadedSessionRef.current.kelasId !== kelasId) return;
+    if (isSaved) return;
+    const base = serverBaseRef.current[`${sesi}|${kelasId}`] || {};
+    if (marksSama(absenMap as MarksMap, base)) {
+      clearMarksDraft(userId, tanggal, sesi, kelasId);
+      return;
+    }
+    saveMarksDraft(userId, tanggal, sesi, kelasId, absenMap as MarksMap, base);
+  }, [absenMap, isSaved, isTeacher, userId, tanggal, sesi, kelasId]);
+
   useEffect(() => {
     if (!tanggal || !sesi) return;
     if (isTeacher && !hasCheckedSession) return;
@@ -726,7 +830,35 @@ export function AbsensiKelasClient({
             setIsSaved(true);
           }
         }
-        setAbsenMap(newMap);
+        // Fase 1: catat basis server sesi+kelas ini, lalu terapkan aturan draf.
+        // Draf hanya dipulihkan bila server belum berubah dari basis draf
+        // (kelanjutan murni); bila server sudah berubah dari tempat lain,
+        // server menang dan draf dibuang — tidak ada timpa diam-diam.
+        serverBaseRef.current[`${sesi}|${kelasId}`] = { ...newMap };
+        let finalMap = newMap;
+        if (isTeacher && userId) {
+          const draft = loadMarksDraft(userId, tanggal, sesi, kelasId);
+          if (draft) {
+            if (marksSama(newMap as MarksMap, draft.base)) {
+              const rosterIds = new Set((data.santriList || []).map((x: any) => x.riwayatId ?? x.id));
+              const dipulihkan: Record<string, any> = {};
+              Object.entries(draft.marks).forEach(([rid, v]) => {
+                if (rosterIds.has(rid)) dipulihkan[rid] = v;
+              });
+              if (Object.keys(dipulihkan).length > 0) {
+                finalMap = dipulihkan;
+                setIsSaved(false);
+                toast("Draf absen belum tersimpan dipulihkan", { icon: "\u{1F4DD}" });
+              } else {
+                clearMarksDraft(userId, tanggal, sesi, kelasId);
+              }
+            } else {
+              clearMarksDraft(userId, tanggal, sesi, kelasId);
+              toast("Data sesi ini sudah diperbarui dari tempat lain; draf lama dibuang", { icon: "\u2139\uFE0F" });
+            }
+          }
+        }
+        setAbsenMap(finalMap);
 
         if (data.unconfirmedIds) {
           setUnconfirmedIds(new Set(data.unconfirmedIds));
@@ -786,6 +918,8 @@ export function AbsensiKelasClient({
 
   const handleSave = async () => {
     setIsSaving(true);
+    // Konteks simpan ditangkap di awal: respons bisa tiba setelah switch sesi
+    const ctx = { tanggal, sesi, kelasId };
     try {
       const absenList = Object.entries(absenMap).map(([riwayatId, data]) => ({
         riwayatId,
@@ -794,6 +928,7 @@ export function AbsensiKelasClient({
       }));
 
       const payload: any = { tanggal, sesi, kelasId, absenList };
+      if (isRecoveryModeRef.current) payload.susulan = true; // Penanda simpan pemulihan (dipakai validasi Fase 2)
       if (isTeacher || (userRole === "ADMIN" && showAdminPengajarForm)) {
         if (isTeacher && !materi) {
           toast.error("Mohon isi materi pelajaran hari ini");
@@ -855,9 +990,20 @@ export function AbsensiKelasClient({
       const result = await res.json();
       if (result.success) {
         toast.success(`Berhasil menyimpan data absensi kelas`);
-        setIsSaved(true);
-        // Bersihkan cache setelah tersimpan ke server
-        if (isTeacher) clearFormCache(tanggal, sesi, kelasId);
+        // Fase 1: basis server konteks yang disimpan kini = isi yang terkirim
+        const basisBaru: MarksMap = {};
+        absenList.forEach((a) => { basisBaru[a.riwayatId] = { status: a.status, keterangan: a.keterangan || "" }; });
+        serverBaseRef.current[`${ctx.sesi}|${ctx.kelasId}`] = basisBaru;
+        // #5: status tersimpan hanya diterapkan bila konteks simpan masih yang tampil
+        const konteksMasihTampil = !isTeacher || (activeSessionRef.current === ctx.sesi && activeClassIdRef.current === ctx.kelasId);
+        if (konteksMasihTampil) setIsSaved(true);
+        // Bersihkan cache & draf milik konteks yang disimpan
+        if (isTeacher) {
+          clearFormCache(ctx.tanggal, ctx.sesi, ctx.kelasId);
+          if (userId) clearMarksDraft(userId, ctx.tanggal, ctx.sesi, ctx.kelasId);
+        }
+        if (isRecoveryModeRef.current) setIsRecoveryMode(false);
+        refreshPendingDrafts();
       } else {
         toast.error(result.error || "Gagal menyimpan absensi");
       }
@@ -866,6 +1012,41 @@ export function AbsensiKelasClient({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Fase 1: masuk/keluar mode pemulihan draf
+  const masukModePemulihan = (d: { sesi: string; kelasId: string }) => {
+    setConfirmingDiscard(null);
+    setIsRecoveryMode(true);
+    setSesi(d.sesi as SesiKelas);
+    setKelasId(d.kelasId);
+    setActiveClassId(d.kelasId);
+    setActiveSession(d.sesi);
+  };
+  const keluarModePemulihan = () => {
+    setIsRecoveryMode(false);
+    // Lompat langsung ke penugasan aktif bila ada; interval akan menegaskan
+    const target = teacherSessions.find((ts) => activeSessionsList.includes(ts.sesi));
+    if (target) {
+      setSesi(target.sesi as SesiKelas);
+      setKelasId(target.kelasId);
+      setActiveClassId(target.kelasId);
+      setActiveSession(target.sesi);
+    }
+  };
+  const abaikanDraf = (d: { sesi: string; kelasId: string }) => {
+    const kunci = `${d.sesi}|${d.kelasId}`;
+    if (confirmingDiscard !== kunci) { setConfirmingDiscard(kunci); return; }
+    if (userId) clearMarksDraft(userId, tanggal, d.sesi, d.kelasId);
+    setConfirmingDiscard(null);
+    refreshPendingDrafts();
+  };
+  const namaKelasDariId = (kId: string): string => {
+    for (const p of programList) {
+      const k = p.kelasList.find((x: any) => x.id === kId);
+      if (k) return k.nama;
+    }
+    return kId;
   };
 
   const allClassesOptions = useMemo(() => {
@@ -1003,6 +1184,33 @@ export function AbsensiKelasClient({
 
   return (
     <div className="space-y-6">
+      {/* Fase 1: banner mode pemulihan draf */}
+      {isTeacher && isRecoveryMode && (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-amber-800">
+            Mode Pemulihan — Anda membuka kembali absen sesi yang belum terkirim. Simpan untuk mengirimnya, atau kembali ke sesi aktif.
+          </p>
+          <button onClick={keluarModePemulihan} className="shrink-0 rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white">
+            Kembali ke Sesi Aktif
+          </button>
+        </section>
+      )}
+      {/* Fase 1: banner draf absen belum terkirim */}
+      {isTeacher && !isRecoveryMode && pendingDrafts.map((d) => (
+        <section key={`${d.sesi}|${d.kelasId}`} className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-amber-800">
+            Absen {d.sesi.replace("_", " ")} — {namaKelasDariId(d.kelasId)} belum terkirim ({d.jumlah} santri, draf pukul {new Date(d.disimpanPada).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}).
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <button onClick={() => masukModePemulihan(d)} className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white">
+              Buka &amp; Kirim
+            </button>
+            <button onClick={() => abaikanDraf(d)} className="rounded-xl border border-amber-400 bg-white px-3 py-2 text-xs font-bold text-amber-700">
+              {confirmingDiscard === `${d.sesi}|${d.kelasId}` ? "Yakin Hapus Draf?" : "Abaikan"}
+            </button>
+          </div>
+        </section>
+      ))}
       <section className="overflow-hidden neu-card-white">
         <div className="flex flex-col gap-4 border-b border-[var(--color-surface-dark)] p-6 md:flex-row md:items-end md:justify-between bg-[var(--color-surface-light)]">
           {isTeacher ? (

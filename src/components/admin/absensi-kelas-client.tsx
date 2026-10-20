@@ -176,6 +176,46 @@ function resolveJamTutup(jadwalSesiList: any, activeSession: string | null, acti
   return j?.jamTutup || "";
 }
 
+// Helper: jendela aktif SATU penugasan (sesi + program tertentu), mengikuti
+// preseden resolveJamTutup: taqwim (SESI_1) -> override Sesi Tambahan program
+// -> global. Keputusan auto-switch dinilai dari jendela penugasan itu sendiri,
+// BUKAN gabungan kunci sesi lintas program (override di program lain tidak
+// boleh memperpanjang/mempercepat jendela penugasan ini).
+function resolveSesiWindow(jadwalSesiList: any, sesi: string, programId: string | null, tanggal: string): { bukaVal: number; baseTutupVal: number; tutupVal: number } | null {
+  if (!jadwalSesiList || !sesi) return null;
+  let j: any = null;
+  if (sesi === "SESI_1") {
+    const isTaqwim = jadwalSesiList.taqwim?.tanggalList?.some((t: any) => t.tanggal.startsWith(tanggal));
+    const taqwimConf = jadwalSesiList.taqwim?.config;
+    if (isTaqwim && taqwimConf && taqwimConf.isActive) j = taqwimConf;
+  }
+  if (!j && programId && jadwalSesiList.sesiTambahan) j = jadwalSesiList.sesiTambahan.find((x: any) => x.sesi === sesi && x.programId === programId && x.isActive);
+  if (!j) j = jadwalSesiList.globalSesi?.find((x: any) => x.sesi === sesi);
+  if (!j || !j.jamBuka || !j.jamTutup) return null;
+  const [bH, bM] = j.jamBuka.split(":").map(Number);
+  const [tH, tM] = j.jamTutup.split(":").map(Number);
+  const baseTutupVal = tH * 60 + tM;
+  return { bukaVal: bH * 60 + bM, baseTutupVal, tutupVal: baseTutupVal + (j.toleransiMenit || 0) };
+}
+
+function isWithinWindow(win: { bukaVal: number; baseTutupVal: number; tutupVal: number }, curVal: number): boolean {
+  const isCrossMidnight = win.baseTutupVal < win.bukaVal || win.tutupVal >= 1440;
+  if (isCrossMidnight) return curVal >= win.bukaVal || curVal <= (win.tutupVal % 1440);
+  return curVal >= win.bukaVal && curVal <= win.tutupVal;
+}
+
+function programIdDariKelas(programList: any[], kelasId: string | null): string | null {
+  if (!kelasId) return null;
+  if (kelasId.startsWith("PROGRAM_")) return kelasId.replace("PROGRAM_", "");
+  const prog = programList.find((p: any) => p.kelasList.some((k: any) => k.id === kelasId));
+  return prog ? prog.id : null;
+}
+
+function menitWibSekarang(): number {
+  const [hh, mm] = getWibTimeNow().split(":").map(Number);
+  return hh * 60 + mm;
+}
+
 // Helper: Cache key untuk form pengajar
 function getCacheKey(tanggal: string, sesi: string, kelasId: string): string {
   return `absen_pengajar_${tanggal}_${sesi}_${kelasId}`;
@@ -356,10 +396,27 @@ export function AbsensiKelasClient({
 
         const currentActive = activeSesis.length > 0 ? activeSesis[0] : null;
 
+        // Pilihan awal dinilai per-penugasan (sesi + program kelasnya): penugasan
+        // yang jendelanya sendiri sedang terbuka didahulukan atas gabungan
+        // kunci sesi lintas program.
+        let initialAssignment: { sesi: string; kelasId: string } | null = null;
+        if (isTeacher && currentActive) {
+          const curVal = menitWibSekarang();
+          const kandidat = teacherSessions
+            .filter(ts => activeSesis.includes(ts.sesi))
+            .filter(ts => {
+              const win = resolveSesiWindow(data, ts.sesi, programIdDariKelas(programList, ts.kelasId), `${y}-${m}-${d}`);
+              return win ? isWithinWindow(win, curVal) : false;
+            })
+            .sort((a, b) => a.sesi.localeCompare(b.sesi));
+          if (kandidat.length > 0) initialAssignment = kandidat[0];
+        }
+        const initialSesi = initialAssignment ? initialAssignment.sesi : currentActive;
+
         if (isTeacher) {
-          if (currentActive) {
-            const teachingThisSession = teacherSessions.find(ts => ts.sesi === currentActive);
-            setSesi(currentActive as SesiKelas);
+          if (initialSesi) {
+            const teachingThisSession = initialAssignment || teacherSessions.find(ts => ts.sesi === initialSesi);
+            setSesi(initialSesi as SesiKelas);
             if (teachingThisSession) {
               setKelasId(teachingThisSession.kelasId);
               setActiveClassId(teachingThisSession.kelasId);
@@ -368,22 +425,19 @@ export function AbsensiKelasClient({
             setSesi("" as SesiKelas);
           }
         }
-        setActiveSession(currentActive);
+        setActiveSession(initialSesi);
         setHasCheckedSession(true);
       })
       .catch(() => setHasCheckedSession(true));
   }, [isTeacher, teacherSessions]);
 
-  const isCompleted = useMemo(() => {
-    if (!isTeacher) return false;
-    const statBelum = santriList.length - Object.keys(absenMap).length;
-    return statBelum === 0 && santriList.length > 0 && isSaved;
-  }, [isTeacher, santriList, absenMap, isSaved]);
-
-  const isCompletedRef = useRef(isCompleted);
+  // Gerbang auto-switch sesi: sesi dianggap selesai bila form pengajar sudah
+  // tersimpan (isSaved). Tanpa syarat semua santri tertandai — keputusan
+  // 20 Okt 2026, memperbaiki kasus sesi berurutan tertahan s.d. toleransi habis.
+  const isSavedRef = useRef(isSaved);
   useEffect(() => {
-    isCompletedRef.current = isCompleted;
-  }, [isCompleted]);
+    isSavedRef.current = isSaved;
+  }, [isSaved]);
 
   const activeClassIdRef = useRef(activeClassId);
   useEffect(() => {
@@ -437,11 +491,24 @@ export function AbsensiKelasClient({
 
       const activeAssignments = teacherSessions.filter(ts => activeSesis.includes(ts.sesi));
 
+      // Saring assignment ke jendelanya sendiri (sesi + program): override sesi
+      // di program lain tidak ikut menentukan nasib penugasan ini. Bila tidak
+      // ada yang ter-resolve jendelanya, jatuh ke daftar berbasis kunci sesi.
+      const curVal = menitWibSekarang();
+      const dalamJendelaSendiri = (ts: { sesi: string; kelasId: string }) => {
+        const win = resolveSesiWindow(jadwalSesiList, ts.sesi, programIdDariKelas(programList, ts.kelasId), tanggal);
+        return win ? isWithinWindow(win, curVal) : true;
+      };
+      const activeAssignmentsByWindow = activeAssignments.filter(dalamJendelaSendiri);
+      const assignmentsUntukKeputusan = activeAssignmentsByWindow.length > 0 ? activeAssignmentsByWindow : activeAssignments;
+      const prevWin = prevSession ? resolveSesiWindow(jadwalSesiList, prevSession, programIdDariKelas(programList, prevClassId), tanggal) : null;
+      const prevMasihAktif = !!prevSession && activeSesis.includes(prevSession) && (prevWin ? isWithinWindow(prevWin, curVal) : true);
+
       let nextSesi: string | null = null;
       let nextKelasId: string | null = null;
 
       if (activeSesis.length > 0) {
-        if (prevSession && activeSesis.includes(prevSession)) {
+        if (prevMasihAktif) {
           // Jika sedang dalam mode Badal atau Asisten, jangan ganggu — pertahankan state saat ini
           if (isBadalModeRef.current || isAsistenModeRef.current) {
             nextSesi = prevSession;
@@ -449,11 +516,11 @@ export function AbsensiKelasClient({
           } else {
             const teachesPrev = teacherSessions.some(ts => ts.sesi === prevSession);
             if (teachesPrev) {
-              const currentAssignmentIdx = activeAssignments.findIndex(a => a.sesi === prevSession && a.kelasId === prevClassId);
+              const currentAssignmentIdx = assignmentsUntukKeputusan.findIndex(a => a.sesi === prevSession && a.kelasId === prevClassId);
 
               if (currentAssignmentIdx !== -1) {
-                if (isCompletedRef.current && activeAssignments.length > 1) {
-                  const nextAssign = currentAssignmentIdx + 1 < activeAssignments.length ? activeAssignments[currentAssignmentIdx + 1] : activeAssignments[currentAssignmentIdx];
+                if (isSavedRef.current && assignmentsUntukKeputusan.length > 1) {
+                  const nextAssign = currentAssignmentIdx + 1 < assignmentsUntukKeputusan.length ? assignmentsUntukKeputusan[currentAssignmentIdx + 1] : assignmentsUntukKeputusan[currentAssignmentIdx];
                   nextSesi = nextAssign.sesi;
                   nextKelasId = nextAssign.kelasId;
                 } else {
@@ -465,9 +532,9 @@ export function AbsensiKelasClient({
                 nextKelasId = prevClassId;
               }
             } else {
-              if (activeAssignments.length > 0) {
-                nextSesi = activeAssignments[0].sesi;
-                nextKelasId = activeAssignments[0].kelasId;
+              if (assignmentsUntukKeputusan.length > 0) {
+                nextSesi = assignmentsUntukKeputusan[0].sesi;
+                nextKelasId = assignmentsUntukKeputusan[0].kelasId;
               } else {
                 const idx = activeSesis.indexOf(prevSession);
                 nextSesi = idx + 1 < activeSesis.length ? activeSesis[idx + 1] : prevSession;
@@ -477,9 +544,9 @@ export function AbsensiKelasClient({
           }
         } else {
           // Sesi sebelumnya sudah tidak aktif lagi — reset badal juga
-          if (activeAssignments.length > 0) {
-            nextSesi = activeAssignments[0].sesi;
-            nextKelasId = activeAssignments[0].kelasId;
+          if (assignmentsUntukKeputusan.length > 0) {
+            nextSesi = assignmentsUntukKeputusan[0].sesi;
+            nextKelasId = assignmentsUntukKeputusan[0].kelasId;
           } else {
             nextSesi = activeSesis[0];
             nextKelasId = null;

@@ -22,7 +22,8 @@ import {
   AlertTriangle,
   MessageCircle,
   Images,
-  Vote
+  Vote,
+  BookOpen
 } from "lucide-react";
 import { useState } from "react";
 
@@ -48,13 +49,15 @@ export function SantriSidebar({
   isAktif,
   isKetuaKelas,
   isLajnah,
-  isJasus
+  isJasus,
+  isHufadz
 }: {
   nama: string;
   isAktif: boolean;
   isKetuaKelas?: boolean;
   isLajnah?: boolean;
   isJasus?: boolean;
+  isHufadz?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -71,6 +74,10 @@ export function SantriSidebar({
 
   if (isLajnah) {
     navItems = [...navItems, { href: "/santri/eksekusi-mukholif", label: "Eksekusi Iqob", icon: Shield }];
+  }
+
+  if (isHufadz) {
+    navItems = [...navItems, { href: "/santri/tasmi", label: "Tasmi'", icon: BookOpen }];
   }
 
   const handleLogout = async () => {

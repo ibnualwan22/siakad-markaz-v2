@@ -29,12 +29,28 @@ export default async function SantriLayout({
     where: { santriId: session.santriId }
   });
 
+  const santriAktif = await prisma.santriInternal.findUnique({
+    where: { id: session.santriId },
+    select: {
+      dufahNama: true,
+      riwayatRecords: {
+        select: { dufahNama: true, program: { select: { nama_indo: true } } },
+      },
+    },
+  });
+  const riwayatAktif = santriAktif?.riwayatRecords.find(
+    (r) => r.dufahNama === santriAktif.dufahNama
+  );
+  const isHufadz = (riwayatAktif?.program?.nama_indo || "")
+    .toLowerCase()
+    .includes("hufadz");
+
   return (
     <div
       className="min-h-screen flex flex-col lg:flex-row"
       style={{ background: "var(--bg-app)" }}
     >
-      <SantriSidebar nama={session.nama} isAktif={session.isAktif} isKetuaKelas={isKetuaKelasCount > 0} isLajnah={isLajnahCount > 0} isJasus={isJasusCount > 0} />
+      <SantriSidebar nama={session.nama} isAktif={session.isAktif} isKetuaKelas={isKetuaKelasCount > 0} isLajnah={isLajnahCount > 0} isJasus={isJasusCount > 0} isHufadz={isHufadz} />
       <main className="flex-1 min-w-0 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 pt-16 lg:pt-8">
           <div className="mx-auto max-w-4xl w-full">{children}</div>

@@ -373,6 +373,10 @@ export function AbsensiKelasClient({
   const [pendingDrafts, setPendingDrafts] = useState<{ sesi: string; kelasId: string; disimpanPada: string; jumlah: number }[]>([]);
   const [confirmingDiscard, setConfirmingDiscard] = useState<string | null>(null);
   const serverBaseRef = useRef<Record<string, MarksMap>>({});
+  // Fase 3: basis form pengajar per sesi/kelas + info konflik basis + pemicu muat ulang
+  const pengajarBaseRef = useRef<Record<string, any>>({});
+  const [konflikInfo, setKonflikInfo] = useState<{ jumlah: number; pengajar: boolean } | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Admin Backup Mode
   const [showAdminPengajarForm, setShowAdminPengajarForm] = useState(false);
@@ -725,6 +729,9 @@ export function AbsensiKelasClient({
     if (userId && tanggal) purgeExpiredDrafts(userId, tanggal);
   }, [userId, tanggal]);
 
+  // Fase 3: info konflik hanya berlaku untuk konteks yang sedang tampil
+  useEffect(() => { setKonflikInfo(null); }, [sesi, kelasId]);
+
   // Fase 1: tulis draf absen santri seketika saat ada perubahan belum tersimpan.
   // Pengaman loadedSessionRef sama seperti cache form: jangan menulis data sesi
   // lama ke kunci sesi baru sebelum data sesi baru selesai dimuat.
@@ -835,6 +842,15 @@ export function AbsensiKelasClient({
         // (kelanjutan murni); bila server sudah berubah dari tempat lain,
         // server menang dan draf dibuang — tidak ada timpa diam-diam.
         serverBaseRef.current[`${sesi}|${kelasId}`] = { ...newMap };
+        pengajarBaseRef.current[`${sesi}|${kelasId}`] = data.absenPengajarData ? {
+          materi: data.absenPengajarData.materi || "",
+          waktuMulai: data.absenPengajarData.waktuMulai || "",
+          waktuSelesai: data.absenPengajarData.waktuSelesai || "",
+          atributKopiah: !!data.absenPengajarData.atributKopiah,
+          atributNametag: !!data.absenPengajarData.atributNametag,
+          atributBros: !!data.absenPengajarData.atributBros,
+          kecerdasan: data.absenPengajarData.kecerdasan || null,
+        } : null;
         let finalMap = newMap;
         if (isTeacher && userId) {
           const draft = loadMarksDraft(userId, tanggal, sesi, kelasId);
@@ -885,7 +901,7 @@ export function AbsensiKelasClient({
     return () => {
       ignore = true;
     };
-  }, [tanggal, sesi, kelasId, isTeacher, hasCheckedSession, isBadalMode, isAsistenMode]);
+  }, [tanggal, sesi, kelasId, isTeacher, hasCheckedSession, isBadalMode, isAsistenMode, refreshKey]);
 
   const handleStatusChange = (riwayatId: string, status: AbsenStatus) => {
     setAbsenMap(prev => ({
@@ -929,6 +945,9 @@ export function AbsensiKelasClient({
 
       const payload: any = { tanggal, sesi, kelasId, absenList };
       if (isRecoveryModeRef.current) payload.susulan = true; // Penanda simpan pemulihan (dipakai validasi Fase 2)
+      // Fase 3: basis (potret server saat form dimuat) untuk kunci optimistis di server
+      payload.basisMarks = serverBaseRef.current[`${sesi}|${kelasId}`] || {};
+      payload.basisPengajar = pengajarBaseRef.current[`${sesi}|${kelasId}`] ?? null;
       if (isTeacher || (userRole === "ADMIN" && showAdminPengajarForm)) {
         if (isTeacher && !materi) {
           toast.error("Mohon isi materi pelajaran hari ini");
@@ -988,6 +1007,12 @@ export function AbsensiKelasClient({
       }
 
       const result = await res.json();
+      if (res.status === 409 && result.konflik) {
+        // Fase 3: data sudah berubah dari tempat lain — jangan menimpa; minta muat ulang
+        setKonflikInfo({ jumlah: result.jumlahBerubah || 0, pengajar: !!result.konflikPengajar });
+        toast.error(result.error || "Data telah diperbarui dari tempat lain");
+        return;
+      }
       if (result.success) {
         toast.success(`Berhasil menyimpan data absensi kelas`);
         // Fase 1: basis server konteks yang disimpan kini = isi yang terkirim
@@ -1002,6 +1027,19 @@ export function AbsensiKelasClient({
           clearFormCache(ctx.tanggal, ctx.sesi, ctx.kelasId);
           if (userId) clearMarksDraft(userId, ctx.tanggal, ctx.sesi, ctx.kelasId);
         }
+        // Fase 3: basis form pengajar konteks ini kini = isi yang baru disimpan
+        if (payload.absenPengajar) {
+          pengajarBaseRef.current[`${ctx.sesi}|${ctx.kelasId}`] = {
+            materi: payload.absenPengajar.materi || "",
+            waktuMulai: payload.absenPengajar.waktuMulai || "",
+            waktuSelesai: payload.absenPengajar.waktuSelesai || "",
+            atributKopiah: !!payload.absenPengajar.atributKopiah,
+            atributNametag: !!payload.absenPengajar.atributNametag,
+            atributBros: !!payload.absenPengajar.atributBros,
+            kecerdasan: payload.absenPengajar.kecerdasan || null,
+          };
+        }
+        setKonflikInfo(null);
         if (isRecoveryModeRef.current) setIsRecoveryMode(false);
         refreshPendingDrafts();
       } else {
@@ -1211,6 +1249,17 @@ export function AbsensiKelasClient({
           </div>
         </section>
       ))}
+      {/* Fase 3: banner konflik basis (409) */}
+      {konflikInfo && (
+        <section className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-red-800">
+            Data sesi ini telah diperbarui dari tempat lain{konflikInfo.jumlah > 0 ? ` (${konflikInfo.jumlah} santri berubah)` : ""}. Perubahan Anda belum disimpan — muat ulang untuk melihat data terbaru, lalu sesuaikan kembali bila perlu.
+          </p>
+          <button onClick={() => { setKonflikInfo(null); setRefreshKey((k) => k + 1); }} className="shrink-0 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white">
+            Muat Ulang Data Terbaru
+          </button>
+        </section>
+      )}
       <section className="overflow-hidden neu-card-white">
         <div className="flex flex-col gap-4 border-b border-[var(--color-surface-dark)] p-6 md:flex-row md:items-end md:justify-between bg-[var(--color-surface-light)]">
           {isTeacher ? (

@@ -288,6 +288,24 @@ model AbsenKelas {
   @@unique([riwayatId, tanggal, sesi])
 }
 
+// Fase 3: jejak audit penimpaan absensi kelas (siapa mengubah apa, nilai lama -> baru)
+model AbsenKelasLog {
+  id            String    @id @default(cuid())
+  tanggal       DateTime  @db.Date
+  sesi          SesiKelas
+  kelasId       String?
+  riwayatId     String?
+  penulisUserId String
+  targetUserId  String?
+  jenis         String
+  field         String
+  nilaiLama     String?
+  nilaiBaru     String?
+  createdAt     DateTime  @default(now())
+
+  @@index([tanggal, sesi])
+}
+
 model KategoriKegiatan {
   id            String              @id @default(cuid())
   nama          String              @unique

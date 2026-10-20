@@ -195,6 +195,52 @@ export async function POST(request: Request) {
     });
     // ---------------------------
 
+    // === Fase 3: muat keadaan server terkini untuk sesi ini ===
+    // Dipakai cek basis (kunci optimistis) & jejak audit penimpaan.
+    const basisMarks: any = (payload as any).basisMarks;
+    const idUntukDimuat = new Set<string>(modifiedAbsenList.map((a: any) => a.riwayatId));
+    if (basisMarks && typeof basisMarks === "object") {
+      Object.keys(basisMarks).forEach((k) => idUntukDimuat.add(k));
+    }
+    const barisKini = idUntukDimuat.size > 0
+      ? await prisma.absenKelas.findMany({
+          where: { tanggal: parsedDate, sesi: sesi as any, riwayatId: { in: Array.from(idUntukDimuat) } },
+          select: { riwayatId: true, status: true, keterangan: true },
+        })
+      : [];
+    const marksKini = new Map<string, { status: string; keterangan: string }>();
+    barisKini.forEach((b) => marksKini.set(b.riwayatId, { status: b.status, keterangan: b.keterangan || "" }));
+    const normMark = (m: any) => ({ status: m?.status || "", keterangan: m?.keterangan || "" });
+    const markBeda = (a: any, b: any) => {
+      const x = normMark(a), y = normMark(b);
+      return x.status !== y.status || x.keterangan !== y.keterangan;
+    };
+
+    // === Fase 3: kunci optimistis berbasis basis (non-admin, bila klien mengirim basis) ===
+    // Bila data server sudah berubah dari basis yang dilihat pengirim, tolak 409:
+    // pengirim wajib memuat ulang data terbaru sebelum menyimpan.
+    if (userSession.role !== "ADMIN" && basisMarks && typeof basisMarks === "object") {
+      const semuaId = new Set<string>([...Object.keys(basisMarks), ...marksKini.keys()]);
+      let jumlahBerubah = 0;
+      semuaId.forEach((rid) => {
+        const basis = basisMarks[rid];
+        const kini = marksKini.get(rid);
+        if (basis === undefined && kini !== undefined) jumlahBerubah++;
+        else if (basis !== undefined && kini === undefined) jumlahBerubah++;
+        else if (basis !== undefined && kini !== undefined && markBeda(basis, kini)) jumlahBerubah++;
+      });
+      if (jumlahBerubah > 0) {
+        return NextResponse.json(
+          {
+            error: `Data sesi ini telah diperbarui dari tempat lain (${jumlahBerubah} santri berubah). Muat ulang untuk melihat data terbaru sebelum menyimpan.`,
+            konflik: true,
+            jumlahBerubah,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const toUpsert = modifiedAbsenList.filter((a: any) => a.status !== "KOSONG");
     const toDelete = modifiedAbsenList.filter((a: any) => a.status === "KOSONG");
 
@@ -231,6 +277,40 @@ export async function POST(request: Request) {
           }
         })
       );
+    }
+
+    // === Fase 3: jejak audit — catat setiap penimpaan baris yang sudah ada ===
+    {
+      const logData: any[] = [];
+      modifiedAbsenList.forEach((a: any) => {
+        const lama = marksKini.get(a.riwayatId);
+        if (!lama) return; // baris baru bukan penimpaan
+        if (a.status === "KOSONG") {
+          logData.push({
+            tanggal: parsedDate, sesi: sesi as any, kelasId: kelasId || null, riwayatId: a.riwayatId,
+            penulisUserId: userSession.userId, targetUserId: null, jenis: "SANTRI", field: "status",
+            nilaiLama: lama.status, nilaiBaru: "DIHAPUS",
+          });
+          return;
+        }
+        if (lama.status !== a.status) {
+          logData.push({
+            tanggal: parsedDate, sesi: sesi as any, kelasId: kelasId || null, riwayatId: a.riwayatId,
+            penulisUserId: userSession.userId, targetUserId: null, jenis: "SANTRI", field: "status",
+            nilaiLama: lama.status, nilaiBaru: a.status,
+          });
+        }
+        if (lama.keterangan !== (a.keterangan || "")) {
+          logData.push({
+            tanggal: parsedDate, sesi: sesi as any, kelasId: kelasId || null, riwayatId: a.riwayatId,
+            penulisUserId: userSession.userId, targetUserId: null, jenis: "SANTRI", field: "keterangan",
+            nilaiLama: lama.keterangan || null, nilaiBaru: a.keterangan || null,
+          });
+        }
+      });
+      if (logData.length > 0) {
+        operations.push(prisma.absenKelasLog.createMany({ data: logData }));
+      }
     }
 
     const isTeacherSubmit = userSession && userSession.role !== "ADMIN";
@@ -276,6 +356,75 @@ export async function POST(request: Request) {
       if (!actualKelasId) {
         await prisma.$transaction(operations);
         return NextResponse.json({ success: true, count: operations.length, note: "Absen santri tersimpan, absen pengajar dilewati (tidak ada kelas yang terdeteksi)" });
+      }
+
+      // === Fase 3: cek basis & audit untuk baris absenPengajar ===
+      const barisPengajarKini = await prisma.absenPengajar.findUnique({
+        where: {
+          userId_tanggal_sesi_kelasId: {
+            userId: targetUserId,
+            tanggal: parsedDate,
+            sesi: sesi,
+            kelasId: actualKelasId,
+          }
+        }
+      });
+      const basisPengajar: any = (payload as any).basisPengajar;
+      const bentukPengajar = (r: any) => r ? {
+        materi: r.materi || "",
+        waktuMulai: r.waktuMulai || "",
+        waktuSelesai: r.waktuSelesai || "",
+        atributKopiah: !!r.atributKopiah,
+        atributNametag: !!r.atributNametag,
+        atributBros: !!r.atributBros,
+        kecerdasan: r.kecerdasan || null,
+      } : null;
+      if (userSession.role !== "ADMIN" && basisPengajar !== undefined) {
+        const basisB = bentukPengajar(basisPengajar);
+        const kiniB = bentukPengajar(barisPengajarKini);
+        let konflikPengajar = false;
+        if (basisB === null && kiniB !== null) konflikPengajar = true;
+        else if (basisB !== null && kiniB !== null) {
+          konflikPengajar = ["materi", "waktuMulai", "waktuSelesai", "atributKopiah", "atributNametag", "atributBros", "kecerdasan"]
+            .some((f) => (basisB as any)[f] !== (kiniB as any)[f]);
+        }
+        if (konflikPengajar) {
+          return NextResponse.json(
+            {
+              error: "Data pengajar sesi ini telah diperbarui dari tempat lain. Muat ulang untuk melihat data terbaru sebelum menyimpan.",
+              konflik: true,
+              jumlahBerubah: 0,
+              konflikPengajar: true,
+            },
+            { status: 409 }
+          );
+        }
+      }
+      if (barisPengajarKini) {
+        const lamaB = bentukPengajar(barisPengajarKini)!;
+        const baruB = bentukPengajar({
+          materi: absenPengajar.materi,
+          waktuMulai: absenPengajar.waktuMulai,
+          waktuSelesai: absenPengajar.waktuSelesai,
+          atributKopiah: absenPengajar.atributKopiah,
+          atributNametag: absenPengajar.atributNametag,
+          atributBros: absenPengajar.atributBros,
+          kecerdasan: absenPengajar.kecerdasan || null,
+        })!;
+        const logPengajar: any[] = [];
+        ["materi", "waktuMulai", "waktuSelesai", "atributKopiah", "atributNametag", "atributBros", "kecerdasan"].forEach((f) => {
+          if ((lamaB as any)[f] !== (baruB as any)[f]) {
+            logPengajar.push({
+              tanggal: parsedDate, sesi: sesi as any, kelasId: actualKelasId, riwayatId: null,
+              penulisUserId: userSession.userId, targetUserId, jenis: "PENGAJAR", field: f,
+              nilaiLama: (lamaB as any)[f] === null ? null : String((lamaB as any)[f]),
+              nilaiBaru: (baruB as any)[f] === null ? null : String((baruB as any)[f]),
+            });
+          }
+        });
+        if (logPengajar.length > 0) {
+          operations.push(prisma.absenKelasLog.createMany({ data: logPengajar }));
+        }
       }
 
       // === Hitung terlambatMenit server-side ===

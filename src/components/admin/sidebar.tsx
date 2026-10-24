@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote } from "lucide-react";
+import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet } from "lucide-react";
 import { useState, useEffect } from "react";
 import { SyncSantriButton } from "./sync-santri-button";
 
@@ -13,6 +13,7 @@ const navigationGroups = [
     items: [
       { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, permissionId: "dashboard" },
       { href: "/admin/jadwal-saya", label: "Jadwal Saya", icon: Calendar, permissionId: "jadwal_saya" },
+      { href: "/admin/bisyaroh", label: "Bisyaroh Saya", icon: Wallet, permissionId: "jadwal_saya" },
     ]
   },
   {

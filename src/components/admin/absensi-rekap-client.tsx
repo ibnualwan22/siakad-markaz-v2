@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { LEMBAGA_FILTER_OPTIONS } from "@/lib/lembaga";
 import { Bed, BookOpen, Activity, TrendingUp, ChevronRight, FileText } from "lucide-react";
 
 type StatusCounts = {
@@ -153,12 +154,14 @@ function getFirstDayOfMonth(): string {
 export function RekapAbsenClient() {
   const [dari, setDari] = useState(getFirstDayOfMonth());
   const [sampai, setSampai] = useState(getWibDateString());
+  const [filterLembaga, setFilterLembaga] = useState("SEMUA");
   const [data, setData] = useState<RekapData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleViewDetail = (type: "sakan" | "kelas" | "kegiatan", title: string, kategoriId?: string) => {
     const params = new URLSearchParams({ type, dari, sampai, title });
+    if (filterLembaga !== "SEMUA") params.append("lembaga", filterLembaga);
     if (kategoriId) params.append("kategoriId", kategoriId);
     router.push(`/admin/absensi/rekap/detail?${params.toString()}`);
   };
@@ -168,6 +171,7 @@ export function RekapAbsenClient() {
       setIsLoading(true);
       try {
         const params = new URLSearchParams({ dari, sampai });
+        if (filterLembaga !== "SEMUA") params.append("lembaga", filterLembaga);
         const res = await fetch(`/api/admin/absensi/rekap?${params}`);
         const json = await res.json();
         setData(json);
@@ -178,7 +182,7 @@ export function RekapAbsenClient() {
       }
     };
     fetchData();
-  }, [dari, sampai]);
+  }, [dari, sampai, filterLembaga]);
 
   const totalKegiatan: StatusCounts = (data?.kegiatan ?? []).reduce(
     (acc, k) => ({
@@ -215,6 +219,18 @@ export function RekapAbsenClient() {
               onChange={(e) => setSampai(e.target.value)}
               className="rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-violet-500"
             />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-[var(--color-text-muted)]">Lembaga</label>
+            <select
+              value={filterLembaga}
+              onChange={(e) => setFilterLembaga(e.target.value)}
+              className="rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-violet-500"
+            >
+              {LEMBAGA_FILTER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2">
             <button

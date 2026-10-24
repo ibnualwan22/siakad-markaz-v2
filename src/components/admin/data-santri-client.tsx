@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Search, Download, X, Phone, Copy, ChevronLeft, ChevronRight, ArrowUpDown, Users, Filter } from "lucide-react";
 import toast from "react-hot-toast";
 import type { SantriDufahRow } from "@/app/admin/data-santri/page";
+import { LEMBAGA_FILTER_OPTIONS, lembagaFromProgramKategori, lembagaLabel, santriPeriodeLabel } from "@/lib/lembaga";
 
 type SortField = "nama" | "bulanKe" | "kabupaten" | "sakan" | "programNama" | "kelasNama";
 type SortDir = "asc" | "desc";
@@ -13,6 +14,8 @@ const COLUMN_DEFS = [
   { key: "lokasi", label: "Sakan / Kamar / Lemari" },
   { key: "kabupaten", label: "Kabupaten" },
   { key: "programKelas", label: "Program & Kelas" },
+  { key: "lembaga", label: "Lembaga" },
+  { key: "periode", label: "Periode" },
   { key: "bulanKe", label: "Bulan Ke" },
   { key: "kategori", label: "Kategori" },
   { key: "noWaSantri", label: "No. WA Santri" },
@@ -55,11 +58,13 @@ export function DataSantriClient({
   uniqueSakans,
   uniquePrograms,
   uniqueKelas,
+  activeDufahName,
 }: {
   rows: SantriDufahRow[];
   uniqueSakans: string[];
   uniquePrograms: string[];
   uniqueKelas: string[];
+  activeDufahName: string | null;
 }) {
   // Filters
   const [search, setSearch] = useState("");
@@ -69,6 +74,7 @@ export function DataSantriClient({
   const [filterProgram, setFilterProgram] = useState("ALL");
   const [filterKelas, setFilterKelas] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterLembaga, setFilterLembaga] = useState("SEMUA");
 
   // Sort
   const [sortField, setSortField] = useState<SortField>("nama");
@@ -96,10 +102,11 @@ export function DataSantriClient({
     if (filterSakan !== "ALL") data = data.filter((r) => r.sakan === filterSakan);
     if (filterProgram !== "ALL") data = data.filter((r) => r.programNama === filterProgram);
     if (filterKelas !== "ALL") data = data.filter((r) => r.kelasNama === filterKelas);
+    if (filterLembaga !== "SEMUA") data = data.filter((r) => lembagaFromProgramKategori(r.programKategori) === filterLembaga);
     if (filterStatus === "CHECK_OUT") data = data.filter((r) => r.isCheckedOut);
     if (filterStatus === "AKTIF") data = data.filter((r) => !r.isCheckedOut);
     return data;
-  }, [rows, search, filterGender, filterKategori, filterSakan, filterProgram, filterKelas, filterStatus]);
+  }, [rows, search, filterGender, filterKategori, filterSakan, filterProgram, filterKelas, filterStatus, filterLembaga]);
 
   // Sort
   const sorted = useMemo(() => {
@@ -131,12 +138,12 @@ export function DataSantriClient({
   const totalKsu = filtered.filter((r) => r.kategori === "KSU").length;
   const totalCheckout = filtered.filter((r) => r.isCheckedOut).length;
 
-  const hasFilters = search || filterGender !== "ALL" || filterKategori !== "ALL" || filterSakan !== "ALL" || filterProgram !== "ALL" || filterKelas !== "ALL" || filterStatus !== "ALL";
+  const hasFilters = search || filterGender !== "ALL" || filterKategori !== "ALL" || filterSakan !== "ALL" || filterProgram !== "ALL" || filterKelas !== "ALL" || filterStatus !== "ALL" || filterLembaga !== "SEMUA";
 
   function resetFilters() {
     setSearch(""); setFilterGender("ALL"); setFilterKategori("ALL");
     setFilterSakan("ALL"); setFilterProgram("ALL"); setFilterKelas("ALL");
-    setFilterStatus("ALL");
+    setFilterStatus("ALL"); setFilterLembaga("SEMUA");
     setPage(1);
   }
 
@@ -188,6 +195,8 @@ export function DataSantriClient({
       lokasi: "Sakan / Kamar / Lemari",
       kabupaten: "Kabupaten",
       programKelas: "Program & Kelas",
+      lembaga: "Lembaga",
+      periode: "Periode",
       bulanKe: "Bulan Ke",
       kategori: "Kategori",
       noWaSantri: "No. WA Santri",
@@ -201,6 +210,8 @@ export function DataSantriClient({
       selectedKeys.map((k) => {
         if (k === "lokasi") return `${r.sakan} / ${r.kamar} / ${r.nomorLemari}`;
         if (k === "programKelas") return `${r.programNama} - ${r.kelasNama}`;
+        if (k === "lembaga") return lembagaLabel(lembagaFromProgramKategori((r as any).programKategori));
+        if (k === "periode") return santriPeriodeLabel(lembagaFromProgramKategori((r as any).programKategori), (r as any).dufahNama, activeDufahName);
         if (k === "gender") return r.gender === "BANIN" ? "Banin" : "Banat";
         return (r as any)[k];
       })
@@ -300,6 +311,9 @@ export function DataSantriClient({
               : uniqueKelas
             ).map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
+          <select value={filterLembaga} onChange={(e) => { setFilterLembaga(e.target.value); setPage(1); }} className="rounded-xl neu-input">
+            {LEMBAGA_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
           <select value={filterStatus} onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }} className="rounded-xl neu-input">
             <option value="ALL">Semua Status</option>
             <option value="AKTIF">Aktif</option>
@@ -330,6 +344,8 @@ export function DataSantriClient({
                   { field: "sakan" as SortField, label: "Sakan / Kamar / Lemari", sortable: true },
                   { field: "kabupaten" as SortField, label: "Kabupaten", sortable: true },
                   { field: "programNama" as SortField, label: "Program & Kelas", sortable: true },
+                  { field: "" as SortField, label: "Lembaga", sortable: false },
+                  { field: "" as SortField, label: "Periode", sortable: false },
                   { field: "bulanKe" as SortField, label: "Bulan Ke", sortable: true },
                   { field: "" as SortField, label: "Kategori", sortable: false },
                   { field: "" as SortField, label: "No. WA Santri", sortable: false },
@@ -350,7 +366,7 @@ export function DataSantriClient({
             <tbody className="divide-y divide-[var(--color-surface)]">
               {paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-16 text-center">
+                  <td colSpan={12} className="px-4 py-16 text-center">
                     <Users size={48} className="mx-auto text-[var(--color-text-subtle)] mb-3" />
                     <p className="text-sm font-bold text-[var(--color-text-muted)]">Tidak ada data santri yang cocok</p>
                     <p className="text-xs text-[var(--color-text-subtle)] mt-1">Coba ubah filter atau kata kunci pencarian</p>
@@ -379,6 +395,8 @@ export function DataSantriClient({
                       <p className="font-semibold text-[var(--color-text)]">{r.programNama}</p>
                       {r.kelasNama !== "-" && <p className="text-[11px] text-[var(--color-text-subtle)] mt-0.5">Kelas {r.kelasNama}</p>}
                     </td>
+                    <td className="px-4 py-3"><span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border bg-[var(--color-secondary)] text-[var(--color-text-muted)] border-[var(--color-surface-dark)]">{lembagaLabel(lembagaFromProgramKategori(r.programKategori))}</span></td>
+                    <td className="px-4 py-3 text-[var(--color-text-muted)] font-medium">{santriPeriodeLabel(lembagaFromProgramKategori(r.programKategori), r.dufahNama, activeDufahName)}</td>
                     <td className="px-4 py-3 text-center">
                       <span className="inline-flex items-center justify-center h-7 w-7 rounded-lg bg-[var(--color-warning-light)] text-[var(--color-warning)] font-black text-sm border border-[var(--color-warning)]">
                         {r.bulanKe}

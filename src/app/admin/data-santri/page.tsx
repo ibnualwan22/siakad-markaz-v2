@@ -23,6 +23,8 @@ export type SantriDufahRow = {
   kelasNama: string;
   bulanKe: number;
   kategori: string;
+  programKategori: string;
+  dufahNama: string;
   noWaSantri: string;
   isCheckedOut?: boolean;
 };
@@ -78,6 +80,8 @@ export default async function DataSantriPage() {
       kelasNama: riwayat?.kelas?.nama ?? "-",
       bulanKe: ms.bulanKe,
       kategori: ms.kategori,
+      programKategori: riwayat?.program?.kategori ?? "REGULER",
+      dufahNama: riwayat?.dufahNama ?? ms.dufahNama ?? "",
       noWaSantri: ms.noWaSantri,
       isCheckedOut: ms.isCheckedOut,
     };
@@ -98,6 +102,7 @@ export default async function DataSantriPage() {
         uniqueSakans={uniqueSakans}
         uniquePrograms={uniquePrograms}
         uniqueKelas={uniqueKelas}
+        activeDufahName={activeDufahName}
       />
     </div>
   );

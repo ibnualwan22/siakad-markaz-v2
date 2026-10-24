@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { parseWibDateString } from "@/lib/absensi";
 import { getMasterSantriList } from "@/lib/santri-api";
+import { lembagaFromProgramKategori, type LembagaId } from "@/lib/lembaga";
 
 export async function GET(request: Request) {
   try {
@@ -10,6 +11,10 @@ export async function GET(request: Request) {
     const kategoriId = searchParams.get("kategoriId"); // required if type === "kegiatan"
     const dari = searchParams.get("dari");
     const sampai = searchParams.get("sampai");
+    const lembagaParam = searchParams.get("lembaga");
+    const lembagaFilter: LembagaId | null =
+    lembagaParam === "TURATS" || lembagaParam === "HUFADZ" || lembagaParam === "ARABIYAH" ? lembagaParam : null;
+
 
     if (!type || !["sakan", "kelas", "kegiatan"].includes(type)) {
       return NextResponse.json({ error: "Tipe rekap tidak valid" }, { status: 400 });
@@ -28,7 +33,7 @@ export async function GET(request: Request) {
         include: {
           santri: true,
           kelas: { select: { nama: true } },
-          program: { select: { nama_indo: true } },
+          program: { select: { nama_indo: true, kategori: true } },
         }
       }
     };
@@ -80,7 +85,9 @@ export async function GET(request: Request) {
     // Filter output: Hanya yang dufah-nya sama dengan active dufah
     const filteredRecords = records.filter(r => {
       const activeDufah = activeSantriMap.get(r.riwayat.santriId);
-      return activeDufah && activeDufah === r.riwayat.dufahNama;
+      if (!activeDufah || activeDufah !== r.riwayat.dufahNama) return false;
+      if (lembagaFilter && lembagaFromProgramKategori(r.riwayat.program?.kategori) !== lembagaFilter) return false;
+      return true;
     });
 
     const result = filteredRecords.map((r) => {

@@ -17,6 +17,7 @@ import {
   Cell,
 } from "recharts";
 import { StackedProgressBar } from "@/components/admin/stacked-progress-bar";
+import { LEMBAGA_FILTER_OPTIONS } from "@/lib/lembaga";
 
 type SantriDetail = {
   id: string;
@@ -60,6 +61,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
   const dari = searchParams.get("dari");
   const sampai = searchParams.get("sampai");
   const title = searchParams.get("title") || "Rincian Absen";
+  const lembagaParam = searchParams.get("lembaga") || "SEMUA";
 
   const [data, setData] = useState<SantriDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
       setIsLoading(true);
       try {
         const params = new URLSearchParams({ type, dari, sampai });
+        if (lembagaParam !== "SEMUA") params.append("lembaga", lembagaParam);
         if (kategoriId) params.append("kategoriId", kategoriId);
         if (allowedKelasId) params.append("kelasId", allowedKelasId);
 
@@ -95,7 +98,7 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
     };
 
     fetchData();
-  }, [type, kategoriId, dari, sampai]);
+  }, [type, kategoriId, dari, sampai, lembagaParam]);
 
   // Aggregate stats
   const stats = useMemo(() => {
@@ -590,6 +593,22 @@ export function AbsensiRekapDetailClient({ allowedKelasId }: { allowedKelasId?: 
                     className="pl-9 pr-4 py-2 text-sm bg-[var(--color-secondary)] border border-[var(--color-surface-dark)] rounded-xl outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all font-semibold"
                   />
                 </div>
+
+                {/* Lembaga */}
+                <select
+                  value={lembagaParam}
+                  onChange={(e) => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    if (e.target.value === "SEMUA") params.delete("lembaga");
+                    else params.set("lembaga", e.target.value);
+                    router.push(`?${params.toString()}`);
+                  }}
+                  className="px-4 py-2 text-sm bg-[var(--color-secondary)] border border-[var(--color-surface-dark)] rounded-xl outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all font-semibold"
+                >
+                  {LEMBAGA_FILTER_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
 
                 {/* Expand / Collapse Controls */}
                 <div className="hidden sm:flex bg-[var(--color-surface)] p-1 rounded-xl">

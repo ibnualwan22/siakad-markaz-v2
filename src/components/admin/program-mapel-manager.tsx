@@ -491,7 +491,7 @@ function ProgramCard({
                 ? "bg-amber-100 text-amber-700"
                 : "bg-[var(--color-primary-50)] text-[var(--color-primary)]"
             }`}>
-              {programKategori === "TURATS" ? "Turats" : "Reguler"}
+              {programKategori === "TURATS" ? "Turats" : programKategori === "HUFADZ" ? "Hufadz" : "Reguler"}
             </span>
           </div>
           <p className="text-xs text-[var(--color-text-subtle)] truncate" dir="rtl">{programNamaArab}</p>
@@ -556,6 +556,7 @@ function ProgramCard({
                 >
                   <option value="REGULER">Reguler (Markaz Arabiyah)</option>
                   <option value="TURATS">Turats (Markaz Turats)</option>
+                  <option value="HUFADZ">Hufadz (Markaz Hufadz)</option>
                 </select>
               </div>
               <div className="flex gap-2">
@@ -843,6 +844,7 @@ export function ProgramMapelManager({ initialPrograms }: { initialPrograms: Prog
               >
                 <option value="REGULER">Reguler (Markaz Arabiyah)</option>
                 <option value="TURATS">Turats (Markaz Turats)</option>
+                <option value="HUFADZ">Hufadz (Markaz Hufadz)</option>
               </select>
             </div>
           </div>

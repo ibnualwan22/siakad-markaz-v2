@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { getMasterSantriList } from "@/lib/santri-api";
+import { lembagaFromProgramKategori, type LembagaId } from "@/lib/lembaga";
 
 export async function GET(request: Request) {
   try {
@@ -7,6 +9,10 @@ export async function GET(request: Request) {
     const dari = searchParams.get("dari");
     const sampai = searchParams.get("sampai");
     const kelompokId = searchParams.get("kelompokId");
+    const lembagaParam = searchParams.get("lembaga");
+    const lembagaFilter: LembagaId | null =
+    lembagaParam === "TURATS" || lembagaParam === "HUFADZ" || lembagaParam === "ARABIYAH" ? lembagaParam : null;
+
 
     const dateFilter: any = {};
     if (dari) dateFilter.gte = new Date(`${dari}T00:00:00Z`);
@@ -39,8 +45,35 @@ export async function GET(request: Request) {
       }
     });
 
+    // Filter lembaga (hanya bila param valid): petakan santri -> program aktifnya.
+    // Tanpa param, perilaku tidak berubah (semua rekaman tetap dihitung).
+    let lembagaSantriIds: Set<string> | null = null;
+    if (lembagaFilter) {
+      const masterSantriList = await getMasterSantriList();
+      const dufahBySantri = new Map<string, string>();
+      for (const ms of masterSantriList) {
+        dufahBySantri.set(ms.id, ms.dufahNama);
+      }
+      const santriIds = [...new Set(records.map((r) => r.santriId))];
+      const riwayatList = await prisma.riwayatSantri.findMany({
+        where: { santriId: { in: santriIds } },
+        select: { santriId: true, dufahNama: true, program: { select: { kategori: true } } },
+      });
+      const lembagaBySantri = new Map<string, string>();
+      for (const rw of riwayatList) {
+        const dufahAktif = dufahBySantri.get(rw.santriId);
+        if (dufahAktif && rw.dufahNama === dufahAktif) {
+          lembagaBySantri.set(rw.santriId, lembagaFromProgramKategori(rw.program?.kategori));
+        }
+      }
+      lembagaSantriIds = new Set(
+        [...lembagaBySantri.entries()].filter(([, l]) => l === lembagaFilter).map(([id]) => id)
+      );
+    }
+
     const recapMap = new Map<string, any>();
     for (const record of records) {
+      if (lembagaSantriIds && !lembagaSantriIds.has(record.santriId)) continue;
       const key = `${record.santriId}_${record.kelompokId}`;
       if (!recapMap.has(key)) {
         recapMap.set(key, {

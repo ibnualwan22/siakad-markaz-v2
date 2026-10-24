@@ -23,7 +23,7 @@ export default async function DashboardPage() {
           Dashboard Utama
         </h1>
         <p className="text-sm max-w-2xl" style={{ color: "var(--color-text-muted)" }}>
-          Visualisasi ringkas dari distribusi data santri Markaz Arabiyah berdasarkan kelas utama dan rombongan belajar.
+          Visualisasi ringkas dari distribusi data santri Markaz Arabiyah, Turats, dan Hufadz berdasarkan kelas utama dan rombongan belajar.
         </p>
       </div>
 

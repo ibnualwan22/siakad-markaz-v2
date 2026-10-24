@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Users, FileText } from "lucide-react";
+import { LEMBAGA_FILTER_OPTIONS } from "@/lib/lembaga";
 import * as XLSX from "xlsx";
 
 type Kelompok = {
@@ -37,6 +38,7 @@ export function RekapTabirotClient() {
   const [dari, setDari] = useState(getFirstDayOfMonth());
   const [sampai, setSampai] = useState(getWibDateString());
   const [kelompokId, setKelompokId] = useState<string>("");
+  const [filterLembaga, setFilterLembaga] = useState("SEMUA");
   const [kelompokList, setKelompokList] = useState<Kelompok[]>([]);
   const [data, setData] = useState<SantriRecap[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,6 +56,7 @@ export function RekapTabirotClient() {
       try {
         const params = new URLSearchParams({ dari, sampai });
         if (kelompokId) params.append("kelompokId", kelompokId);
+        if (filterLembaga !== "SEMUA") params.append("lembaga", filterLembaga);
         
         const res = await fetch(`/api/admin/absensi/rekap/tabirot?${params}`);
         if (!res.ok) throw new Error("Gagal mengambil data");
@@ -66,7 +69,7 @@ export function RekapTabirotClient() {
       }
     };
     fetchData();
-  }, [dari, sampai, kelompokId]);
+  }, [dari, sampai, kelompokId, filterLembaga]);
 
   const handleExportExcel = () => {
     if (data.length === 0) return;
@@ -126,6 +129,18 @@ export function RekapTabirotClient() {
                 <option key={k.id} value={k.id}>
                   {k.tempat} — Bulan ke-{k.bulanKe}
                 </option>
+              ))}
+            </select>
+          </div>
+          <div className="min-w-[200px]">
+            <label className="mb-1.5 block text-xs font-semibold text-[var(--color-text-muted)]">Lembaga</label>
+            <select
+              value={filterLembaga}
+              onChange={(e) => setFilterLembaga(e.target.value)}
+              className="w-full rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--color-text)] outline-none transition focus:border-blue-500"
+            >
+              {LEMBAGA_FILTER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </div>

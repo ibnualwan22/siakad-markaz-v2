@@ -2,11 +2,16 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { parseWibDateString } from "@/lib/absensi";
 import { getMasterSantriList } from "@/lib/santri-api";
+import { lembagaFromProgramKategori, type LembagaId } from "@/lib/lembaga";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dari = searchParams.get("dari");
   const sampai = searchParams.get("sampai");
+  const lembagaParam = searchParams.get("lembaga");
+  const lembagaFilter: LembagaId | null =
+    lembagaParam === "TURATS" || lembagaParam === "HUFADZ" || lembagaParam === "ARABIYAH" ? lembagaParam : null;
+
 
   const dateFilter: any = {};
   if (dari) dateFilter.gte = new Date(`${dari}T00:00:00Z`);
@@ -29,7 +34,11 @@ export async function GET(request: Request) {
     return activeDufah && activeDufah === riwayat.dufahNama;
   };
 
-  const riwayatSelect = { select: { santriId: true, dufahNama: true } };
+  // Filter lembaga: hanya berlaku bila param valid; tanpa param = perilaku lama.
+  const isLembagaMatch = (riwayat: { program?: { kategori?: string | null } | null }) =>
+    !lembagaFilter || lembagaFromProgramKategori(riwayat.program?.kategori) === lembagaFilter;
+
+  const riwayatSelect = { select: { santriId: true, dufahNama: true, program: { select: { kategori: true } } } };
 
   const hariLiburList = await prisma.hariLibur.findMany({
     where: tanggalWhere
@@ -44,7 +53,7 @@ export async function GET(request: Request) {
   
   const sakanRekap: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
   for (const r of sakanRecords) {
-    if (isActiveRiwayat(r.riwayat)) {
+    if (isActiveRiwayat(r.riwayat) && isLembagaMatch(r.riwayat)) {
       const tgl = r.tanggal.toISOString().split("T")[0];
       const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
       if (!(hl && hl.isSemuaSesi)) {
@@ -61,7 +70,7 @@ export async function GET(request: Request) {
 
   const kelasRekap: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
   for (const r of kelasRecords) {
-    if (isActiveRiwayat(r.riwayat)) {
+    if (isActiveRiwayat(r.riwayat) && isLembagaMatch(r.riwayat)) {
       const tgl = r.tanggal.toISOString().split("T")[0];
       const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
       const sesiIsLibur = hl && (hl.isSemuaSesi || hl.sesiLibur.includes(r.sesi as any));
@@ -84,7 +93,7 @@ export async function GET(request: Request) {
   const kegiatanRekap = kegiatanList.map((k) => {
     const counts: Record<string, number> = { HADIR: 0, IZIN: 0, SAKIT: 0, ALPHA: 0 };
     for (const r of kegiatanRecords) {
-      if (r.kategoriId === k.id && isActiveRiwayat(r.riwayat)) {
+      if (r.kategoriId === k.id && isActiveRiwayat(r.riwayat) && isLembagaMatch(r.riwayat)) {
         const tgl = r.tanggal.toISOString().split("T")[0];
         const hl = hariLiburList.find(h => h.tanggal.toISOString().split("T")[0] === tgl);
         if (!(hl && hl.isSemuaSesi)) {

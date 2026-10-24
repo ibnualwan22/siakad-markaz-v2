@@ -15,6 +15,7 @@ import {
   Legend
 } from "recharts";
 import { Copy, Check } from "lucide-react";
+import { LEMBAGA_LIST, lembagaFromProgramKategori } from "@/lib/lembaga";
 import { useState } from "react";
 import toast from "react-hot-toast";
 
@@ -26,6 +27,7 @@ type DashboardSantri = {
   kelasId: string | null;
   gender: string;
   isCheckedOut: boolean;
+  programKategori: string;
 };
 
 type ProgramItem = {
@@ -156,6 +158,19 @@ export function DashboardCharts({
   const totalSantri = santriRows.length;
   const totalAktif = santriRows.filter(s => !s.isCheckedOut).length;
   const totalCheckout = santriRows.filter(s => s.isCheckedOut).length;
+
+  // Hitung per lembaga dari baris yang sama dengan kartu total di atas,
+  // sehingga angka gabungan selalu konsisten (Aktif = belum checkout).
+  const lembagaStats = useMemo(() => {
+    const stats = LEMBAGA_LIST.map((l) => ({ ...l, aktif: 0, checkout: 0 }));
+    for (const s of santriRows) {
+      const row = stats.find((x) => x.id === lembagaFromProgramKategori(s.programKategori));
+      if (!row) continue;
+      if (s.isCheckedOut) row.checkout += 1;
+      else row.aktif += 1;
+    }
+    return stats;
+  }, [santriRows]);
   
   return (
     <div className="space-y-6">
@@ -173,6 +188,42 @@ export function DashboardCharts({
             <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-danger)" }}>Santri Checkout</p>
             <h3 className="mt-2 text-4xl font-black font-display text-red-600">{totalCheckout}</h3>
          </div>
+      </div>
+
+      {/* Jumlah Santri per Lembaga */}
+      <div className="neu-card-white p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-bold font-display" style={{ color: "var(--color-text)" }}>Jumlah Santri per Lembaga</h3>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-subtle)" }}>Aktif dan checkout untuk Markaz Arabiyah, Turats, dan Hufadz, serta gabungan ketiganya.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[var(--color-surface-dark)] text-left text-[11px] font-black uppercase tracking-wider" style={{ color: "var(--color-text-muted)" }}>
+                <th className="px-4 py-3">Lembaga</th>
+                <th className="px-4 py-3 text-right">Aktif</th>
+                <th className="px-4 py-3 text-right">Checkout</th>
+                <th className="px-4 py-3 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--color-surface)]">
+              {lembagaStats.map((l) => (
+                <tr key={l.id}>
+                  <td className="px-4 py-3 font-bold" style={{ color: "var(--color-text)" }}>{l.label}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{l.aktif}</td>
+                  <td className="px-4 py-3 text-right font-semibold">{l.checkout}</td>
+                  <td className="px-4 py-3 text-right font-black">{l.aktif + l.checkout}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-[var(--color-surface-dark)]">
+                <td className="px-4 py-3 font-black" style={{ color: "var(--color-text)" }}>Gabungan</td>
+                <td className="px-4 py-3 text-right font-black">{totalAktif}</td>
+                <td className="px-4 py-3 text-right font-black">{totalCheckout}</td>
+                <td className="px-4 py-3 text-right font-black">{totalSantri}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Charts */}

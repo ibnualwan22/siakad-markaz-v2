@@ -20,6 +20,7 @@ import {
   Calendar,
   ClipboardList,
 } from "lucide-react";
+import { lembagaFromProgramKategori, lembagaPeriodeLabel, lembagaTerm, santriPeriodeLabel } from "@/lib/lembaga";
 
 type SantriData = {
   santri: {
@@ -40,6 +41,7 @@ type SantriData = {
     id: string;
     dufahNama: string;
     programNama: string;
+    programKategori: string;
     kelasNama: string;
     statusKelulusan: string;
     average: number;
@@ -144,6 +146,8 @@ export default function SantriDashboardPage() {
 
   const { santri, riwayat } = data;
   const currentRiwayat = riwayat[0];
+  const lembagaId = lembagaFromProgramKategori(currentRiwayat?.programKategori);
+  const periodeSekarang = lembagaPeriodeLabel(lembagaId);
 
   const statusColor =
     currentRiwayat?.statusKelulusan === "LULUS"
@@ -196,6 +200,9 @@ export default function SantriDashboardPage() {
   const sisaBulan = statusData?.masaAktif?.sisaBulanBerjalan ?? statusData?.masaAktif?.sisaKoutaBulan;
   const berakhirDufah = adjustDufahName(statusData?.masaAktif?.berakhirPadaDufahNama);
   const dufahSekarang = adjustDufahName(statusData?.masaAktif?.dufahSekarangSistem?.nama);
+  // Label "Berakhir pada": hanya periode berjalan yang dikonversi ke istilah lembaga;
+  // dufah lain tampil apa adanya (perbandingan memakai hasil adjust di kedua sisi).
+  const berakhirDufahLabel = berakhirDufah && berakhirDufah === dufahSekarang ? periodeSekarang : berakhirDufah;
 
   const isDurasiLow = sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
 
@@ -308,7 +315,7 @@ export default function SantriDashboardPage() {
                   style={{ color: "var(--color-text-subtle)" }}
                 />
                 <span style={{ color: "var(--color-text-muted)" }}>
-                  Duf&apos;ah: {currentRiwayat?.dufahNama ?? "-"}
+                  {lembagaTerm(lembagaId)}: {santriPeriodeLabel(lembagaId, currentRiwayat?.dufahNama, statusData?.masaAktif?.dufahSekarangSistem?.nama)}
                 </span>
               </div>
             </div>
@@ -373,7 +380,7 @@ export default function SantriDashboardPage() {
                         className="text-[11px]"
                         style={{ color: "var(--color-text-muted)" }}
                       >
-                        Berakhir pada {berakhirDufah}
+                        Berakhir pada {berakhirDufahLabel}
                       </span>
                     </div>
                     {dufahSekarang && (
@@ -383,7 +390,7 @@ export default function SantriDashboardPage() {
                           className="text-[11px]"
                           style={{ color: "var(--color-text-muted)" }}
                         >
-                          Sedang berjalan: {dufahSekarang}
+                          Sedang berjalan: {periodeSekarang}
                         </span>
                       </div>
                     )}
@@ -728,8 +735,8 @@ export default function SantriDashboardPage() {
             {
               href: "/santri/riwayat",
               icon: Clock,
-              label: "Riwayat Duf'ah",
-              desc: "Histori per duf'ah sebelumnya",
+              label: `Riwayat ${lembagaTerm(lembagaId)}`,
+              desc: `Histori per ${lembagaTerm(lembagaId).toLowerCase()} sebelumnya`,
             },
             {
               href: "/santri/perizinan",

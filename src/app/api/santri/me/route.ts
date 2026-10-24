@@ -201,6 +201,7 @@ export async function GET() {
         programNama: program?.nama_indo ?? '-',
         programNamaArab: program?.nama_arab ?? '',
         programId: program?.id ?? null,
+        programKategori: program?.kategori ?? 'REGULER',
         kelasNama: riwayat.kelas?.nama ?? '-',
         isTasmi: riwayat.is_tasmi,
         statusKelulusan: status,

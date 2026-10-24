@@ -29,6 +29,11 @@ export function lembagaLabel(id: LembagaId): string {
   return LEMBAGA_LIST.find((l) => l.id === id)?.label ?? "Markaz Arabiyah";
 }
 
+// Istilah periode saja (tanpa nomor), mis. "Marhalah" — untuk label seperti "Riwayat Marhalah".
+export function lembagaTerm(id: LembagaId): string {
+  return LEMBAGA_LIST.find((l) => l.id === id)?.term ?? "Duf'ah";
+}
+
 // Label periode berjalan untuk satu lembaga, mis. "Marhalah 5".
 export function lembagaPeriodeLabel(id: LembagaId): string {
   const l = LEMBAGA_LIST.find((x) => x.id === id);

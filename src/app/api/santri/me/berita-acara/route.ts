@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSantriSession } from '@/lib/santri-auth';
+import { notifyEmaliyahAbsenChanged } from '@/lib/emaliyah-webhook';
 
 // 1. GET: Ambil daftar absen guru untuk kelas santri yang bersangkutan
 export async function GET() {
@@ -114,6 +115,15 @@ export async function POST(request: Request) {
 
       return ba;
     });
+
+    // Berita acara dapat mengubah terlambatMenit absen pengajar.
+    const absenTerkait = await prisma.absenPengajar.findUnique({
+      where: { id: absenPengajarId },
+      select: { tanggal: true }
+    });
+    if (absenTerkait) {
+      await notifyEmaliyahAbsenChanged(absenTerkait.tanggal);
+    }
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

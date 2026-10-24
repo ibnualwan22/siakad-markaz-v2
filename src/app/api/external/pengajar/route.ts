@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
+import { notifyEmaliyahAbsenChanged } from '@/lib/emaliyah-webhook';
 
 // Helper: validasi API key
 function validateApiKey(request: Request): boolean {
@@ -181,6 +182,8 @@ export async function PUT(request: Request) {
         kelas: { select: { nama: true } },
       }
     });
+
+    await notifyEmaliyahAbsenChanged(updated.tanggal);
 
     return NextResponse.json({
       success: true,

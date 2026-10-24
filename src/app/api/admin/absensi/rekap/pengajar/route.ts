@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
+import { notifyEmaliyahAbsenChanged } from "@/lib/emaliyah-webhook";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -307,6 +308,7 @@ export async function PUT(request: Request) {
           pengajarDigantikanId: finalPengajarDigantikanId,
         }
       });
+      await notifyEmaliyahAbsenChanged(created.tanggal);
       return NextResponse.json({ success: true, data: created });
     }
 
@@ -329,6 +331,7 @@ export async function PUT(request: Request) {
       }
     });
 
+    await notifyEmaliyahAbsenChanged(updated.tanggal);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error("Error updating absen pengajar:", error);
@@ -357,6 +360,7 @@ export async function DELETE(request: Request) {
 
     await prisma.absenPengajar.delete({ where: { id } });
 
+    await notifyEmaliyahAbsenChanged(existing.tanggal);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error deleting absen pengajar:", error);

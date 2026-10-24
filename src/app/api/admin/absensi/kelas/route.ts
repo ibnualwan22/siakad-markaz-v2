@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { parseWibDateString, getActiveRiwayatListForAbsen, getTodayWibString } from "@/lib/absensi";
 import { getSession } from "@/lib/auth";
+import { notifyEmaliyahAbsenChanged } from "@/lib/emaliyah-webhook";
 import { resolveSesiWindowServer, menitWibSekarang, formatMenit } from "@/lib/sesi-window";
 
 export async function GET(request: Request) {
@@ -517,6 +518,9 @@ export async function POST(request: Request) {
     }
 
     await prisma.$transaction(operations);
+
+    // Beri tahu E-Maliyah: KBM tanggal ini berubah (payroll otomatis).
+    await notifyEmaliyahAbsenChanged(tanggal);
 
     return NextResponse.json({ success: true, count: operations.length });
   } catch (error) {

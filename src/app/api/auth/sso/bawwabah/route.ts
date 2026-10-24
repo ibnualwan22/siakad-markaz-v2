@@ -86,5 +86,16 @@ export async function GET(req: Request) {
     kelasId: user.kelasId,
     sakan: user.sakan,
   });
-  return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+  // JANGAN redirect lewat new URL(path, req.url): di balik proxy, host
+  // req.url bisa menjadi alamat internal (teramati: 0.0.0.0:3000) sehingga
+  // browser diarahkan ke host yang salah. Halaman ini mengarahkan secara
+  // relatif (pola yang sama dengan verifier SSO E-Maliyah), jadi selalu
+  // mendarat di domain publik yang sedang dibuka.
+  return new NextResponse(
+    `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Siakad</title><script>location.href='/admin/dashboard';</script></head><body style="font-family:system-ui,sans-serif;background:#F3F4F6;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:24px;max-width:420px"><h2 style="color:#166534;margin:0 0 8px">Berhasil masuk lewat Bawwabah</h2><p style="color:#374151;font-size:14px;line-height:1.6;margin:0">Mengalihkan ke dashboard…</p><p style="margin:16px 0 0;font-size:14px"><a href="/admin/dashboard">Klik di sini bila tidak teralihkan</a></p></div></body></html>`,
+    {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }
+  );
 }

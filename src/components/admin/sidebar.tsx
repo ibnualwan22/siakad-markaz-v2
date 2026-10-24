@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet } from "lucide-react";
+import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
 import { SyncSantriButton } from "./sync-santri-button";
 
@@ -356,6 +356,18 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
           <div className="neu-inset p-4 rounded-xl">
             <p className="text-sm font-bold" style={{ color: "var(--color-text)" }}>{user?.nama}</p>
             <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--color-text-subtle)" }}>{user?.role}</p>
+            <Link
+              href="https://bawwabah.markazarabiyah.site"
+              className="w-full flex items-center justify-center gap-2 font-bold py-2 px-3 rounded-lg transition-all text-sm mb-2"
+              style={{
+                background: "var(--color-primary)",
+                color: "#fff",
+                boxShadow: "var(--shadow-flat)"
+              }}
+            >
+              <Globe size={16} />
+              Bawwabah
+            </Link>
             <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 font-bold py-2 px-3 rounded-lg transition-all text-sm"

@@ -1402,3 +1402,11 @@ model HuffadzTasmi {
   @@index([santriId])
   @@index([waktuSubmit])
 }
+
+// Token SSO sekali pakai yang sudah dikonsumsi (anti-replay, Fase 5 Bawwabah).
+// Ditulis sekali saat verifikasi berhasil; jti yang sama kedua kali ditolak.
+model SsoConsumedToken {
+  jti        String   @id
+  aud        String
+  consumedAt DateTime @default(now())
+}

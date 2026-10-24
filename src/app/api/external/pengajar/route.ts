@@ -49,7 +49,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    const periode = await getActivePeriode();
+    // Rentang tanggal kustom (?from=YYYY-MM-DD&to=YYYY-MM-DD) untuk rekap
+    // historis per periode (dipakai E-Maliyah). Tanpa parameter ini,
+    // perilaku tetap: periode usbu aktif.
+    const { searchParams } = new URL(request.url);
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+
+    let periode;
+    if (fromParam && toParam && dateRe.test(fromParam) && dateRe.test(toParam)) {
+      periode = {
+        startDate: new Date(fromParam + 'T00:00:00'),
+        endDate: new Date(toParam + 'T00:00:00'),
+        dufah: null,
+        usbu: null,
+      };
+    } else {
+      periode = await getActivePeriode();
+    }
     if (!periode) {
       return NextResponse.json(
         { error: 'Tidak ada periode usbu aktif yang ditemukan' },

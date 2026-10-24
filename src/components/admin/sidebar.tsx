@@ -357,7 +357,7 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
             <p className="text-sm font-bold" style={{ color: "var(--color-text)" }}>{user?.nama}</p>
             <p className="text-xs mt-0.5 mb-3" style={{ color: "var(--color-text-subtle)" }}>{user?.role}</p>
             <Link
-              href="https://bawwabah.markazarabiyah.site"
+              href="https://bawwabah.markazarabiyah.site/dashboard"
               className="w-full flex items-center justify-center gap-2 font-bold py-2 px-3 rounded-lg transition-all text-sm mb-2"
               style={{
                 background: "var(--color-primary)",

@@ -30,6 +30,7 @@ const AVAILABLE_PERMISSIONS = [
   { id: "absen_sakan_edit", label: "Absen Sakan (Aksi)", desc: "Akses melakukan absensi sakan", category: "Divisi Absensi", type: "aksi" },
   { id: "absen_kelas", label: "Absen Kelas (Lihat)", desc: "Akses melihat absensi kelas", category: "Divisi Absensi", type: "lihat" },
   { id: "absen_kelas_edit", label: "Absen Kelas (Aksi)", desc: "Akses melakukan absensi kelas", category: "Divisi Absensi", type: "aksi" },
+  { id: "absen_kelas_koreksi", label: "Absen Kelas (Koreksi)", desc: "Akses menyimpan koreksi absen kelas di luar hari ini dan di luar jendela sesi (seperti ADMIN, tanpa hak admin lainnya)", category: "Divisi Absensi", type: "aksi" },
   { id: "manajemen_sesi", label: "Jadwal Buka/Tutup Sesi (Lihat)", desc: "Akses melihat jadwal sesi", category: "Divisi Absensi", type: "lihat" },
   { id: "manajemen_sesi_edit", label: "Jadwal Buka/Tutup Sesi (Aksi)", desc: "Akses mengatur jadwal sesi", category: "Divisi Absensi", type: "aksi" },
   { id: "absen_kegiatan", label: "Absen Kegiatan (Lihat)", desc: "Akses melihat absensi kegiatan", category: "Divisi Absensi", type: "lihat" },

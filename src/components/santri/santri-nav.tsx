@@ -41,6 +41,7 @@ const baseNavItems = [
   { href: "/santri/no-wa", label: "WhatsApp AI", icon: MessageCircle },
   { href: "/santri/arsip-galeri", label: "Galeri", icon: Images },
   { href: "/santri/pemilihan-lajnah", label: "Pemilihan", icon: Vote },
+  { href: "/santri/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen },
   { href: "/santri/checkout", label: "Check Out", icon: DoorOpen },
 ];
 

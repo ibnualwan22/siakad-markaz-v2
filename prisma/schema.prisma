@@ -1357,6 +1357,20 @@ model NadiHufadzTasmi {
   penguji User?             @relation(fields: [pengujiId], references: [id], onDelete: SetNull)
 }
 
+// Status buka/tutup pendaftaran Nadi Hufadz per dufah.
+// Satu baris per dufah; tanpa baris = tertutup (admin membuka eksplisit).
+// Menutup hanya menghalangi pendaftar baru — peserta yang sudah terdaftar
+// tetap berjalan setoran & tasmi'-nya.
+model NadiHufadzPeriode {
+  id        String   @id @default(cuid())
+  dufahNama String   @unique
+  dibuka    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dufahNama])
+}
+
 // Template cetak generik (Nadi Hufadz & program lain ke depan).
 // backgroundUrl = Cloudinary; fieldPositions = JSON koordinat per field:
 // { nama: {x, y, fontSize, align, maxWidth}, juz: {...}, predikat: {...}, periode: {...} }

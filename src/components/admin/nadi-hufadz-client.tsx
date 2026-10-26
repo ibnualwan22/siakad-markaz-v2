@@ -53,6 +53,8 @@ export default function NadiHufadzClient({
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("peserta");
   const [pesertaList, setPesertaList] = useState<Peserta[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendaftaranDibuka, setPendaftaranDibuka] = useState<boolean | null>(null);
+  const [toggleLoading, setToggleLoading] = useState(false);
 
   const fetchPeserta = async () => {
     setLoading(true);
@@ -67,13 +69,66 @@ export default function NadiHufadzClient({
     }
   };
 
+  const fetchPendaftaran = async () => {
+    try {
+      const res = await fetch(`/api/admin/nadi-hufadz/periode?dufahNama=${encodeURIComponent(dufahAktif)}`);
+      const json = await res.json();
+      setPendaftaranDibuka(!!json.dibuka);
+    } catch {
+      setPendaftaranDibuka(false);
+    }
+  };
+
+  const togglePendaftaran = async () => {
+    if (pendaftaranDibuka === null) return;
+    setToggleLoading(true);
+    try {
+      const res = await fetch("/api/admin/nadi-hufadz/periode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dufahNama: dufahAktif, dibuka: !pendaftaranDibuka }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal mengubah status");
+      setPendaftaranDibuka(!!json.dibuka);
+      toast.success(json.dibuka ? "Pendaftaran dibuka" : "Pendaftaran ditutup");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal mengubah status");
+    } finally {
+      setToggleLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPeserta();
+    fetchPendaftaran();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dufahAktif]);
 
   return (
     <div className="space-y-6">
+      {dufahAktif !== "" && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3">
+          <p className="text-sm">
+            Pendaftaran {dufahAktif}:{" "}
+            <span className={`font-bold ${pendaftaranDibuka ? "text-emerald-700" : "text-red-600"}`}>
+              {pendaftaranDibuka === null ? "Memuat..." : pendaftaranDibuka ? "DIBUKA" : "DITUTUP"}
+            </span>
+            <span className="text-[var(--color-text-muted)]">
+              {" "}— menutup hanya menghalangi pendaftar baru, peserta yang sudah terdaftar tetap berjalan.
+            </span>
+          </p>
+          {canEdit && (
+            <button
+              onClick={togglePendaftaran}
+              disabled={toggleLoading || pendaftaranDibuka === null}
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex gap-2 flex-wrap border-b border-[var(--color-surface-dark)]">
         {TABS.map((t) => (
           <button

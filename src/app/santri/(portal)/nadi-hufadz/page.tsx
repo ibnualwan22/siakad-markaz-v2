@@ -152,34 +152,48 @@ export default function NadiHufadzSantriPage() {
               {r.setoran.length === 0 ? (
                 <p className="text-slate-400 text-xs">Belum ada setoran.</p>
               ) : (
-                <ul className="space-y-4">
+                <div className="space-y-3">
                   {r.setoran.map((s) => (
-                    <li key={s.pertemuanKe} className="flex gap-3">
-                      <span className="shrink-0 w-7 h-7 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">
-                        {s.pertemuanKe}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="text-xs text-slate-500">{formatTanggalId(s.tanggal)}</p>
-                          <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${s.lulus ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                            {s.lulus ? "Lulus" : "Tidak lulus"}
-                          </span>
+                    <div key={s.pertemuanKe} className="rounded-xl border border-slate-200 bg-white shadow-sm p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-sm">Pertemuan {s.pertemuanKe}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{formatTanggalId(s.tanggal)}</p>
                         </div>
-                        <p className="text-sm font-medium mt-0.5">
-                          {[s.juz && `Juz ${s.juz}`, s.surat, s.ayat && `Ayat ${s.ayat}`]
-                            .filter(Boolean)
-                            .join(" • ") || "-"}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">Disimak oleh {s.penyimak}</p>
-                        {s.catatan && (
-                          <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mt-2">
-                            <span className="font-bold">Catatan:</span> {s.catatan}
+                        <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded ${s.lulus ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                          {s.lulus ? "Lulus" : "Tidak lulus"}
+                        </span>
+                      </div>
+                      <div className="border-t border-slate-100 my-3" />
+                      <div className="space-y-2.5">
+                        <div>
+                          <p className="text-[11px] tracking-wide text-slate-400 font-bold">SETORAN</p>
+                          <p className="text-sm font-medium mt-0.5">
+                            {[s.juz && `Juz ${s.juz}`, s.surat, s.ayat && `Ayat ${s.ayat}`]
+                              .filter(Boolean)
+                              .join(" • ") || "-"}
                           </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] tracking-wide text-slate-400 font-bold">PENYIMAK</p>
+                          <p className="text-sm mt-0.5">{s.penyimak}</p>
+                        </div>
+                        {s.catatan && (
+                          <div>
+                            <p className="text-[11px] tracking-wide text-slate-400 font-bold">CATATAN</p>
+                            <p className="text-xs text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mt-1">
+                              {s.catatan}
+                            </p>
+                          </div>
                         )}
                       </div>
-                    </li>
+                      <div className="border-t border-slate-100 mt-3 pt-3 flex items-end justify-between gap-2">
+                        <p className="text-[11px] tracking-wide text-slate-400 font-bold">PARAF PENYIMAK</p>
+                        <p className="text-sm font-medium border-t border-slate-400 pt-1 px-2">{s.penyimak}</p>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
 

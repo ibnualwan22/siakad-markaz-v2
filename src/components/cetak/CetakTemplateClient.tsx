@@ -11,6 +11,8 @@ type FieldCfg = {
   fontSize: number; // px pada skala referensi
   align?: string;
   maxWidth?: number; // persen
+  fontFamily?: string; // nama font, diatur lewat web (mis. "The Season", "Poppins")
+  color?: string; // warna teks, mis. "#865b34"
 };
 
 const FIELD_LABEL: Record<string, string> = {
@@ -18,6 +20,7 @@ const FIELD_LABEL: Record<string, string> = {
   juz: "Juz",
   predikat: "Predikat",
   periode: "Periode",
+  tglCetak: "Tanggal Cetak",
 };
 
 export default function CetakTemplateClient({
@@ -28,9 +31,10 @@ export default function CetakTemplateClient({
   programKey: string;
   data: {
     nama: string;
-    juz: string;
-    predikat: string;
+    juz?: string;
+    predikat?: string;
     periode: string;
+    tglCetak?: string;
     template: { backgroundUrl: string | null; fieldPositions: Record<string, FieldCfg> };
   };
   showPngButton?: boolean;
@@ -51,6 +55,8 @@ export default function CetakTemplateClient({
     setPngDownloading(true);
     setPngError("");
     try {
+      // Tunggu webfont (mis. Poppins) termuat agar PNG memakai font yang benar.
+      try { await (document as any).fonts?.ready; } catch { /* abaikan */ }
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(el, {
         scale: 2,
@@ -64,7 +70,7 @@ export default function CetakTemplateClient({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `syahadah-nadi-hufadz-${data.nama.replace(/\s+/g, "-")}.png`;
+      a.download = `syahadah-${programKey}-${data.nama.replace(/\s+/g, "-")}.png`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch {
@@ -98,10 +104,14 @@ export default function CetakTemplateClient({
 
   const fieldText: Record<string, string> = {
     nama: data.nama,
-    juz: data.juz,
-    predikat: data.predikat,
+    juz: data.juz ?? "",
+    predikat: data.predikat ?? "",
     periode: data.periode,
+    tglCetak: data.tglCetak ?? "",
   };
+
+  // Nadi memakai teks Arab (rtl); syahadah organisasi memakai teks Latin (ltr).
+  const fieldDirection = programKey === "nadi-hufadz" ? "rtl" : "ltr";
 
   const renderField = (key: string) => {
     const cfg = fields[key] as FieldCfg | undefined;
@@ -114,7 +124,9 @@ export default function CetakTemplateClient({
       transform: "translate(-50%, -50%)",
       width: maxW,
       textAlign: (cfg.align as any) || "center",
-      direction: "rtl",
+      direction: fieldDirection,
+      fontFamily: cfg.fontFamily || undefined,
+      color: cfg.color || undefined,
     };
     if (key === "nama") {
       return (
@@ -143,6 +155,12 @@ export default function CetakTemplateClient({
           @page { size: landscape; margin: 0; }
         }
       `}</style>
+      {/* Poppins untuk field syahadah organisasi. Font lain (mis. "The Season")
+          dirujuk lewat nama family yang diatur di layout — tampil bila font
+          tersebut tersedia di browser (terinstal / webfont yang dipasang). */}
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
       <div className="no-print sticky top-0 z-10 bg-white/90 backdrop-blur border-b px-4 py-3 flex items-center justify-between gap-3">
         <div>

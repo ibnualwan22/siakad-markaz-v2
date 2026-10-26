@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Plus, Trash2, Search, X, Loader2, Users } from "lucide-react";
+import { Shield, Plus, Trash2, Search, X, Loader2, Users, Printer } from "lucide-react";
 import toast from "react-hot-toast";
 import { lembagaPeriodeLabel } from "@/lib/lembaga";
+import TemplateSyahadahTab from "@/components/admin/template-syahadah-tab";
 
 type AnggotaOsim = {
   id: string;
@@ -36,8 +37,16 @@ export default function OSIMPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedSantri, setSelectedSantri] = useState<any | null>(null);
 
+  // Syahadah: tab + izin cetak/atur template (permission osim_syahadah).
+  const [tab, setTab] = useState<"anggota" | "template">("anggota");
+  const [bisaSyahadah, setBisaSyahadah] = useState(false);
+
   useEffect(() => {
     fetchInit();
+    fetch("/api/admin/izin-syahadah")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j) setBisaSyahadah(!!j.osim_syahadah); })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -186,6 +195,18 @@ export default function OSIMPage() {
         </div>
       </div>
 
+      <div className="flex gap-2">
+        <button onClick={() => setTab("anggota")}
+          className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === "anggota" ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>
+          Anggota
+        </button>
+        <button onClick={() => setTab("template")}
+          className={`px-4 py-2 rounded-xl text-sm font-bold ${tab === "template" ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>
+          Template & Layout Syahadah
+        </button>
+      </div>
+
+      {tab === "anggota" ? (
       <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-[var(--color-surface-dark)] relative min-h-[500px]">
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-100">
           <h2 className="text-xl font-bold text-slate-800">Daftar Anggota ({osimList.length})</h2>
@@ -279,19 +300,35 @@ export default function OSIMPage() {
                   <p className="font-bold text-sm text-slate-800 line-clamp-1 leading-tight mb-0.5">{item.santri.nama}</p>
                   <p className="text-[10px] text-slate-500 font-medium">Asrama: {item.santri.sakan} {item.santri.kamar}</p>
                 </div>
-                <button 
-                  onClick={() => handleDelete(item.id, item.santri.nama)}
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all shrink-0"
-                  title="Hapus OSIM"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {bisaSyahadah && (
+                    <a
+                      href={`/cetak-template/osim/${item.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                      title="Cetak Syahadah"
+                    >
+                      <Printer size={16} />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => handleDelete(item.id, item.santri.nama)}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl opacity-0 group-hover:opacity-100 transition-all"
+                    title="Hapus OSIM"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
 
       </div>
+      ) : (
+        <TemplateSyahadahTab programKey="osim" apiBase="/api/admin/osim/template" canEdit={bisaSyahadah} />
+      )}
     </div>
   );
 }

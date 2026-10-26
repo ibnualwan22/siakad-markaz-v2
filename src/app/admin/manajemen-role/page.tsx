@@ -129,7 +129,9 @@ const AVAILABLE_PERMISSIONS = [
   { id: "mukholif_lughoh", label: "Mukholif Lughoh (Lihat)", desc: "Akses melihat daftar laporan pelanggaran bahasa", category: "Divisi Kebahasaan", type: "lihat" },
   { id: "mukholif_lughoh_edit", label: "Mukholif Lughoh (Aksi)", desc: "Akses melakukan tabayun/verifikasi pelanggaran bahasa", category: "Divisi Kebahasaan", type: "aksi" },
   { id: "lajnah_manage", label: "Kelola Lajnah", desc: "Akses mengelola anggota lajnah pengeksekusi iqob", category: "Divisi Kebahasaan", type: "aksi" },
+  { id: "lajnah_syahadah", label: "Cetak Syahadah Lajnah", desc: "Akses mencetak syahadah anggota Lajnah dan mengatur template & layout-nya", category: "Divisi Kebahasaan", type: "aksi" },
   { id: "osim_manage", label: "Kelola OSIM", desc: "Akses mengelola anggota OSIM dan pemilihan OSIM Markaz Turats", category: "Markaz Turats", type: "aksi" },
+  { id: "osim_syahadah", label: "Cetak Syahadah OSIM", desc: "Akses mencetak syahadah anggota OSIM dan mengatur template & layout-nya", category: "Markaz Turats", type: "aksi" },
   { id: "jasus_manage", label: "Kelola Jasus", desc: "Akses mengelola anggota jasus pelapor pelanggaran bahasa", category: "Divisi Kebahasaan", type: "aksi" },
   { id: "monitoring_mukholif", label: "Monitoring Mukholif", desc: "Akses dashboard monitoring eksekusi iqob", category: "Divisi Kebahasaan", type: "lihat" }
 ];

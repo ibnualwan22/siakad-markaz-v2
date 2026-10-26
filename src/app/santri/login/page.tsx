@@ -76,25 +76,13 @@ export default function SantriLoginPage() {
         <div className="flex flex-col items-center mb-8">
           <div className="neu-card p-5 rounded-2xl mb-6">
             <Image
-              src="/images/Logo Markaz.png"
-              alt="Logo Markaz Arabiyah"
-              width={72}
-              height={72}
-              className="rounded-lg"
+              src="/images/logo-siakad-stacked.png"
+              alt="Logo SIAKAD Markaz Arabiyah"
+              width={190}
+              height={207}
+              className="h-auto w-[190px]"
             />
           </div>
-          <h1
-            className="text-2xl font-bold tracking-wide font-display"
-            style={{ color: "var(--color-text)" }}
-          >
-            SIAKAD
-          </h1>
-          <p
-            className="mt-1 text-xs font-semibold tracking-widest uppercase"
-            style={{ color: "var(--color-primary)" }}
-          >
-            Markaz Arabiyah
-          </p>
           <p
             className="mt-2 text-xs text-center"
             style={{ color: "var(--color-text-muted)" }}

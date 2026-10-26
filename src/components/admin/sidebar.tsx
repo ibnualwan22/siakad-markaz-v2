@@ -201,14 +201,12 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
       <div className="lg:hidden flex items-center justify-between px-4 py-3 sticky top-0 z-30" style={{ background: "var(--bg-app)", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
         <div className="flex items-center gap-2.5">
           <Image
-            src="/images/Logo Markaz.png"
-            alt="Logo Markaz Arabiyah"
-            width={32}
+            src="/images/logo-siakad-horizontal.png"
+            alt="Logo SIAKAD Markaz Arabiyah"
+            width={104}
             height={32}
-            className="rounded-lg"
-            style={{ boxShadow: "var(--shadow-flat)" }}
+            className="h-8 w-auto"
           />
-          <span className="font-bold tracking-wide text-sm font-display" style={{ color: "var(--color-text)" }}>Markaz Arabiyah</span>
         </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -257,16 +255,12 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
         <div className="hidden lg:flex flex-col p-5 items-center justify-center">
           <div className="neu-card p-4 flex flex-col items-center gap-3 w-full">
             <Image
-              src="/images/Logo Markaz.png"
-              alt="Logo Markaz Arabiyah"
-              width={56}
-              height={56}
-              className="rounded-xl"
+              src="/images/logo-siakad-stacked.png"
+              alt="Logo SIAKAD Markaz Arabiyah"
+              width={170}
+              height={185}
+              className="h-auto w-[170px]"
             />
-            <h1 className="text-center text-[14px] font-bold tracking-wide leading-tight font-display" style={{ color: "var(--color-text)" }}>
-              Sistem Akademik<br />
-              <span className="font-bold text-[13px] tracking-normal" style={{ color: "var(--color-primary)" }}>Markaz Arabiyah</span>
-            </h1>
           </div>
         </div>
 

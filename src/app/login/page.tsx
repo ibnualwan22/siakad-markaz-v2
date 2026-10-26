@@ -77,19 +77,13 @@ function LoginForm() {
           <div className="flex flex-col items-center mb-8">
             <div className="neu-card p-4 mb-5 rounded-2xl">
               <Image
-                src="/images/Logo Markaz.png"
-                alt="Logo Markaz Arabiyah"
-                width={64}
-                height={64}
-                className="rounded-lg"
+                src="/images/logo-siakad-stacked.png"
+                alt="Logo SIAKAD Markaz Arabiyah"
+                width={190}
+                height={207}
+                className="h-auto w-[190px]"
               />
             </div>
-            <h1 className="text-2xl font-bold tracking-wide font-display" style={{ color: "var(--color-text)" }}>
-              SIAKAD
-            </h1>
-            <p className="mt-1 text-sm font-semibold" style={{ color: "var(--color-primary)" }}>
-              Markaz Arabiyah
-            </p>
           </div>
 
           {/* Error */}

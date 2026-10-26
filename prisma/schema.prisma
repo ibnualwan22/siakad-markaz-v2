@@ -106,6 +106,10 @@ model SantriInternal {
   paslonLajnah1List    PaslonLajnah[]     @relation("PaslonSantri1")
   paslonLajnah2List    PaslonLajnah[]     @relation("PaslonSantri2")
   suaraLajnahList      SuaraLajnah[]
+  anggotaOsimList      AnggotaOsim[]
+  paslonOsim1List      PaslonOsim[]      @relation("PaslonOsimSantri1")
+  paslonOsim2List      PaslonOsim[]      @relation("PaslonOsimSantri2")
+  suaraOsimList        SuaraOsim[]
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
   waOtpList             WaOtp[]
   nadiHufadzPesertaList NadiHufadzPeserta[]
@@ -150,6 +154,8 @@ model Dufah {
   anggotaJasusList  AnggotaJasus[]
   arsipGaleriList   ArsipGaleri[]
   sesiPemilihanList SesiPemilihanLajnah[]
+  anggotaOsimList      AnggotaOsim[]
+  sesiPemilihanOsimList SesiPemilihanOsim[]
 }
 
 model RiwayatSantri {
@@ -1298,6 +1304,77 @@ model SuaraLajnah {
   sesi   SesiPemilihanLajnah @relation(fields: [sesiId], references: [id], onDelete: Cascade)
   paslon PaslonLajnah        @relation(fields: [paslonId], references: [id], onDelete: Cascade)
   santri SantriInternal      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@unique([sesiId, santriId]) // 1 santri = 1 suara per sesi
+  @@index([paslonId])
+}
+
+// ===== OSIM (Markaz Turats) =====
+// Cermin persis model Lajnah (Anggota/Sesi/Paslon/Suara), TANPA kaitan apa pun
+// ke mukholif/jasus. Jangkar data tetap dufahNama (FK ke Dufah) — label
+// "Marhalah" hanya tampil di UI via lib/lembaga.ts, sementara sembari
+// menunggu Bawwabah mengambil alih pergantian periode (Fase 4/7).
+// Pemenang otomatis menjadi AnggotaOsim saat sesi ditutup (lib/pemilihan-osim.ts).
+model AnggotaOsim {
+  id         String         @id @default(cuid())
+  santriId   String
+  dufahNama  String
+  createdAt  DateTime       @default(now())
+
+  santri     SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  dufah      Dufah          @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+
+  @@unique([santriId, dufahNama])
+}
+
+model SesiPemilihanOsim {
+  id             String    @id @default(cuid())
+  judul          String
+  dufahNama      String
+  status         String    @default("DRAFT") // DRAFT | BUKA | TUTUP
+  rencanaTutupAt DateTime?
+  dibukaAt       DateTime?
+  ditutupAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  dufah      Dufah            @relation(fields: [dufahNama], references: [nama], onDelete: Cascade)
+  paslonList PaslonOsim[]
+  suaraList  SuaraOsim[]
+
+  @@index([dufahNama])
+  @@index([status])
+}
+
+model PaslonOsim {
+  id        String   @id @default(cuid())
+  sesiId    String
+  nomorUrut Int
+  santri1Id String // calon ketua
+  santri2Id String // calon wakil
+  fotoUrl   String?
+  visiMisi  String?
+  createdAt DateTime @default(now())
+
+  sesi      SesiPemilihanOsim @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+  santri1   SantriInternal    @relation("PaslonOsimSantri1", fields: [santri1Id], references: [id], onDelete: Cascade)
+  santri2   SantriInternal    @relation("PaslonOsimSantri2", fields: [santri2Id], references: [id], onDelete: Cascade)
+  suaraList SuaraOsim[]
+
+  @@unique([sesiId, nomorUrut])
+  @@index([sesiId])
+}
+
+model SuaraOsim {
+  id        String   @id @default(cuid())
+  sesiId    String
+  paslonId  String
+  santriId  String // pemilih
+  createdAt DateTime @default(now())
+
+  sesi   SesiPemilihanOsim @relation(fields: [sesiId], references: [id], onDelete: Cascade)
+  paslon PaslonOsim        @relation(fields: [paslonId], references: [id], onDelete: Cascade)
+  santri SantriInternal    @relation(fields: [santriId], references: [id], onDelete: Cascade)
 
   @@unique([sesiId, santriId]) // 1 santri = 1 suara per sesi
   @@index([paslonId])

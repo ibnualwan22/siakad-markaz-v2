@@ -51,7 +51,8 @@ export function SantriSidebar({
   isKetuaKelas,
   isLajnah,
   isJasus,
-  isHufadz
+  isHufadz,
+  isTurats
 }: {
   nama: string;
   isAktif: boolean;
@@ -59,15 +60,28 @@ export function SantriSidebar({
   isLajnah?: boolean;
   isJasus?: boolean;
   isHufadz?: boolean;
+  isTurats?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  let navItems = isKetuaKelas 
+  let navItems = isKetuaKelas
     ? [...baseNavItems, { href: "/santri/berita-acara", label: "Berita Acara", icon: ClipboardCheck }]
     : [...baseNavItems];
+
+  // Santri Markaz Turats melihat "Pemilihan OSIM" menggantikan "Pemilihan"
+  // (Lajnah). Santri Arabiyah/Hufadz tidak berubah. Ini hanya soal menu:
+  // API vote OSIM tetap memvalidasi Turats, dan API vote Lajnah tidak
+  // menyaring lembaga (keputusan terbuka — lihat walkthrough OSIM).
+  if (isTurats) {
+    navItems = navItems.map((it) =>
+      it.href === "/santri/pemilihan-lajnah"
+        ? { href: "/santri/pemilihan-osim", label: "Pemilihan OSIM", icon: Vote }
+        : it
+    );
+  }
 
   if (isJasus || isLajnah) {
     navItems = [...navItems, { href: "/santri/mukholif", label: "Lapor Mukholif", icon: AlertTriangle }];

@@ -123,6 +123,14 @@ const navigationGroups = [
     ]
   },
   {
+    // OSIM: organisasi santri Markaz Turats (cermin Lajnah, TANPA mukholif).
+    title: "Markaz Turats",
+    items: [
+      { href: "/admin/osim", label: "OSIM", icon: Shield, permissionId: "osim_manage" },
+      { href: "/admin/osim/pemilihan", label: "Pemilihan OSIM", icon: Vote, permissionId: "osim_manage" },
+    ]
+  },
+  {
     title: "Infrastruktur & Jaringan",
     items: [
       { href: "/admin/wifi", label: "Pusat Kontrol WiFi", icon: Wifi, permissionId: "manajemen_user" },

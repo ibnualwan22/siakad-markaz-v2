@@ -34,7 +34,7 @@ export default async function SantriLayout({
     select: {
       dufahNama: true,
       riwayatRecords: {
-        select: { dufahNama: true, program: { select: { nama_indo: true } } },
+        select: { dufahNama: true, program: { select: { nama_indo: true, kategori: true } } },
       },
     },
   });
@@ -44,13 +44,15 @@ export default async function SantriLayout({
   const isHufadz = (riwayatAktif?.program?.nama_indo || "")
     .toLowerCase()
     .includes("hufadz");
+  // Santri Markaz Turats: riwayat berjalan ber-program kategori TURATS.
+  const isTurats = riwayatAktif?.program?.kategori === "TURATS";
 
   return (
     <div
       className="min-h-screen flex flex-col lg:flex-row"
       style={{ background: "var(--bg-app)" }}
     >
-      <SantriSidebar nama={session.nama} isAktif={session.isAktif} isKetuaKelas={isKetuaKelasCount > 0} isLajnah={isLajnahCount > 0} isJasus={isJasusCount > 0} isHufadz={isHufadz} />
+      <SantriSidebar nama={session.nama} isAktif={session.isAktif} isKetuaKelas={isKetuaKelasCount > 0} isLajnah={isLajnahCount > 0} isJasus={isJasusCount > 0} isHufadz={isHufadz} isTurats={isTurats} />
       <main className="flex-1 min-w-0 flex flex-col">
         <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 lg:pb-8 pt-16 lg:pt-8">
           <div className="mx-auto max-w-4xl w-full">{children}</div>

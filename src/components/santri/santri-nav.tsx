@@ -31,7 +31,6 @@ const baseNavItems = [
   { href: "/santri/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/santri/nilai", label: "Nilai", icon: FileText },
   { href: "/santri/ujian", label: "Ujian", icon: ClipboardCheck },
-  { href: "/santri/absen-kegiatan", label: "Absen Mandiri", icon: CalendarCheck },
   { href: "/santri/qr-saya", label: "QR Saya", icon: QrCode },
   { href: "/santri/absensi", label: "Absensi", icon: CalendarCheck },
   { href: "/santri/riwayat", label: "Riwayat", icon: Clock },
@@ -278,9 +277,9 @@ export function SantriSidebar({
 export function SantriBottomNav() {
   const pathname = usePathname();
 
-  // 6 icon di bottom nav: QR Saya ditambahkan agar mudah diakses saat scan kehadiran
+  // 5 icon di bottom nav: QR Saya ditambahkan agar mudah diakses saat scan kehadiran
   const bottomItems = baseNavItems.filter((item: any) =>
-    ["Beranda", "QR Saya", "Absensi", "Absen Mandiri", "Nilai", "Perizinan"].includes(item.label)
+    ["Beranda", "QR Saya", "Absensi", "Nilai", "Perizinan"].includes(item.label)
   );
 
   return (
@@ -299,7 +298,6 @@ export function SantriBottomNav() {
           
           // Singkat teks khusus bottom nav jika perlu
           let shortLabel = item.label;
-          if (item.label === "Absen Mandiri") shortLabel = "Absen";
 
           return (
             <Link

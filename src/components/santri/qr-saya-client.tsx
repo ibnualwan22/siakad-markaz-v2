@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
-import { ScanLine, X, Sun } from "lucide-react";
+import { ScanLine, X, Sun, CheckCircle2 } from "lucide-react";
 
 export function QrSayaClient({
   nama,
@@ -14,7 +14,54 @@ export function QrSayaClient({
   error: string | null;
 }) {
   const [scanMode, setScanMode] = useState(false);
+  const [berhasil, setBerhasil] = useState<{ kategoriNama: string; waktu: string } | null>(null);
   const wakeLockRef = useRef<any>(null);
+  // Polling status scan: snapshot saat masuk Mode Scan = baseline; hanya rekaman
+  // BARU (kategoriId yang belum ada di baseline) yang memicu modal berhasil.
+  const baselineRef = useRef<Set<string> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!scanMode) return;
+    let berhenti = false;
+    const cek = async () => {
+      try {
+        const res = await fetch("/api/santri/qr-saya/status");
+        const data = await res.json();
+        if (!data.success || berhenti) return;
+        if (baselineRef.current === null) {
+          // Pengambilan pertama = baseline (rekaman lama tidak memicu modal)
+          baselineRef.current = new Set<string>(data.hadir.map((h: any) => h.kategoriId));
+          return;
+        }
+        const baru = data.hadir.find((h: any) => !baselineRef.current!.has(h.kategoriId));
+        if (baru) {
+          setBerhasil({
+            kategoriNama: baru.kategoriNama,
+            waktu: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
+          });
+          try {
+            navigator.vibrate?.(200);
+          } catch {
+            /* abaikan */
+          }
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+      } catch {
+        /* abaikan: polling berikutnya mencoba lagi */
+      }
+    };
+    baselineRef.current = null;
+    setBerhasil(null);
+    void cek();
+    intervalRef.current = setInterval(cek, 5000);
+    return () => {
+      berhenti = true;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    };
+  }, [scanMode]);
 
   // Wake Lock: jaga layar tetap menyala saat Mode Scan
   const requestWakeLock = async () => {
@@ -79,6 +126,11 @@ export function QrSayaClient({
 
   return (
     <div className="mx-auto max-w-md">
+      {/* Animasi modal berhasil: pop singkat, gaya sama dengan kartu hasil admin */}
+      <style>{`
+        @keyframes scan-pop { 0% { transform: scale(0.96); opacity: 0.4; } 100% { transform: scale(1); opacity: 1; } }
+        .animasi-scan-pop { animation: scan-pop 0.3s ease-out; }
+      `}</style>
       <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
         <p className="text-sm text-gray-500">QR Absensi</p>
         <h2 className="mt-1 text-xl font-bold text-gray-900">{nama}</h2>
@@ -130,6 +182,25 @@ export function QrSayaClient({
           <p className="mt-3 text-xs text-gray-400">
             Ketuk tombol × di atas untuk keluar dari Mode Scan
           </p>
+
+          {/* Modal berhasil: muncul begitu scan petugas tercatat (polling) */}
+          {berhasil && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6">
+              <div className="animasi-scan-pop w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
+                <CheckCircle2 size={64} className="mx-auto text-green-600" />
+                <h2 className="mt-3 text-2xl font-black text-gray-900">Absensi Berhasil!</h2>
+                <p className="mt-1 text-sm font-semibold text-gray-600">
+                  {berhasil.kategoriNama} • {berhasil.waktu}
+                </p>
+                <button
+                  onClick={exitScanMode}
+                  className="mt-6 w-full rounded-xl bg-gray-900 px-4 py-3 text-sm font-bold text-white"
+                >
+                  Selesai
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

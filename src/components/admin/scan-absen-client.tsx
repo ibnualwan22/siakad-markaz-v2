@@ -63,7 +63,9 @@ function beepKasir() {
 }
 
 // Pola QR santri: SKA.<santriId>.<tanda-tangan-hex-32> — dipakai untuk auto-submit tanpa Enter
-const POLA_QR_SANTRI = /^SKA\.[^.]+\.[0-9a-f]{32}$/i;
+// Sengaja TANPA jangkar ^...$: isi kolom bisa menempel dua pola bila scanner memicu
+// dua kali (SKA...SKA...); yang diekstrak dan dikirim hanya pola PERTAMA yang lengkap.
+const POLA_QR_SANTRI = /SKA\.[^.\s]+\.[0-9a-f]{32}/i;
 
 export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategoriList: Kategori[]; bisaBuatSesi?: boolean }) {
   const [kategoriId, setKategoriId] = useState("");
@@ -73,7 +75,9 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   const [mode, setMode] = useState<"scanner" | "kamera">("scanner");
   const [scanValue, setScanValue] = useState("");
   const [hasil, setHasil] = useState<Hasil | null>(null);
-  const [riwayat, setRiwayat] = useState<{ nama: string; tipe: Hasil["tipe"]; waktu: string }[]>([]);
+  // Penghitung hasil: kunci remount kartu/notif supaya animasi terulang tiap hasil baru
+  const [hasilKey, setHasilKey] = useState(0);
+  const [riwayat, setRiwayat] = useState<{ id: number; nama: string; tipe: Hasil["tipe"]; waktu: string }[]>([]);
   const [count, setCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
@@ -150,6 +154,45 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
     return () => window.removeEventListener("focus", onWindowFocus);
   }, [fokusInput]);
 
+  // Layar tetap hidup selama sesi scan aktif (Wake Lock API): diminta saat sesi
+  // dibuka, diminta ulang saat petugas kembali ke halaman (kunci lepas begitu tab
+  // disembunyikan), dilepas saat sesi berakhir. Browser yang tak mendukung atau
+  // menolak diam-diam dibiarkan — halaman tetap jalan normal tanpa kunci.
+  const wakeLockRef = useRef<any>(null);
+  const [layarHidup, setLayarHidup] = useState(false);
+  const mintaWakeLock = useCallback(async () => {
+    try {
+      if (!("wakeLock" in navigator)) return;
+      if (document.visibilityState !== "visible") return;
+      if (wakeLockRef.current) return;
+      wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      setLayarHidup(true);
+      wakeLockRef.current.addEventListener("release", () => {
+        wakeLockRef.current = null;
+        setLayarHidup(false);
+      });
+    } catch {
+      /* abaikan: tanpa kunci, layar mengikuti penguncian normal perangkat */
+    }
+  }, []);
+  useEffect(() => {
+    if (!sesiAktif) return;
+    void mintaWakeLock();
+    const onVis = () => {
+      if (document.visibilityState === "visible") void mintaWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      try {
+        void wakeLockRef.current?.release();
+      } catch {
+        /* abaikan */
+      }
+      wakeLockRef.current = null;
+    };
+  }, [sesiAktif, mintaWakeLock]);
+
   const stopCamera = useCallback(async () => {
     try {
       if (qrRef.current) {
@@ -196,6 +239,12 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   const kirimScan = useCallback(
     async (p: string) => {
       if (!sesiAktif) return;
+      // Setiap hasil scan menaikkan hasilKey: kartu & banner di-remount sehingga
+      // animasinya terulang untuk tiap santri, bukan hanya scan pertama.
+      const tunjukkan = (x: Hasil) => {
+        setHasil(x);
+        setHasilKey((k) => k + 1);
+      };
       try {
         const res = await fetch("/api/admin/absensi/kegiatan/scan", {
           method: "POST",
@@ -204,12 +253,12 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
         });
         const data = await res.json();
         if (!data.hasil) {
-          setHasil({ tipe: "DITOLAK", alasan: "Sesi login berakhir / tidak punya akses" });
+          tunjukkan({ tipe: "DITOLAK", alasan: "Sesi login berakhir / tidak punya akses" });
           beep(220, 300);
           return;
         }
         const h: Hasil = { tipe: data.hasil, nama: data.namaSantri, sakan: data.sakan, kelasNama: data.kelasNama, alasan: data.alasan };
-        setHasil(h);
+        tunjukkan(h);
         if (h.tipe === "TERCATAT") {
           beepKasir();
           if (h.nama) {
@@ -217,7 +266,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
           }
           setCount((c) => c + 1);
           if (h.nama) {
-            setRiwayat((r) => [{ nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
+            setRiwayat((r) => [{ id: Date.now(), nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
           }
         } else if (h.tipe === "SUDAH_TERCATAT") {
           beep(440);
@@ -230,7 +279,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
           setNotif(null);
         }
       } catch {
-        setHasil({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
+        tunjukkan({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
         beep(220, 300);
       }
     },
@@ -262,6 +311,10 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
       if (lastScanRef.current.payload === p && now - lastScanRef.current.at < 3000) return;
       lastScanRef.current = { payload: p, at: now };
       antreanRef.current.push(p);
+      // Kosongkan kolom SECARA SINKRON (DOM + state): mengandalkan state React saja
+      // tidak cukup — burst kedua scanner bisa mulai mengetik sebelum render
+      // pengosongan berjalan, sehingga isi lama menempel dengan isi baru.
+      if (inputRef.current) inputRef.current.value = "";
       setScanValue("");
       void prosesAntrean();
     },
@@ -657,6 +710,13 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   // ---- Tampilan: sesi aktif, mode scan ----
   return (
     <div className="mx-auto max-w-2xl space-y-4">
+      {/* Animasi umpan balik scan: pop singkat kartu/banner, sorot hijau memudar di baris terbaru */}
+      <style>{`
+        @keyframes scan-pop { 0% { transform: scale(0.96); opacity: 0.4; } 100% { transform: scale(1); opacity: 1; } }
+        .animasi-scan-pop { animation: scan-pop 0.3s ease-out; }
+        @keyframes scan-sorot { 0% { background: #dcfce7; } 100% { background: #f9fafb; } }
+        .animasi-scan-sorot { animation: scan-sorot 1.2s ease-out; }
+      `}</style>
       <div className="flex items-center justify-between rounded-2xl border bg-white p-4">
         <div>
           <p className="text-xs text-gray-500">Sesi aktif</p>
@@ -665,6 +725,11 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
             Berakhir {new Date(sesiAktif.ditutupPada).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
             {" "}• {count} tercatat di jalur ini
           </p>
+          {layarHidup && (
+            <p className="mt-1 text-xs font-bold text-green-700">
+              <span className="mr-1 inline-block h-2 w-2 rounded-full bg-green-500" /> Layar tetap hidup
+            </p>
+          )}
         </div>
         {bisaBuatSesi && (
         <button
@@ -693,7 +758,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
       </div>
 
       {notif && (
-        <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${notif.tipe === "TERCATAT" ? "border-green-500 bg-green-100" : "border-amber-400 bg-amber-100"}`}>
+        <div key={hasilKey} className={`animasi-scan-pop flex items-center gap-2 rounded-xl border px-3 py-2 ${notif.tipe === "TERCATAT" ? "border-green-500 bg-green-100" : "border-amber-400 bg-amber-100"}`}>
           {notif.tipe === "TERCATAT"
             ? <CheckCircle2 size={20} className="shrink-0 text-green-600" />
             : <AlertTriangle size={20} className="shrink-0 text-amber-600" />}
@@ -728,10 +793,13 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
             onChange={(e) => {
               const v = e.target.value;
               setScanValue(v);
-              // Auto-submit begitu pola QR lengkap — tidak tergantung tombol Enter dari scanner
-              if (POLA_QR_SANTRI.test(v.trim())) submitScan(v);
+              // Auto-submit begitu SATU pola QR lengkap ditemukan — tidak tergantung
+              // tombol Enter dari scanner, dan tidak menunggu isi kolom persis sama
+              // dengan pola (isi ganda yang menempel tetap menghasilkan satu submit).
+              const cocok = v.match(POLA_QR_SANTRI);
+              if (cocok) submitScan(cocok[0]);
             }}
-            onKeyDown={(e) => { if (e.key === "Enter") submitScan(scanValue); }}
+            onKeyDown={(e) => { if (e.key === "Enter") submitScan((e.target as HTMLInputElement).value); }}
             onBlur={fokusInput}
             autoComplete="off"
             aria-hidden={true}
@@ -776,7 +844,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
       )}
 
       {hasil && hasil.tipe !== "SUDAH_TERCATAT" && (
-        <div className={`rounded-2xl border-2 p-6 text-center ${hasilWarna}`}>
+        <div key={hasilKey} className={`animasi-scan-pop rounded-2xl border-2 p-6 text-center ${hasilWarna}`}>
           {hasil.tipe === "TERCATAT" && <CheckCircle2 size={40} className="mx-auto text-green-600" />}
           {hasil.tipe === "SUDAH_TERCATAT" && <AlertTriangle size={40} className="mx-auto text-yellow-600" />}
           {hasil.tipe === "DITOLAK" && <XCircle size={40} className="mx-auto text-red-600" />}
@@ -790,7 +858,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
           <p className="text-sm font-bold text-gray-500">Baru tercatat ({riwayat.length})</p>
           <div className="mt-2 max-h-48 space-y-1 overflow-auto">
             {riwayat.map((r, i) => (
-              <div key={i} className="flex justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+              <div key={r.id} className={`flex justify-between rounded-lg px-3 py-2 text-sm ${i === 0 ? "animasi-scan-sorot" : "bg-gray-50"}`}>
                 <span className="font-semibold">{r.nama}</span>
                 <span className="text-gray-400">{r.waktu}</span>
               </div>

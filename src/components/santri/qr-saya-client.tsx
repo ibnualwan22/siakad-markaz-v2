@@ -24,6 +24,35 @@ export function QrSayaClient({
   useEffect(() => {
     if (!scanMode) return;
     let berhenti = false;
+    let pusher: any = null;
+    let channel: any = null;
+    // Hentikan kedua jalur (Pusher + polling) begitu berhasil / keluar Mode Scan
+    const hentikan = () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      try {
+        channel?.unbind_all?.();
+        channel?.unsubscribe?.();
+      } catch {
+        /* abaikan */
+      }
+      try {
+        pusher?.disconnect?.();
+      } catch {
+        /* abaikan */
+      }
+      channel = null;
+      pusher = null;
+    };
+    const tampilkanBerhasil = (kategoriNama: string, waktu: string) => {
+      setBerhasil({ kategoriNama, waktu });
+      try {
+        navigator.vibrate?.(200);
+      } catch {
+        /* abaikan */
+      }
+      hentikan();
+    };
     const cek = async () => {
       try {
         const res = await fetch("/api/santri/qr-saya/status");
@@ -36,30 +65,46 @@ export function QrSayaClient({
         }
         const baru = data.hadir.find((h: any) => !baselineRef.current!.has(h.kategoriId));
         if (baru) {
-          setBerhasil({
-            kategoriNama: baru.kategoriNama,
-            waktu: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-          });
-          try {
-            navigator.vibrate?.(200);
-          } catch {
-            /* abaikan */
-          }
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          intervalRef.current = null;
+          tampilkanBerhasil(
+            baru.kategoriNama,
+            new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+          );
         }
       } catch {
         /* abaikan: polling berikutnya mencoba lagi */
+      }
+    };
+    // Jalur utama realtime: Pusher (private channel milik santri ini).
+    // Gagal apa pun di jalur ini tidak masalah — polling di bawah tetap jalan.
+    const mulaiPusher = async () => {
+      try {
+        const cfgRes = await fetch("/api/santri/qr-saya/pusher-config");
+        const cfg = await cfgRes.json();
+        if (!cfg.success || !cfg.configured || berhenti) return;
+        const PusherMod = await import("pusher-js");
+        const Pusher = PusherMod.default;
+        if (berhenti) return;
+        pusher = new Pusher(cfg.key, {
+          cluster: cfg.cluster,
+          authEndpoint: "/api/santri/qr-saya/pusher-auth",
+        });
+        channel = pusher.subscribe(cfg.channel);
+        channel.bind("scan-berhasil", (data: any) => {
+          if (berhenti) return;
+          tampilkanBerhasil(data.kategoriNama, data.waktu);
+        });
+      } catch {
+        /* abaikan: polling tetap jalan sebagai cadangan */
       }
     };
     baselineRef.current = null;
     setBerhasil(null);
     void cek();
     intervalRef.current = setInterval(cek, 5000);
+    void mulaiPusher();
     return () => {
       berhenti = true;
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
+      hentikan();
     };
   }, [scanMode]);
 

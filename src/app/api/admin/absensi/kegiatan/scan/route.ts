@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { verifySantriQr } from "@/lib/qr-signing";
 import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
+import { triggerScanBerhasil } from "@/lib/pusher-server";
 
 async function checkAkses() {
   const session = await getSession();
@@ -100,6 +101,22 @@ export async function POST(request: Request) {
       }
       throw e;
     }
+
+    // Realtime: kabari HP santri (fire-and-forget; gagal kirim tak menggagalkan
+    // scan, dan tidak menambah latensi respons karena tidak di-await).
+    void (async () => {
+      const kategori = await prisma.kategoriKegiatan.findUnique({
+        where: { id: sesi.kategoriId },
+        select: { nama: true },
+      });
+      await triggerScanBerhasil(ver.santriId, {
+        kategoriNama: kategori?.nama ?? "Kegiatan",
+        waktu: new Date().toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      });
+    })();
 
     return NextResponse.json({
       hasil: "TERCATAT",

@@ -277,7 +277,7 @@ export function InputTasmiBulkClient({
                   return (
                     <tr key={santri.santriId} className={`hover:bg-slate-50 transition-colors ${santri.isCheckedOut ? 'opacity-60 bg-red-50/50 grayscale-[50%]' : ''}`}>
                       <td className="sticky left-0 bg-white px-3 md:px-6 py-4 group-hover:bg-slate-50 border-r border-slate-200 z-10 min-w-[140px] w-[140px] max-w-[140px] md:min-w-[250px] md:w-[250px] md:max-w-[250px]">
-                         <div className="font-bold truncate" title={santri.nama}>
+                         <div className="font-bold leading-snug break-words whitespace-normal" title={santri.nama}>
                             {santri.nama} {santri.isCheckedOut && <span className="text-red-500 text-xs ml-1">(Out)</span>}
                          </div>
                       </td>

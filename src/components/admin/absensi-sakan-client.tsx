@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { Send, FileText, X } from "lucide-react";
 import TasrihModal, { TasrihDetail } from "./tasrih-modal";
+import { PushPermissionPrompt } from "./push-permission-prompt";
 
 // Strip [TRS-xxx] prefix dari keterangan untuk tampilan
 function stripTasrihId(keterangan: string): string {
@@ -47,6 +48,8 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
   const [tasrihPickerFor, setTasrihPickerFor] = useState<{ riwayatId: string; nama: string } | null>(null);
   const [perizinanCache, setPerizinanCache] = useState<Record<string, any[]>>({});
   const [isFetchingPerizinan, setIsFetchingPerizinan] = useState(false);
+  // Penghitung simpan berhasil: memicu penawaran izin notifikasi pasca-submit.
+  const [saveCount, setSaveCount] = useState(0);
 
   useEffect(() => {
     // Set default tanggal to today WIB (timezone-safe)
@@ -203,6 +206,7 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
       const result = await res.json();
       if (result.success) {
         toast.success(`Berhasil menyimpan ${result.count} data absensi`);
+        setSaveCount((c) => c + 1);
         // Kirim ke WA jika toggle aktif
         if (sendToWa) {
           await handleSendWa();
@@ -243,6 +247,12 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
 
   return (
     <div className="space-y-6">
+      {/* Penawaran izin notifikasi: muncul otomatis setelah submit berhasil
+          (hanya bila izin masih default, belum berlangganan, tidak snooze) */}
+      <PushPermissionPrompt
+        benefitText="Absensi tersimpan. Aktifkan notifikasi supaya kamu juga menerima laporan dari sakan lain, tanpa perlu membuka grup WA."
+        autoOfferSignal={saveCount}
+      />
       <section className="overflow-hidden neu-card-white">
         <div className="flex flex-col gap-4 border-b border-[var(--color-surface-dark)] p-6 md:flex-row md:items-end md:justify-between bg-[var(--color-surface-light)]">
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:gap-4">

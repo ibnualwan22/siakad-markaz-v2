@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
+import { getActiveRiwayatListForAbsen, getTodayWibString } from "@/lib/absensi";
 import { parseWibDateString } from "@/lib/jadwal-sesi";
+import { getSession } from "@/lib/auth";
+import { buildSakanLaporanPush, sendPushToStaff } from "@/lib/push-server";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -101,6 +103,25 @@ export async function POST(request: Request) {
 
     const parsedDate = parseWibDateString(tanggal);
 
+    // --- Snapshot sakan yang sudah lapor SEBELUM simpan ---
+    // Pemicu push: hanya sakan yang BERUBAH belum -> sudah lapor pada aksi
+    // ini. Sesi dibaca lunak: tanpa sesi pun simpan tetap jalan (push
+    // dikirim ke semua staf tanpa pengecualian pelaku).
+    const actorSession = await getSession().catch(() => null);
+    const activeForSakan = await getActiveRiwayatListForAbsen();
+    const sakanByRiwayat = new Map(
+      activeForSakan.map((s) => [s.riwayatId, s.sakan])
+    );
+    const preRows = await prisma.absenSakan.findMany({
+      where: { tanggal: parsedDate },
+      select: { riwayatId: true },
+    });
+    const preSakan = new Set(
+      preRows
+        .map((r) => sakanByRiwayat.get(r.riwayatId))
+        .filter((s): s is string => !!s && s !== "-")
+    );
+
     // --- AUTO-JIT IZIN LOGIC FOR POST --- //
     const santriIds = absenList.map((a: any) => a.riwayatId);
     const dateZero = new Date(parsedDate);
@@ -175,6 +196,46 @@ export async function POST(request: Request) {
     }
 
     await prisma.$transaction(operations);
+
+    // --- Pemicu push laporan sakan (fire-and-forget, tidak menunda respons) ---
+    // Hanya untuk tanggal HARI INI (WIB) dan sakan yang baru lapor pada aksi
+    // ini; submit perbaikan berikutnya dan backfill tanggal lampau tidak
+    // mengirim push lagi.
+    if (toUpsert.length > 0 && tanggal === getTodayWibString()) {
+      const submittedSakan = new Set(
+        absenList
+          .map((a: any) => sakanByRiwayat.get(a.riwayatId))
+          .filter((s): s is string => !!s && s !== "-")
+      );
+      const newlyReported = [...submittedSakan]
+        .filter((s) => !preSakan.has(s))
+        .sort();
+      if (newlyReported.length > 0) {
+        void (async () => {
+          try {
+            const savedRows = modifiedAbsenList
+              .filter((a: any) => a.status !== "KOSONG")
+              .map((a: any) => ({
+                sakan: sakanByRiwayat.get(a.riwayatId) ?? "-",
+                status: a.status as string,
+                keterangan: (a.keterangan as string | undefined) ?? null,
+              }))
+              .filter((r) => newlyReported.includes(r.sakan));
+            const payload = await buildSakanLaporanPush(
+              tanggal,
+              newlyReported,
+              savedRows
+            );
+            await sendPushToStaff(payload, actorSession?.userId ?? null);
+          } catch (e) {
+            console.warn(
+              "Push laporan sakan gagal:",
+              (e as Error)?.message
+            );
+          }
+        })();
+      }
+    }
 
     return NextResponse.json({ success: true, count: operations.length });
   } catch (error) {

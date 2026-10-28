@@ -430,6 +430,23 @@ model User {
   nadiHufadzSetoranDisimak NadiHufadzSetoran[]
   nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
   huffadzTasmiDinilai      HuffadzTasmi[]
+  pushSubscriptions         PushSubscription[]
+}
+
+// Langganan Web Push per akun staf (santri tidak punya akun User, jadi
+// secara konstruksi hanya staf yang bisa berlangganan lewat API ini).
+// endpoint unik: satu perangkat = satu baris; pindah akun = baris dipindah.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model RolePermission {

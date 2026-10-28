@@ -22,3 +22,25 @@ export function humanKeterangan(keterangan: string | null): string {
     .filter(Boolean)
     .join(" | ");
 }
+
+// Susun isi notifikasi laporan sakan:
+// - sakan yang baru submit (+ ringkasannya bila satu sakan),
+// - lalu daftar sakan yang BELUM absen, atau penanda "semua sudah lapor".
+// Tanpa tag: tiap simpan menghasilkan notifikasi tersendiri.
+export function formatSakanPushBody(
+  submitted: string[],
+  ringkasan: string | null,
+  remaining: string[]
+): string {
+  let first: string;
+  if (submitted.length === 1) {
+    first = `Sakan ${submitted[0]} sudah lapor`;
+    if (ringkasan) first += ` • ${ringkasan}`;
+  } else {
+    first = `${submitted.length} sakan sudah lapor: ${submitted.join(", ")}`;
+  }
+  if (remaining.length > 0) {
+    return `${first} • ${remaining.length} sakan belum absen: ${remaining.join(", ")}`;
+  }
+  return `${first} • Semua sakan sudah lapor`;
+}

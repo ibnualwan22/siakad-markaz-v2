@@ -1,6 +1,7 @@
 import * as webPush from "web-push";
 import prisma from "@/lib/prisma";
 import { filterPerhatian } from "./sakan-perhatian";
+import { formatSakanPushBody } from "./sakan-perhatian-pure";
 
 // Web Push via pustaka web-push (VAPID + enkripsi payload).
 // Kredensial HANYA dibaca dari env runtime server — tidak pernah ke klien,
@@ -82,16 +83,20 @@ export async function sendPushToStaff(
   return { sent, pruned };
 }
 
-// Susun payload laporan absen sakan untuk sakan-sakan yang BARU lapor.
-// Satu push per aksi simpan (bukan per sakan) agar tidak membanjiri.
+// Susun payload laporan absen sakan untuk sakan-sakan yang disubmit pada
+// aksi simpan ini, ditambah daftar sakan yang BELUM absen (keadaan setelah
+// simpan). Satu push per aksi simpan (bukan per sakan). Tanpa tag: tiap
+// simpan menghasilkan notifikasi tersendiri (keputusan user 28 Okt 2026:
+// notif selalu muncul tiap ada pembaruan absen).
 export async function buildSakanLaporanPush(
-  tanggal: string,
-  sakanList: string[],
+  submitted: string[],
+  remaining: string[],
   rows: { sakan: string; status: string; keterangan: string | null }[]
 ): Promise<PushPayload> {
   const url = "/admin/absensi/rekap/sakan";
-  if (sakanList.length === 1) {
-    const sakan = sakanList[0];
+  let ringkasan: string | null = null;
+  if (submitted.length === 1) {
+    const sakan = submitted[0];
     const { izinSakit, bercatatan } = await filterPerhatian(
       rows.filter((r) => r.sakan === sakan)
     );
@@ -101,17 +106,11 @@ export async function buildSakanLaporanPush(
     if (izin > 0) parts.push(`${izin} izin`);
     if (sakit > 0) parts.push(`${sakit} sakit`);
     if (bercatatan.length > 0) parts.push(`${bercatatan.length} bercatatan`);
-    const ringkas = parts.length > 0 ? parts.join(", ") : "semua hadir";
-    return {
-      title: "Laporan Absen Sakan",
-      body: `Sakan ${sakan} sudah lapor • ${ringkas}`,
-      url,
-      tag: `sakan-${tanggal}-${sakan}`,
-    };
+    ringkasan = parts.length > 0 ? parts.join(", ") : "semua hadir";
   }
   return {
     title: "Laporan Absen Sakan",
-    body: `${sakanList.length} sakan sudah lapor: ${sakanList.join(", ")}`,
+    body: formatSakanPushBody(submitted, ringkasan, remaining),
     url,
   };
 }

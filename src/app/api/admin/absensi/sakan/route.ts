@@ -103,23 +103,13 @@ export async function POST(request: Request) {
 
     const parsedDate = parseWibDateString(tanggal);
 
-    // --- Snapshot sakan yang sudah lapor SEBELUM simpan ---
-    // Pemicu push: hanya sakan yang BERUBAH belum -> sudah lapor pada aksi
-    // ini. Sesi dibaca lunak: tanpa sesi pun simpan tetap jalan (push
-    // dikirim ke semua staf tanpa pengecualian pelaku).
+    // --- Data pemicu push (dibaca lunak, tidak menggagalkan simpan) ---
+    // Sesi dibaca lunak: tanpa sesi pun simpan tetap jalan (push dikirim
+    // ke semua staf tanpa pengecualian pelaku).
     const actorSession = await getSession().catch(() => null);
     const activeForSakan = await getActiveRiwayatListForAbsen();
     const sakanByRiwayat = new Map(
       activeForSakan.map((s) => [s.riwayatId, s.sakan])
-    );
-    const preRows = await prisma.absenSakan.findMany({
-      where: { tanggal: parsedDate },
-      select: { riwayatId: true },
-    });
-    const preSakan = new Set(
-      preRows
-        .map((r) => sakanByRiwayat.get(r.riwayatId))
-        .filter((s): s is string => !!s && s !== "-")
     );
 
     // --- AUTO-JIT IZIN LOGIC FOR POST --- //
@@ -198,21 +188,42 @@ export async function POST(request: Request) {
     await prisma.$transaction(operations);
 
     // --- Pemicu push laporan sakan (fire-and-forget, tidak menunda respons) ---
-    // Hanya untuk tanggal HARI INI (WIB) dan sakan yang baru lapor pada aksi
-    // ini; submit perbaikan berikutnya dan backfill tanggal lampau tidak
-    // mengirim push lagi.
+    // Keputusan user 28 Okt 2026: notif SELALU dikirim tiap tombol Simpan
+    // ditekan dan ada pembaruan absen (termasuk koreksi). Pengecualian yang
+    // tersisa: hanya tanggal HARI INI (WIB) — backfill tanggal lampau tidak
+    // mengirim push karena daftar "belum absen"-nya mengacu ke hari ini;
+    // dan simpan yang hanya menghapus (KOSONG) tidak memicu.
     if (toUpsert.length > 0 && tanggal === getTodayWibString()) {
-      const submittedSakan = new Set(
-        absenList
-          .map((a: any) => sakanByRiwayat.get(a.riwayatId))
-          .filter((s): s is string => !!s && s !== "-")
-      );
-      const newlyReported = [...submittedSakan]
-        .filter((s) => !preSakan.has(s))
-        .sort();
-      if (newlyReported.length > 0) {
+      const submittedSakan = [
+        ...new Set(
+          absenList
+            .map((a: any) => sakanByRiwayat.get(a.riwayatId))
+            .filter((s): s is string => !!s && s !== "-")
+        ),
+      ].sort();
+      if (submittedSakan.length > 0) {
         void (async () => {
           try {
+            // Keadaan SETELAH simpan: sakan mana yang sudah lapor hari ini
+            // (populasi yang sama dengan papan rekap: riwayat aktif).
+            const postRows = await prisma.absenSakan.findMany({
+              where: { tanggal: parsedDate },
+              select: { riwayatId: true },
+            });
+            const reported = new Set(
+              postRows
+                .map((r) => sakanByRiwayat.get(r.riwayatId))
+                .filter((s): s is string => !!s && s !== "-")
+            );
+            const allSakan = [
+              ...new Set(
+                activeForSakan
+                  .filter((s) => !s.isCheckedOut)
+                  .map((s) => s.sakan)
+                  .filter((s) => s && s !== "-")
+              ),
+            ].sort();
+            const remaining = allSakan.filter((s) => !reported.has(s));
             const savedRows = modifiedAbsenList
               .filter((a: any) => a.status !== "KOSONG")
               .map((a: any) => ({
@@ -220,10 +231,10 @@ export async function POST(request: Request) {
                 status: a.status as string,
                 keterangan: (a.keterangan as string | undefined) ?? null,
               }))
-              .filter((r) => newlyReported.includes(r.sakan));
+              .filter((r) => submittedSakan.includes(r.sakan));
             const payload = await buildSakanLaporanPush(
-              tanggal,
-              newlyReported,
+              submittedSakan,
+              remaining,
               savedRows
             );
             await sendPushToStaff(payload, actorSession?.userId ?? null);

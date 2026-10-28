@@ -43,9 +43,16 @@ function setSnooze() {
 export function PushPermissionPrompt({
   benefitText,
   autoOfferSignal,
+  banner = true,
+  autoOpenOnMount = false,
 }: {
   benefitText: string;
   autoOfferSignal?: number;
+  // banner=false: hanya logika modal (untuk layout global); tanpa kartu.
+  banner?: boolean;
+  // autoOpenOnMount: buka modal saat pertama mount bila masih undecided
+  // (izin default, belum berlangganan, tidak snooze).
+  autoOpenOnMount?: boolean;
 }) {
   const [supported, setSupported] = useState(true);
   const [permission, setPermission] =
@@ -67,6 +74,23 @@ export function PushPermissionPrompt({
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Penawaran global saat pertama membuka (layout admin).
+  useEffect(() => {
+    if (!autoOpenOnMount) return;
+    if (!pushSupported()) return;
+    getPushState().then((st) => {
+      setPermission(st.permission);
+      setSubscribed(st.subscribed);
+      if (
+        st.permission === "default" &&
+        !st.subscribed &&
+        !isSnoozed()
+      ) {
+        setShowModal(true);
+      }
+    });
+  }, [autoOpenOnMount]);
 
   // Penawaran otomatis (mis. setelah submit absen berhasil).
   useEffect(() => {
@@ -124,6 +148,7 @@ export function PushPermissionPrompt({
 
   return (
     <>
+      {banner && (
       <div className="rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3.5">
         {subscribed ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -156,6 +181,7 @@ export function PushPermissionPrompt({
           </div>
         )}
       </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">

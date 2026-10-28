@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/admin/sidebar";
 import { Toaster } from "react-hot-toast";
 import { getSession } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { PushPermissionPrompt } from "@/components/admin/push-permission-prompt";
 
 export default async function AdminLayout({
   children,
@@ -38,6 +39,18 @@ export default async function AdminLayout({
           Developed by <span className="font-bold" style={{ color: "var(--color-primary)" }}>Aksara X</span> KSU Batch 10
         </footer>
       </main>
+      {/* Modal izin notifikasi global: muncul saat pertama membuka area
+          admin (setelah login), hanya bila belum diputuskan. Dua tahap:
+          modal penjelasan dulu, prompt browser hanya setelah Aktifkan.
+          Tanpa kartu banner (banner tetap ada di halaman rekap sebagai
+          jalur manual). */}
+      {session && (
+        <PushPermissionPrompt
+          banner={false}
+          autoOpenOnMount
+          benefitText="Aktifkan notifikasi Siakad? Kamu akan menerima laporan absen sakan langsung di perangkat ini — sakan yang sudah lapor beserta sakan yang belum absen — tanpa perlu membuka grup WA."
+        />
+      )}
       <Toaster position="bottom-center" toastOptions={{
         style: {
           fontWeight: "600",

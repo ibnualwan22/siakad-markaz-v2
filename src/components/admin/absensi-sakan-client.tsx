@@ -41,7 +41,12 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
   const [absenMap, setAbsenMap] = useState<Record<string, { status: AbsenStatus; keterangan: string }>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [sendToWa, setSendToWa] = useState(true);
+  // NONAKTIF SEMENTARA (29 Okt 2026, perintah user): laporan sakan ke
+  // grup WA dimatikan dulu — toggle default mati + checkbox dikunci.
+  // Route send-wa juga diguard 503, jadi tidak ada pesan yang terkirim
+  // lewat jalur mana pun. Untuk menghidupkan lagi: default true +
+  // hapus disabled + hapus guard route.
+  const [sendToWa, setSendToWa] = useState(false);
   const [isSendingWa, setIsSendingWa] = useState(false);
   const [unconfirmedIds, setUnconfirmedIds] = useState<Set<string>>(new Set());
   const [selectedTasrih, setSelectedTasrih] = useState<TasrihDetail | null>(null);
@@ -303,12 +308,13 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
                 {isSaving ? (isSendingWa ? "Mengirim WA..." : "Menyimpan...") : "Simpan Absensi"}
               </button>
             </div>
-            {/* Toggle Kirim ke WhatsApp */}
-            <label className="flex items-center gap-2.5 cursor-pointer select-none group">
+            {/* Toggle Kirim ke WhatsApp — NONAKTIF SEMENTARA */}
+            <label className="flex items-center gap-2.5 select-none group opacity-60">
               <div className="relative">
                 <input
                   type="checkbox"
                   checked={sendToWa}
+                  disabled
                   onChange={(e) => setSendToWa(e.target.checked)}
                   className="sr-only peer"
                 />
@@ -318,7 +324,7 @@ export function AbsensiSakanClient({ sakanList, defaultSakan }: { sakanList: str
               <div className="flex items-center gap-1.5">
                 <Send className="h-3.5 w-3.5 text-[var(--color-primary)]" />
                 <span className="text-xs font-bold text-[var(--color-text-muted)] group-hover:text-[var(--color-text)] transition">
-                  Kirim ke WhatsApp
+                  Kirim ke WhatsApp (nonaktif sementara)
                 </span>
               </div>
             </label>

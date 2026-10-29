@@ -4,6 +4,19 @@ import { getMasterSantriList } from "@/lib/santri-api";
 import { sendWhatsAppMessage, formatSakanStatusReport } from "@/lib/whatsapp";
 
 export async function POST(request: Request) {
+  // NONAKTIF SEMENTARA (29 Okt 2026, perintah user): laporan sakan ke
+  // grup WA dimatikan dulu; notifikasi web push tetap jalan seperti biasa.
+  // Guard ini menutup semua jalur (kirim otomatis saat simpan maupun
+  // panggilan langsung). Untuk menghidupkan lagi, hapus blok return ini
+  // + kembalikan toggle di absensi-sakan-client.tsx (default true,
+  // checkbox aktif).
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Laporan WA sakan dinonaktifkan sementara oleh panitia.",
+    },
+    { status: 503 }
+  );
   try {
     const { tanggal } = await request.json();
 

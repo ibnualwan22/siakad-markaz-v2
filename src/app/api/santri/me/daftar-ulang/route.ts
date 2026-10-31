@@ -133,8 +133,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Sinkron program ke Siakad langsung (tidak menunggu webhook):
-    // petakan nama program PPDB -> Program Siakad (nama_indo), lalu set ke riwayat terbaru.
+    // JANGAN sinkron program ke Siakad di sini: transaksi ini masih PENDING
+    // untuk dufah depan, dan riwayat "terbaru" adalah baris dufah BERJALAN —
+    // menimpa programId-nya merusak tampilan dufah berjalan (insiden Afif
+    // Musyaffa, 31 Okt 2026: program dufah 94 ikut berubah). Program Siakad
+    // hanya berubah lewat webhook PPDB saat verifikasi + aktivasi dufah.
+    // Di sini kita hanya memetakan nama program untuk pesan sukses di
+    // frontend, tanpa menulis apa pun ke database Siakad.
     let siakadProgram: { id: string; nama_indo: string } | null = null;
     const ppdbProgramNama = data?.data?.program?.nama;
     if (ppdbProgramNama) {
@@ -145,34 +150,11 @@ export async function POST(request: Request) {
         });
         if (prog) {
           siakadProgram = prog;
-          const riwayatTerbaru = await prisma.riwayatSantri.findFirst({
-            where: { santriId: session.santriId },
-            orderBy: { id: 'desc' },
-            select: { id: true },
-          });
-          if (riwayatTerbaru) {
-            await prisma.riwayatSantri.update({
-              where: { id: riwayatTerbaru.id },
-              data: { programId: prog.id },
-            });
-          }
-          // Samakan juga peserta tauzi aktif bila ada
-          const sesiAktif = await prisma.sesiTauzi.findFirst({
-            where: { isActive: true },
-            select: { id: true },
-          });
-          if (sesiAktif) {
-            await prisma.pesertaTauzi.upsert({
-              where: { sesiTauziId_santriId: { sesiTauziId: sesiAktif.id, santriId: session.santriId } },
-              update: { programId: prog.id },
-              create: { sesiTauziId: sesiAktif.id, santriId: session.santriId, programId: prog.id },
-            });
-          }
         } else {
           console.warn(`[daftar-ulang] Program PPDB "${ppdbProgramNama}" tidak cocok dengan Program Siakad manapun (NIS: ${session.santriId}). Program Siakad dipertahankan.`);
         }
       } catch (e) {
-        console.error('[daftar-ulang] Gagal sinkron program ke Siakad:', e);
+        console.error('[daftar-ulang] Gagal memetakan program PPDB ke Siakad:', e);
       }
     }
 

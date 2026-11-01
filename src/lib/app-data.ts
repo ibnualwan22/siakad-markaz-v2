@@ -1042,12 +1042,19 @@ export async function getRiwayatSantriRows(
         return m ? parseInt(m[0], 10) : 0;
       };
       const currNum = getDufahNum(riwayat.dufahNama);
-      const prevList = riwayatList
-        .filter((r: any) => r.santriId === riwayat.santriId &&
-          r.program?.nama_indo?.toLowerCase().includes("akbarnas") &&
-          getDufahNum(r.dufahNama) < currNum)
-        .sort((a: any, b: any) => getDufahNum(b.dufahNama) - getDufahNum(a.dufahNama));
-      const prev = prevList[0];
+      // Bulan sebelumnya HARUS diambil dari DB: riwayatList fungsi ini hanya berisi
+      // dufah target (filter halaman), jadi bulan sebelumnya tidak pernah ada di
+      // list — inilah sebabnya perbaikan pertama tidak mengubah tampilan halaman ini.
+      const prevCandidates: any[] = await prisma.riwayatSantri.findMany({
+        where: {
+          santriId: riwayat.santriId,
+          program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
+        },
+        include: { nilaiList: true },
+      });
+      const prev = prevCandidates
+        .filter((r: any) => getDufahNum(r.dufahNama) < currNum)
+        .sort((a: any, b: any) => getDufahNum(b.dufahNama) - getDufahNum(a.dufahNama))[0];
       if (prev) {
         const gabungan = calcAkbarnasGabungan([...(prev.nilaiList || []), ...(riwayat.nilaiList || [])]);
         const gabRows = (program?.programMapels || []).map((pm: any) => {

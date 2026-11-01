@@ -91,7 +91,14 @@ export async function GET() {
       const progMapels: any[] = curr.program?.programMapels || [];
       const rows = progMapels
         .map((pm: any) => {
-          const skor = gabungan.get(pm.mapelId) ?? null;
+          const avg = gabungan.get(pm.mapelId) ?? null;
+          // Tambahan mengikuti halaman transkrip: pakai record bulan ke-2 (curr)
+          // dulu, fallback bulan ke-1 (prev) — supaya angka gabungan portal sama
+          // dengan transkrip admin.
+          const currRec = (curr.nilaiList || []).find((n: any) => n.mapelId === pm.mapelId);
+          const prevRec = (prev.nilaiList || []).find((n: any) => n.mapelId === pm.mapelId);
+          const tambahan = (currRec?.nilaiTambahan > 0 ? currRec.nilaiTambahan : (prevRec?.nilaiTambahan > 0 ? prevRec.nilaiTambahan : 0));
+          const skor = avg !== null ? applyNilaiTambahan(avg, tambahan) : null;
           return {
             mapelId: pm.mapelId,
             namaIndo: pm.mapel?.nama_indo ?? '-',
@@ -184,7 +191,7 @@ export async function GET() {
           return r.nilaiUsbu1 !== null && r.nilaiUsbu2 !== null && r.nilaiNihai !== null;
         });
 
-      const status = hasCompleteNilai
+      let status = hasCompleteNilai
         ? calculateStatus(
             { is_tasmi: riwayat.is_tasmi },
             accRows.map((r: any) => ({ skor: r.skor })),
@@ -192,7 +199,22 @@ export async function GET() {
           )
         : 'BELUM_LENGKAP';
 
-      const canDownloadSyahadah = hasCompleteNilai && status !== 'TIDAK_LULUS';
+      let canDownloadSyahadah = hasCompleteNilai && status !== 'TIDAK_LULUS';
+
+      // Akbarnas: gerbang cetak + status dihitung dari nilai GABUNGAN (bulan 1 + 2),
+      // bukan dari nilai bulan tunggal — satu bulan tidak pernah lengkap sendiri
+      // karena kurikulum Akbarnas terbagi ke dua bulan.
+      const gabunganEntry = isAkbarnas ? transkripGabunganMap.get(riwayat.id) : null;
+      if (gabunganEntry) {
+        const gabComplete = totalMapel > 0 && gabunganEntry.nilaiRows.length === totalMapel;
+        const gabStatus = calculateStatus(
+          { is_tasmi: riwayat.is_tasmi },
+          gabunganEntry.nilaiRows.filter((r: any) => r.masukAkumulasi).map((r: any) => ({ skor: r.skor })),
+          program
+        );
+        status = gabComplete ? gabStatus : 'BELUM_LENGKAP';
+        canDownloadSyahadah = gabComplete && gabStatus !== 'TIDAK_LULUS';
+      }
 
       return {
         id: riwayat.id,

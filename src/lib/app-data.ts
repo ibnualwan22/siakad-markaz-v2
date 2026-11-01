@@ -638,6 +638,9 @@ export async function getCertificateData(id: string) {
   let allNilaiList = [...riwayat.nilaiList];
   let allProgramMapels = [...riwayat.program.programMapels];
 
+  // Untuk Akbarnas: tambahan mengikuti halaman transkrip (record bulan tertinggi).
+  let akbarnasBaseRiwayatId: string | null = null;
+
   if (riwayat.program.nama_indo.toLowerCase().includes("akbarnas")) {
     const historicalRiwayat = await prisma.riwayatSantri.findMany({
       where: {
@@ -656,6 +659,17 @@ export async function getCertificateData(id: string) {
     for (const hist of historicalRiwayat) {
       allNilaiList = [...allNilaiList, ...hist.nilaiList];
     }
+
+    // Bulan Akbarnas tertinggi = riwayat yang diminta bila nomor dufahnya paling
+    // besar, kalau tidak = historical terakhir (sudah terurut asc).
+    const numOf = (name: string) => {
+      const m = (name || "").match(/\d+/);
+      return m ? parseInt(m[0], 10) : 0;
+    };
+    const lastHist = historicalRiwayat[historicalRiwayat.length - 1];
+    akbarnasBaseRiwayatId = (lastHist && numOf(lastHist.dufahNama) > numOf(riwayat.dufahNama))
+      ? lastHist.id
+      : riwayat.id;
   }
 
   // Filter tampil_di_syahadah
@@ -677,8 +691,10 @@ export async function getCertificateData(id: string) {
       // Use grade-calculator for Akbarnas gabungan
       const grandNilaiAkhir = calcAkbarnasMapelAverage(list);
 
-      // Ambil nilai record terakhir sebagai base
-      const baseNilai = list[list.length - 1];
+      // Base tambahan: record dari bulan Akbarnas tertinggi (sama seperti halaman
+      // transkrip: bulan 2 dulu, fallback bulan 1) — bukan sekadar record terakhir
+      // di list gabungan (yang justru bulan tertua).
+      const baseNilai = list.find((n: any) => n.riwayatId === akbarnasBaseRiwayatId) ?? list[list.length - 1];
       nilaiMap.set(mapelId, {
         ...baseNilai,
         nilaiUsbu1: baseNilai.nilaiUsbu1,
@@ -994,7 +1010,7 @@ export async function getRiwayatSantriRows(
 
     const totalMapel = program?.programMapels.length ?? 0;
     const effectiveUsbuainMode2 = riwayat.jumlah_kolom_usbu ?? kelas?.jumlah_kolom_usbu ?? 0;
-    const hasCompleteNilai = Boolean(totalMapel > 0 && program?.programMapels.every((pm: any) => {
+    let hasCompleteNilai = Boolean(totalMapel > 0 && program?.programMapels.every((pm: any) => {
       const n = nilaiList.find((nl: any) => nl.mapelId === pm.mapelId);
       if (!n) return false;
       const m = pm.mapel;
@@ -1010,11 +1026,50 @@ export async function getRiwayatSantriRows(
       if (!pm) return false;
       return pm.mapel.masuk_akumulasi !== false;
     });
-    const status = calculateStatus(
+    let status = calculateStatus(
       { is_tasmi: riwayat.is_tasmi },
       accumulativeNilai.map((n: any) => ({ skor: n.nilaiAkhir || 0 })),
       program,
     );
+
+    // Akbarnas: gerbang cetak + status bulan ke-2 dihitung dari nilai GABUNGAN
+    // (bulan ini + bulan Akbarnas sebelumnya), bukan dari nilai bulan tunggal.
+    // Tambahan mengikuti halaman transkrip: record bulan ini dulu, fallback bulan
+    // sebelumnya — supaya angka gabungan sama dengan transkrip admin.
+    if (isAkbarnas) {
+      const getDufahNum = (name: string) => {
+        const m = (name || "").match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+      };
+      const currNum = getDufahNum(riwayat.dufahNama);
+      const prevList = riwayatList
+        .filter((r: any) => r.santriId === riwayat.santriId &&
+          r.program?.nama_indo?.toLowerCase().includes("akbarnas") &&
+          getDufahNum(r.dufahNama) < currNum)
+        .sort((a: any, b: any) => getDufahNum(b.dufahNama) - getDufahNum(a.dufahNama));
+      const prev = prevList[0];
+      if (prev) {
+        const gabungan = calcAkbarnasGabungan([...(prev.nilaiList || []), ...(riwayat.nilaiList || [])]);
+        const gabRows = (program?.programMapels || []).map((pm: any) => {
+          const avg = gabungan.get(pm.mapelId) ?? null;
+          const currRec = (riwayat.nilaiList || []).find((n: any) => n.mapelId === pm.mapelId);
+          const prevRec = (prev.nilaiList || []).find((n: any) => n.mapelId === pm.mapelId);
+          const tambahan = (currRec?.nilaiTambahan > 0 ? currRec.nilaiTambahan : (prevRec?.nilaiTambahan > 0 ? prevRec.nilaiTambahan : 0));
+          return {
+            skor: avg !== null ? applyNilaiTambahan(avg, tambahan) : null,
+            masukAkumulasi: pm.mapel?.masuk_akumulasi !== false,
+          };
+        });
+        const gabComplete = totalMapel > 0 && gabRows.every((r: any) => r.skor !== null);
+        const gabStatus = calculateStatus(
+          { is_tasmi: riwayat.is_tasmi },
+          gabRows.filter((r: any) => r.masukAkumulasi).map((r: any) => ({ skor: r.skor })),
+          program,
+        );
+        hasCompleteNilai = gabComplete;
+        status = gabStatus;
+      }
+    }
 
     const absenSakanSummary = {
       hadir: riwayat.absenSakanList.filter((a: any) => a.status === "HADIR").length,

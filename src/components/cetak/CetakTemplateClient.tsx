@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import AutoFitText from "./AutoFitText";
+import MunaqosahNilaiTable from "./MunaqosahNilaiTable";
 import { NADI_HUFADZ_WARNA_NAMA } from "@/lib/nadi-hufadz";
 
 const REF_W = 1600;
@@ -31,6 +32,16 @@ const FIELD_LABEL: Record<string, string> = {
   tauqi: "Label Tanda Tangan",
   tandaTangan: "Gambar Tanda Tangan",
   namaMudir: "Nama Mudir",
+  // Syahadah Munaqosah Hufadz (field lain programKey tidak punya
+  // cfg-nya sehingga renderField mengembalikan null untuk mereka).
+  kalimatJuz: "Kalimat Juz",
+  periodeLine: "Baris Periode",
+  tanggalPeriodeLine: "Baris Tanggal Periode",
+  doa: "Doa Penutup",
+  tabelNilai: "Tabel Nilai",
+  tanggalCetak: "Tanggal Cetak",
+  qrLabel: "Label QR",
+  qr: "Gambar QR",
 };
 
 export default function CetakTemplateClient({
@@ -58,6 +69,19 @@ export default function CetakTemplateClient({
     tauqi?: string;
     namaMudir?: string;
     signatureUrl?: string | null;
+    // Syahadah Munaqosah Hufadz.
+    kalimatJuz?: string;
+    periodeLine?: string;
+    tanggalPeriodeLine?: string;
+    doa?: string;
+    tanggalCetak?: string;
+    qrLabel?: string;
+    qrUrl?: string | null;
+    tabelNilai?: {
+      rows: { arab: string; nilai: number }[];
+      rataRata: number;
+      predikat: string;
+    } | null;
     template: { backgroundUrl: string | null; fieldPositions: Record<string, FieldCfg> };
   };
   showPngButton?: boolean;
@@ -137,17 +161,68 @@ export default function CetakTemplateClient({
     tanggalPemberian: data.tanggalPemberian ?? "",
     tauqi: data.tauqi ?? "",
     namaMudir: data.namaMudir ?? "",
+    kalimatJuz: data.kalimatJuz ?? "",
+    periodeLine: data.periodeLine ?? "",
+    tanggalPeriodeLine: data.tanggalPeriodeLine ?? "",
+    doa: data.doa ?? "",
+    tanggalCetak: data.tanggalCetak ?? "",
+    qrLabel: data.qrLabel ?? "",
   };
 
-  // Nadi & MC Akbarnas memakai teks Arab (rtl); syahadah organisasi
-  // memakai teks Latin (ltr).
+  // Nadi, MC Akbarnas, & Munaqosah memakai teks Arab (rtl); syahadah
+  // organisasi memakai teks Latin (ltr).
   const fieldDirection =
-    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" ? "rtl" : "ltr";
+    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz" ? "rtl" : "ltr";
 
   const renderField = (key: string) => {
     const cfg = fields[key] as FieldCfg | undefined;
     if (!cfg) return null;
     const maxW = ((cfg.maxWidth || 80) / 100) * REF_W;
+    // Tabel nilai Munaqosah: blok tabel (bukan satu baris teks).
+    // Musyarokah: data.tabelNilai null -> blok disembunyikan total.
+    if (key === "tabelNilai") {
+      if (!data.tabelNilai) return null;
+      return (
+        <div
+          key={key}
+          style={{
+            position: "absolute",
+            left: `${cfg.x}%`,
+            top: `${cfg.y}%`,
+            transform: "translate(-50%, -50%)",
+            width: maxW,
+            direction: "rtl",
+          }}
+        >
+          <MunaqosahNilaiTable
+            rows={data.tabelNilai.rows}
+            rataRata={data.tabelNilai.rataRata}
+            predikat={data.tabelNilai.predikat}
+            fontSize={cfg.fontSize}
+          />
+        </div>
+      );
+    }
+    // QR verifikasi Munaqosah: gambar dari data URL (dibuat server).
+    if (key === "qr") {
+      if (!data.qrUrl) return null;
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={key}
+          src={data.qrUrl}
+          alt="QR verifikasi"
+          draggable={false}
+          style={{
+            position: "absolute",
+            left: `${cfg.x}%`,
+            top: `${cfg.y}%`,
+            transform: "translate(-50%, -50%)",
+            width: maxW,
+          }}
+        />
+      );
+    }
     // Tanda tangan dirender sebagai gambar (bukan teks); lebarnya dari
     // maxWidth field tersebut (persen panggung).
     if (key === "tandaTangan") {
@@ -213,13 +288,13 @@ export default function CetakTemplateClient({
     );
   };
 
-  // Kertas cetak: Nadi Hufadz & MC Akbarnas memakai F4 landscape
-  // (330 x 210 mm) — desain keduanya landscape.
+  // Kertas cetak: Nadi Hufadz, MC Akbarnas, & Munaqosah memakai F4
+  // landscape (330 x 210 mm) — desain ketiganya landscape.
   // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
   // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
   // (Letter portrait, 2 lembar). Program lain tetap landscape generik.
   const isNadi = programKey === "nadi-hufadz";
-  const isF4 = isNadi || programKey === "akbarnas-mc";
+  const isF4 = isNadi || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz";
 
   return (
     <div className={bulkMode ? "cetak-root print:bg-white" : "cetak-root min-h-screen bg-slate-200 print:bg-white"}>

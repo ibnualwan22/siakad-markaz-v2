@@ -114,6 +114,7 @@ model SantriInternal {
   waOtpList             WaOtp[]
   nadiHufadzPesertaList NadiHufadzPeserta[]
   huffadzTasmiList      HuffadzTasmi[]
+  munaqosahHufadzList   MunaqosahHufadz[]
 }
 
 // OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
@@ -430,6 +431,7 @@ model User {
   nadiHufadzSetoranDisimak NadiHufadzSetoran[]
   nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
   huffadzTasmiDinilai      HuffadzTasmi[]
+  munaqosahHufadzDiuji     MunaqosahHufadz[]
   pushSubscriptions         PushSubscription[]
 }
 
@@ -1513,6 +1515,37 @@ model HuffadzTasmi {
 
   @@index([santriId])
   @@index([waktuSubmit])
+}
+
+// Munaqosah Hufadz — ujian akhir hafalan per santri per dufah.
+// 5 nilai input (0–100); nilai akhir = rata-rata dibulatkan terdekat dan
+// predikat DIHITUNG dari nilai akhir (tidak disimpan mentah) — lihat
+// src/lib/munaqosah-hufadz.ts. <60 = musyarokah (tetap bisa cetak,
+// nilai + predikat tidak ditampilkan di syahadah).
+// juzTeks diinput per santri (mis. "30،29،1"). verifyToken untuk QR
+// verifikasi keaslian di halaman publik /verifikasi-munaqosah/<token>.
+model MunaqosahHufadz {
+  id                   String   @id @default(cuid())
+  santriId             String
+  dufahNama            String
+  nilaiHafalan         Int
+  nilaiKelancaran      Int
+  nilaiTajwid          Int
+  nilaiMakhorijulHuruf Int
+  nilaiAdab            Int
+  juzTeks              String
+  tanggal              DateTime @db.Date
+  pengujiId            String?
+  catatan              String?
+  verifyToken          String   @unique @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  santri  SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  penguji User?          @relation(fields: [pengujiId], references: [id], onDelete: SetNull)
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
 }
 
 // Token SSO sekali pakai yang sudah dikonsumsi (anti-replay, Fase 5 Bawwabah).

@@ -1118,6 +1118,11 @@ model LokasiDenah {
   imageUrl  String?
   publicId  String?
   isActive  Boolean  @default(true)
+  // Sakan terdaftar yang diwakili titik ini (null = titik umum, bukan
+  // sakan). Satu sakan maksimal satu titik aktif (dijaga API + indeks
+  // parsial di DB). Lantai = tinggi balok gedung di mode 3D.
+  sakan     String?
+  lantai    Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

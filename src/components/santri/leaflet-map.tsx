@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import { Navigation } from "lucide-react";
@@ -38,14 +38,46 @@ interface Lokasi {
   longitude: number;
   imageUrl?: string | null;
   isActive: boolean;
+  sakan?: string | null;
+  lantai?: number;
 }
 
-// Komponen helper untuk menggerakkan peta (Auto Pan smooth) ke titik baru
-function MapController({ center }: { center: [number, number] }) {
+// Jarak meter (haversine) untuk ambang gerak peta.
+function jarakMeter(a: [number, number], b: [number, number]) {
+  const R = 6371000;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((a[0] * Math.PI) / 180) *
+      Math.cos((b[0] * Math.PI) / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Komponen helper untuk menggerakkan peta (Auto Pan smooth) ke titik baru.
+// Perilaku lama: flyTo(center, 17) pada SETIAP update GPS — walau posisi
+// hanya bergeser 1–2 m karena jitter — sehingga zoom yang diatur user
+// (mis. pinch-zoom dekat) selalu ditarik balik ke 17 dan garis rute
+// tampak berubah. Perilaku baru: zoom dipertahankan, peta hanya mengikuti
+// bila user bergerak >20 m, kecuali tombol Posisi Saya ditekan (paksa).
+function MapController({ center, recenterKey }: { center: [number, number]; recenterKey: number }) {
   const map = useMap();
+  const lastFlown = useRef<[number, number] | null>(null);
+  const lastKey = useRef(recenterKey);
   useEffect(() => {
-    map.flyTo(center, 17, { animate: true, duration: 1.5 });
-  }, [center, map]);
+    const dipaksa = recenterKey !== lastKey.current;
+    lastKey.current = recenterKey;
+    if (!lastFlown.current) {
+      map.flyTo(center, 17, { animate: true, duration: 1.5 });
+      lastFlown.current = center;
+      return;
+    }
+    if (dipaksa || jarakMeter(lastFlown.current, center) > 20) {
+      map.flyTo(center, map.getZoom(), { animate: true, duration: 1.2 });
+      lastFlown.current = center;
+    }
+  }, [center, recenterKey, map]);
   return null;
 }
 
@@ -55,12 +87,14 @@ export default function LeafletMap({
   routeCoordinates,
   onNavigate,
   selectedDestId,
+  recenterKey,
 }: {
   currentPosition: [number, number] | null;
   destinations: Lokasi[];
   routeCoordinates: [number, number][];
   onNavigate: (dest: Lokasi) => void;
   selectedDestId: string | null;
+  recenterKey: number;
 }) {
   const defaultPos: [number, number] = [-7.747, 112.183]; // Default Pare center
   const center = currentPosition || defaultPos;
@@ -69,16 +103,20 @@ export default function LeafletMap({
     <MapContainer
       center={center}
       zoom={16}
+      // OSM menyediakan tile sampai zoom 19; default Leaflet (18) membuat
+      // user tidak bisa zoom cukup dekat di area sakan yang berdekatan.
+      maxZoom={19}
       style={{ width: "100%", height: "100%", zIndex: 0 }}
       zoomControl={false} // Kita hilangkan agar UI lebih bersih, user bs cubit zoom
     >
       {/* Menggunakan Tile Layer OSM standard yang 100% gratis tanpa API Key */}
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={19}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      <MapController center={center} />
+      <MapController center={center} recenterKey={recenterKey} />
 
       {/* Marker Posisi Santri Saat ini */}
       {currentPosition && (

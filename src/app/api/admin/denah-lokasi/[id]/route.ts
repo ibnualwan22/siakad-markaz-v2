@@ -19,6 +19,22 @@ export async function PUT(
         { status: 400 }
       );
     }
+
+    const sakan =
+      typeof body.sakan === "string" && body.sakan.trim() ? body.sakan.trim() : null;
+    if (sakan) {
+      const ganda = await prisma.lokasiDenah.findFirst({
+        where: { sakan, isActive: true, id: { not: resolvedParams.id } },
+      });
+      if (ganda) {
+        return NextResponse.json(
+          { error: `Sakan "${sakan}" sudah punya titik aktif. Edit titik itu, atau nonaktifkan dulu.` },
+          { status: 400 }
+        );
+      }
+    }
+    const lantaiRaw = typeof body.lantai === "number" ? Math.floor(body.lantai) : parseInt(String(body.lantai ?? ""), 10);
+    const lantai = Number.isFinite(lantaiRaw) ? Math.min(50, Math.max(1, lantaiRaw)) : 1;
     
     // Check existing
     const existing = await prisma.lokasiDenah.findUnique({
@@ -51,6 +67,8 @@ export async function PUT(
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         isActive: isActive !== undefined ? isActive : true,
+        sakan,
+        lantai,
         imageUrl,
         publicId,
       },

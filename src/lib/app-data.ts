@@ -340,6 +340,40 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
       const totalMapel = program?.programMapels.length ?? 0;
       const isAkbarnas = program?.nama_indo.toLowerCase().includes("akbarnas");
 
+      // Syahadah MC Akbarnas bulan 1 — dihitung dari riwayat MENTAH
+      // (sebelum nilaiList diganti hasil gabungan di bawah, supaya nilai
+      // MC dufah sebelumnya tidak bocor ke baris ini).
+      // "Bulan pertama" = tidak ada riwayat Akbarnas lebih awal dari
+      // riwayat ini (bahasa yang sama dipakai getTranskripAkbarnas:
+      // bulan pertama = tidak ada transkrip gabungan). BUKAN
+      // SantriInternal.bulanKe (angka itu kumulatif lintas program dan
+      // tersebar 1–6 di kelas yang sama) dan BUKAN flag kelas b2.
+      const mcMapelId = program?.programMapels?.find(
+        (pm: any) => pm.mapel?.nama_indo === "MC",
+      )?.mapelId;
+      const mcTerisi = Boolean(
+        riwayat &&
+          mcMapelId &&
+          (riwayat.nilaiList ?? []).some(
+            (n: any) => n.mapelId === mcMapelId && n.nilaiAkhir != null,
+          ),
+      );
+      const dufahNum = (name: string) => {
+        const m = (name || "").match(/\d+/);
+        return m ? parseInt(m[0], 10) : 0;
+      };
+      const isBulanPertamaAkbarnas = Boolean(
+        isAkbarnas &&
+          riwayat &&
+          !riwayatList.some(
+            (r: any) =>
+              r.santriId === masterSantri.id &&
+              r.program?.nama_indo.toLowerCase().includes("akbarnas") &&
+              dufahNum(r.dufahNama) < dufahNum(riwayat.dufahNama),
+          ),
+      );
+      const canPrintMcSyahadah = isBulanPertamaAkbarnas && mcTerisi;
+
       if (isAkbarnas && riwayat) {
         // Cari semua riwayat santri ini yg programnya Akbarnas
         const historical = riwayatList.filter(
@@ -440,6 +474,11 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
           Boolean(program) &&
           hasCompleteNilai &&
           status !== "TIDAK_LULUS",
+        // Bulan pertama Akbarnas: tombol cetak di Data Syahadah
+        // mengarah ke syahadah MC (bukan syahadah kelulusan) — regulasi
+        // baru Nov 2026. Di bulan pertama, MC-lah syahadahnya.
+        canPrintMcSyahadah,
+        mcRiwayatId: canPrintMcSyahadah ? (riwayat?.id ?? null) : null,
         canViewIjazah: Boolean(program) && hasCompleteNilai,
         dufahNama: masterSantri.dufahNama,
         riwayatId: riwayat?.id ?? null,

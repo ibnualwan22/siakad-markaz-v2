@@ -17,6 +17,9 @@ type DashboardSantri = {
   statusKelulusan: StatusKelulusan;
   isTasmi: boolean;
   canPrintSyahadah: boolean;
+  // Akbarnas bulan pertama: tombol cetak mengarah ke syahadah MC.
+  canPrintMcSyahadah: boolean;
+  mcRiwayatId: string | null;
   canViewIjazah: boolean;
   isAktif: boolean;
 };
@@ -103,7 +106,7 @@ export function SyahadahClient({
     const lulus = filteredSantri.filter(s => s.statusKelulusan === "LULUS").length;
     const musyarokah = filteredSantri.filter(s => s.statusKelulusan === "MUSYAROKAH").length;
     const tidakLulus = filteredSantri.filter(s => s.statusKelulusan === "TIDAK_LULUS").length;
-    const siapCetak = filteredSantri.filter(s => s.canPrintSyahadah).length;
+    const siapCetak = filteredSantri.filter(s => s.canPrintSyahadah || s.canPrintMcSyahadah).length;
     const totalTasmi = filteredSantri.filter(s => s.isTasmi).length;
     return { lulus, musyarokah, tidakLulus, siapCetak, totalTasmi, total: filteredSantri.length };
   }, [filteredSantri]);
@@ -187,6 +190,14 @@ export function SyahadahClient({
             >
               Layout Syahadah
             </Link>
+            {filteredSantri.some((s) => s.programNama.toLowerCase().includes("akbarnas")) && (
+              <Link
+                href="/admin/akbarnas-mc"
+                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-[var(--color-info)] transition hover:border-blue-300 hover:bg-blue-100"
+              >
+                Layout Syahadah MC
+              </Link>
+            )}
             {isRealKelas && (
               <a
                 href={`/cetak-bulk/${filterKelasId}`}
@@ -294,7 +305,16 @@ export function SyahadahClient({
                           Ijazah Terkunci
                         </span>
                       )}
-                      {santri.canPrintSyahadah ? (
+                      {santri.canPrintMcSyahadah && santri.mcRiwayatId ? (
+                        // Akbarnas bulan pertama: tombol cetak yang sama,
+                        // tapi yang terbuka adalah syahadah MC.
+                        <Link
+                          href={`/cetak-template/akbarnas-mc/${santri.mcRiwayatId}`}
+                          className="rounded-full bg-[var(--color-warning)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--color-warning)]"
+                        >
+                          Cetak Syahadah MC
+                        </Link>
+                      ) : santri.canPrintSyahadah ? (
                         <Link
                           href={`/cetak/${santri.id}`}
                           className="rounded-full bg-[var(--color-warning)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--color-warning)]"

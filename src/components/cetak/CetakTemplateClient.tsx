@@ -22,20 +22,44 @@ const FIELD_LABEL: Record<string, string> = {
   predikat: "Predikat",
   periode: "Periode",
   tglCetak: "Tanggal Cetak",
+  // Syahadah MC Akbarnas bulan 1 (field lain programKey tidak punya
+  // cfg-nya sehingga renderField mengembalikan null untuk mereka).
+  judul: "Judul",
+  pembuka: "Teks Pembuka",
+  penghargaan: "Teks Penghargaan",
+  tahunAjaran: "Tahun Ajaran",
+  tanggalPemberian: "Tanggal Pemberian",
+  tauqi: "Label Tanda Tangan",
+  tandaTangan: "Gambar Tanda Tangan",
+  namaMudir: "Nama Mudir",
 };
 
 export default function CetakTemplateClient({
   programKey,
   data,
   showPngButton,
+  bulkMode,
 }: {
   programKey: string;
+  // bulkMode: dipakai halaman cetak bulk (banyak panggung satu dokumen).
+  // @page tidak dirender dari sini supaya tidak menimpa @page dokumen
+  // bulk; aturan @media print untuk panggung tetap dirender.
+  bulkMode?: boolean;
   data: {
     nama: string;
     juz?: string;
     predikat?: string;
     periode: string;
     tglCetak?: string;
+    // Syahadah MC Akbarnas bulan 1.
+    judul?: string;
+    pembuka?: string;
+    penghargaan?: string;
+    tahunAjaran?: string;
+    tanggalPemberian?: string;
+    tauqi?: string;
+    namaMudir?: string;
+    signatureUrl?: string | null;
     template: { backgroundUrl: string | null; fieldPositions: Record<string, FieldCfg> };
   };
   showPngButton?: boolean;
@@ -109,15 +133,45 @@ export default function CetakTemplateClient({
     predikat: data.predikat ?? "",
     periode: data.periode,
     tglCetak: data.tglCetak ?? "",
+    judul: data.judul ?? "",
+    pembuka: data.pembuka ?? "",
+    penghargaan: data.penghargaan ?? "",
+    tahunAjaran: data.tahunAjaran ?? "",
+    tanggalPemberian: data.tanggalPemberian ?? "",
+    tauqi: data.tauqi ?? "",
+    namaMudir: data.namaMudir ?? "",
   };
 
-  // Nadi memakai teks Arab (rtl); syahadah organisasi memakai teks Latin (ltr).
-  const fieldDirection = programKey === "nadi-hufadz" ? "rtl" : "ltr";
+  // Nadi & MC Akbarnas memakai teks Arab (rtl); syahadah organisasi
+  // memakai teks Latin (ltr).
+  const fieldDirection =
+    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" ? "rtl" : "ltr";
 
   const renderField = (key: string) => {
     const cfg = fields[key] as FieldCfg | undefined;
     if (!cfg) return null;
     const maxW = ((cfg.maxWidth || 80) / 100) * REF_W;
+    // Tanda tangan dirender sebagai gambar (bukan teks); lebarnya dari
+    // maxWidth field tersebut (persen panggung).
+    if (key === "tandaTangan") {
+      if (!data.signatureUrl) return null;
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={key}
+          src={data.signatureUrl}
+          alt="Tanda tangan"
+          draggable={false}
+          style={{
+            position: "absolute",
+            left: `${cfg.x}%`,
+            top: `${cfg.y}%`,
+            transform: "translate(-50%, -50%)",
+            width: maxW,
+          }}
+        />
+      );
+    }
     const posStyle: React.CSSProperties = {
       position: "absolute",
       left: `${cfg.x}%`,
@@ -147,22 +201,34 @@ export default function CetakTemplateClient({
       );
     }
     return (
-      <div key={key} style={{ ...posStyle, fontSize: cfg.fontSize, lineHeight: 1.4 }}>
+      <div
+        key={key}
+        style={{
+          ...posStyle,
+          fontSize: cfg.fontSize,
+          lineHeight: 1.4,
+          // Pembuka MC terdiri dari 2 baris (dipisah \n).
+          whiteSpace: "pre-line",
+          fontWeight: key === "judul" ? 700 : undefined,
+        }}
+      >
         {fieldText[key]}
       </div>
     );
   };
 
-  // Kertas cetak: Nadi Hufadz memakai F4 landscape (330 x 210 mm).
+  // Kertas cetak: Nadi Hufadz & MC Akbarnas memakai F4 landscape
+  // (330 x 210 mm) — desain keduanya landscape.
   // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
   // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
   // (Letter portrait, 2 lembar). Program lain tetap landscape generik.
   const isNadi = programKey === "nadi-hufadz";
+  const isF4 = isNadi || programKey === "akbarnas-mc";
 
   return (
-    <div className="cetak-root min-h-screen bg-slate-200 print:bg-white">
+    <div className={bulkMode ? "cetak-root print:bg-white" : "cetak-root min-h-screen bg-slate-200 print:bg-white"}>
       <style>{`
-        @page { size: ${isNadi ? "330mm 210mm" : "landscape"}; margin: 0; }
+        ${bulkMode ? "" : `@page { size: ${isF4 ? "330mm 210mm" : "landscape"}; margin: 0; }`}
         @media print {
           .no-print { display: none !important; }
           .cetak-root { min-height: 0 !important; }
@@ -177,6 +243,7 @@ export default function CetakTemplateClient({
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
+      {!bulkMode && (
       <div className="no-print sticky top-0 z-10 bg-white/90 backdrop-blur border-b px-4 py-3 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-bold">Cetak Syahadah — {programKey}</h1>
@@ -201,10 +268,11 @@ export default function CetakTemplateClient({
           </button>
         </div>
       </div>
+      )}
 
       <div ref={wrapRef} className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
         <div
-          className={`print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none${isNadi ? " print-f4" : ""}`}
+          className={`print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none${isF4 ? " print-f4" : ""}`}
           style={{
             width: REF_W,
             height: stageH,

@@ -81,6 +81,7 @@ const navigationGroups = [
     title: "Divisi Syahadah",
     items: [
       { href: "/admin/syahadah", label: "Data Syahadah", icon: GraduationCap, permissionId: "data_syahadah" },
+      { href: "/admin/akbarnas-mc", label: "Layout Syahadah MC", icon: GraduationCap, permissionId: "data_syahadah" },
       { href: "/admin/syahadah-online", label: "Syahadah Online", icon: GraduationCap, permissionId: "syahadah_online" },
       { href: "/admin/martabah-ula", label: "Martabah Ula", icon: Medal, permissionId: "martabah_ula" },
       { href: "/admin/haflah-wada", label: "Haflah Wada'", icon: Armchair, permissionId: "haflah_wada" },

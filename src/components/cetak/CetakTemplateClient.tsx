@@ -24,7 +24,6 @@ const FIELD_LABEL: Record<string, string> = {
   tglCetak: "Tanggal Cetak",
   // Syahadah MC Akbarnas bulan 1 (field lain programKey tidak punya
   // cfg-nya sehingga renderField mengembalikan null untuk mereka).
-  judul: "Judul",
   pembuka: "Teks Pembuka",
   penghargaan: "Teks Penghargaan",
   tahunAjaran: "Tahun Ajaran",
@@ -52,7 +51,6 @@ export default function CetakTemplateClient({
     periode: string;
     tglCetak?: string;
     // Syahadah MC Akbarnas bulan 1.
-    judul?: string;
     pembuka?: string;
     penghargaan?: string;
     tahunAjaran?: string;
@@ -133,7 +131,6 @@ export default function CetakTemplateClient({
     predikat: data.predikat ?? "",
     periode: data.periode,
     tglCetak: data.tglCetak ?? "",
-    judul: data.judul ?? "",
     pembuka: data.pembuka ?? "",
     penghargaan: data.penghargaan ?? "",
     tahunAjaran: data.tahunAjaran ?? "",
@@ -209,7 +206,6 @@ export default function CetakTemplateClient({
           lineHeight: 1.4,
           // Pembuka MC terdiri dari 2 baris (dipisah \n).
           whiteSpace: "pre-line",
-          fontWeight: key === "judul" ? 700 : undefined,
         }}
       >
         {fieldText[key]}

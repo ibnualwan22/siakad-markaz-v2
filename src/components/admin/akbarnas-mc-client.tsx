@@ -5,7 +5,6 @@ import toast from "react-hot-toast";
 import {
   AKBARNAS_MC_FIELD_KEYS,
   AKBARNAS_MC_FIELD_LABEL,
-  AKBARNAS_MC_JUDUL,
   AKBARNAS_MC_PEMBUKA,
   AKBARNAS_MC_PENGHARGAAN,
   AKBARNAS_MC_TAHUN_AJARAN,
@@ -29,6 +28,7 @@ export default function AkbarnasMcClient({
   const [bg, setBg] = useState<string | null>(initialBg);
   const [positions, setPositions] = useState<Record<string, any>>(initialPositions);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [imgRatio, setImgRatio] = useState(1869 / 2870);
   const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -48,6 +48,35 @@ export default function AkbarnasMcClient({
     ro.observe(el);
     return () => ro.disconnect();
   }, [bg]);
+
+  // Upload background khusus template MC (Cloudinary) lalu simpan
+  // sebagai backgroundUrl template ini saja.
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("programKey", "akbarnas-mc");
+      const res = await fetch("/api/admin/akbarnas-mc/template/upload", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error || "Gagal upload");
+      const { url, publicId } = await res.json();
+      const put = await fetch("/api/admin/akbarnas-mc/template", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ programKey: "akbarnas-mc", backgroundUrl: url, backgroundId: publicId }),
+      });
+      if (!put.ok) throw new Error("Gagal menyimpan template");
+      setBg(url);
+      toast.success("Background terupload");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal upload");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const savePositions = async () => {
     setSaving(true);
@@ -91,7 +120,6 @@ export default function AkbarnasMcClient({
   // Data contoh preview — SAMA seperti yang dirender halaman cetak,
   // hanya namanya contoh (bukan santri baru).
   const sample: Record<string, string> = {
-    judul: AKBARNAS_MC_JUDUL,
     pembuka: AKBARNAS_MC_PEMBUKA,
     nama: "Ahmad Ibnu Alwan",
     penghargaan: AKBARNAS_MC_PENGHARGAAN,
@@ -106,9 +134,15 @@ export default function AkbarnasMcClient({
         <div className="bg-white rounded-2xl border p-5 space-y-4">
           <h3 className="font-bold">Atur Posisi & Ukuran Field <span className="font-normal text-sm text-[var(--color-text-muted)]">(geser teks di atas desain)</span></h3>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Background memakai desain syahadah offline persis. Preview memakai data contoh dengan gaya field asli —
+            Background default memakai desain syahadah offline persis dan hanya berlaku untuk template MC ini.
+            Preview memakai data contoh dengan gaya field asli —
             tanggal pemberian di preview dihitung dari hari ini, sama seperti saat mencetak nanti.
           </p>
+          <label className="inline-block px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white font-bold cursor-pointer hover:opacity-90">
+            {uploading ? "Mengupload..." : "Upload Desain Baru"}
+            <input type="file" accept="image/*" className="hidden" onChange={upload} disabled={uploading} />
+          </label>
+          <p className="text-xs text-[var(--color-text-muted)]">Format gambar (JPG/PNG), maksimal 10MB. Tersimpan di Cloudinary, hanya untuk template MC.</p>
           {!bg ? (
             <p className="text-sm text-[var(--color-text-muted)]">Template belum memiliki background.</p>
           ) : (
@@ -162,7 +196,7 @@ export default function AkbarnasMcClient({
                           width: maxW, textAlign: cfg.align || "center", direction: "rtl",
                           fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
                           fontSize: cfg.fontSize ?? 28,
-                          fontWeight: key === "nama" || key === "judul" ? 700 : undefined,
+                          fontWeight: key === "nama" ? 700 : undefined,
                           lineHeight: 1.4, whiteSpace: "pre-line",
                         }}
                       >

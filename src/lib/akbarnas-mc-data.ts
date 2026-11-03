@@ -1,6 +1,5 @@
 import prisma from "@/lib/prisma";
 import {
-  AKBARNAS_MC_JUDUL,
   AKBARNAS_MC_PEMBUKA,
   AKBARNAS_MC_PENGHARGAAN,
   AKBARNAS_MC_TAHUN_AJARAN,
@@ -43,7 +42,6 @@ export async function getAkbarnasMcPrintData(riwayatId: string) {
 
   return {
     nama: riwayat.santri.nama || "-",
-    judul: AKBARNAS_MC_JUDUL,
     pembuka: AKBARNAS_MC_PEMBUKA,
     penghargaan: AKBARNAS_MC_PENGHARGAAN,
     tahunAjaran: AKBARNAS_MC_TAHUN_AJARAN,

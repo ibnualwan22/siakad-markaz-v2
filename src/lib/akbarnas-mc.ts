@@ -12,19 +12,15 @@
 
 export const AKBARNAS_MC_PROGRAM_KEY = "akbarnas-mc";
 
-// Judul tidak ada di daftar kata statis user, tapi ada di desain offline
-// (di bawah garis SK) dan tidak ada di file background — jadi dirender
-// web sebagai field statis juga.
-export const AKBARNAS_MC_JUDUL = "شهادة شكر وتقدير";
-
 export const AKBARNAS_MC_PEMBUKA =
   "تتقدم دورة مركز العربية على أساس الذكاءات المتعددة\nبوافر الشكر وعظيم الامتنان إلى";
 
 export const AKBARNAS_MC_PENGHARGAAN =
   "تقديرا لتقدمه/ها كمقسم الأوقات في برنامج أكبرناس لدورة مركز العربية على أساس الذكاءات المتعددة";
 
-// Tahun ajaran ditulis statis sesuai daftar user (bukan tahun berjalan).
-export const AKBARNAS_MC_TAHUN_AJARAN = "للسنة الدراسية 2026م";
+// Tahun ajaran ditulis statis sesuai daftar user (bukan tahun berjalan),
+// dengan angka Arab (bukan Latin) seperti baris tanggal pemberian.
+export const AKBARNAS_MC_TAHUN_AJARAN = "للسنة الدراسية ٢٠٢٦م";
 
 export const AKBARNAS_MC_TAUQI = "التوقيع";
 
@@ -138,7 +134,6 @@ export function defaultFieldPositionsAkbarnasMc(): Record<
   AkbarnasMcFieldCfg
 > {
   return {
-    judul: { x: 50, y: 27, fontSize: 44, maxWidth: 60 },
     pembuka: { x: 50, y: 38, fontSize: 30, maxWidth: 80 },
     nama: { x: 50, y: 50, fontSize: 44, maxWidth: 80 },
     penghargaan: { x: 50, y: 60, fontSize: 30, maxWidth: 85 },
@@ -152,7 +147,6 @@ export function defaultFieldPositionsAkbarnasMc(): Record<
 
 // Field yang tampil di editor (urutan = urutan atas-ke-bawah di syahadah).
 export const AKBARNAS_MC_FIELD_KEYS = [
-  "judul",
   "pembuka",
   "nama",
   "penghargaan",
@@ -164,7 +158,6 @@ export const AKBARNAS_MC_FIELD_KEYS = [
 ] as const;
 
 export const AKBARNAS_MC_FIELD_LABEL: Record<string, string> = {
-  judul: "Judul",
   pembuka: "Teks Pembuka",
   nama: "Nama Santri",
   penghargaan: "Teks Penghargaan",

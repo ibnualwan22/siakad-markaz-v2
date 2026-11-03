@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import AutoFitText from "./AutoFitText";
+import { NADI_HUFADZ_WARNA_NAMA } from "@/lib/nadi-hufadz";
 
 const REF_W = 1600;
 
@@ -126,7 +127,13 @@ export default function CetakTemplateClient({
       textAlign: (cfg.align as any) || "center",
       direction: fieldDirection,
       fontFamily: cfg.fontFamily || undefined,
-      color: cfg.color || undefined,
+      // Syahadah Nadi: nama jatuh ke emas bila posisi tersimpan belum
+      // punya warna (layout lama tersimpan tanpa warna).
+      color:
+        cfg.color ||
+        (programKey === "nadi-hufadz" && key === "nama"
+          ? NADI_HUFADZ_WARNA_NAMA
+          : undefined),
     };
     if (key === "nama") {
       return (
@@ -146,13 +153,21 @@ export default function CetakTemplateClient({
     );
   };
 
+  // Kertas cetak: Nadi Hufadz memakai F4 landscape (330 x 210 mm).
+  // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
+  // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
+  // (Letter portrait, 2 lembar). Program lain tetap landscape generik.
+  const isNadi = programKey === "nadi-hufadz";
+
   return (
-    <div className="min-h-screen bg-slate-200 print:bg-white">
+    <div className="cetak-root min-h-screen bg-slate-200 print:bg-white">
       <style>{`
+        @page { size: ${isNadi ? "330mm 210mm" : "landscape"}; margin: 0; }
         @media print {
           .no-print { display: none !important; }
-          .print-stage-wrap { transform: none !important; width: 100% !important; }
-          @page { size: landscape; margin: 0; }
+          .cetak-root { min-height: 0 !important; }
+          .print-stage-wrap { transform: none !important; width: 100% !important; margin-bottom: 0 !important; }
+          .print-stage-wrap.print-f4 { width: 330mm !important; height: 210mm !important; }
         }
       `}</style>
       {/* Poppins untuk field syahadah organisasi. Font lain (mis. "The Season")
@@ -189,7 +204,7 @@ export default function CetakTemplateClient({
 
       <div ref={wrapRef} className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
         <div
-          className="print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none"
+          className={`print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none${isNadi ? " print-f4" : ""}`}
           style={{
             width: REF_W,
             height: stageH,

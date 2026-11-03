@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { PREDIKAT_TASMI, NADI_HUFADZ_MAX_PERTEMUAN, NADI_HUFADZ_MIN_HADIR } from "@/lib/nadi-hufadz";
+import { PREDIKAT_TASMI, NADI_HUFADZ_MAX_PERTEMUAN, NADI_HUFADZ_MIN_HADIR, NADI_HUFADZ_WARNA_NAMA, formatJuzTeks, formatPeriodeArab } from "@/lib/nadi-hufadz";
 
 type Peserta = {
   id: string;
@@ -34,11 +34,14 @@ const TABS = [
 ] as const;
 
 const FIELD_KEYS = ["nama", "juz", "predikat", "periode"] as const;
+// Preview editor memakai data contoh yang DIHITUNG lewat formatter yang
+// sama dengan halaman cetak, supaya preview = hasil jadi. Ini HANYA label
+// contoh di editor — tidak membuat peserta/syahadah baru.
 const FIELD_SAMPLE: Record<string, string> = {
-  nama: "Nama Santri",
-  juz: "٢٣",
+  nama: "Ahmad Ibnu Alwan",
+  juz: formatJuzTeks("1,2,5"),
   predikat: "ممتاز",
-  periode: "١١ أبريل إلى ٥ مايو ٢٠٢٦",
+  periode: formatPeriodeArab("2026-04-11", "2026-05-05"),
 };
 
 export default function NadiHufadzClient({
@@ -751,8 +754,27 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
   const [positions, setPositions] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imgRatio, setImgRatio] = useState(210 / 330);
+  const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<any>(null);
+
+  // Rasio gambar background + skala preview, sama seperti panggung cetak
+  // (lebar referensi 1600px) supaya preview sebangun dengan hasil cetak.
+  useEffect(() => {
+    if (!bg) return;
+    const img = new Image();
+    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
+    img.src = bg;
+  }, [bg]);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / 1600));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [bg]);
 
   const load = async () => {
     const res = await fetch("/api/admin/nadi-hufadz/template?programKey=nadi-hufadz");
@@ -847,6 +869,10 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
           <p className="text-sm text-[var(--color-text-muted)]">Upload background terlebih dahulu.</p>
         ) : (
           <>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Preview memakai data contoh (Ahmad Ibnu Alwan, juz 1, 2, 5, predikat ممتاز, periode 11 April – 5 Mei 2026)
+              dengan gaya field asli — geser teksnya langsung di atas desain, atau atur angka di bawah.
+            </p>
             <div
               ref={wrapRef}
               className="relative w-full max-w-3xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
@@ -854,23 +880,47 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
               onPointerUp={onUp}
               onPointerCancel={onUp}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bg} alt="Template" className="w-full block" draggable={false} />
-              {FIELD_KEYS.map((key) => {
-                const cfg = positions[key] || { x: 50, y: 50 };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => onChipDown(e, key)}
-                    className={`absolute px-2 py-1 rounded text-xs font-bold border-2 whitespace-nowrap ${
-                      canEdit ? "cursor-move bg-yellow-300/90 border-yellow-600" : "bg-white/80 border-slate-400"
-                    }`}
-                    style={{ left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)" }}
-                  >
-                    {FIELD_SAMPLE[key]}
-                  </div>
-                );
-              })}
+              <div
+                className="relative overflow-hidden bg-white"
+                style={{
+                  width: 1600,
+                  height: Math.round(1600 * imgRatio),
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                  marginBottom: -Math.round(1600 * imgRatio) * (1 - scale),
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={bg} alt="Template" className="absolute inset-0 w-full h-full object-fill" draggable={false} />
+                {FIELD_KEYS.map((key) => {
+                  const cfg = positions[key] || { x: 50, y: 50 };
+                  const maxW = ((cfg.maxWidth ?? 80) / 100) * 1600;
+                  return (
+                    <div
+                      key={key}
+                      onPointerDown={(e) => onChipDown(e, key)}
+                      className={`absolute border border-dashed border-transparent hover:border-amber-500 ${
+                        canEdit ? "cursor-move" : ""
+                      }`}
+                      style={{
+                        left: `${cfg.x}%`,
+                        top: `${cfg.y}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: maxW,
+                        textAlign: cfg.align || "center",
+                        direction: "rtl",
+                        fontFamily: cfg.fontFamily || undefined,
+                        color: cfg.color || (key === "nama" ? NADI_HUFADZ_WARNA_NAMA : undefined),
+                        fontSize: cfg.fontSize ?? 28,
+                        fontWeight: key === "nama" ? 700 : undefined,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {FIELD_SAMPLE[key]}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -899,6 +949,18 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
                         <input type="number" value={cfg.maxWidth ?? 80}
                           onChange={(e) => setField(key, { maxWidth: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
+                      </label>
+                      <label className="col-span-2">Warna
+                        <span className="flex gap-2">
+                          <input type="color"
+                            value={/^#[0-9a-fA-F]{6}$/.test(cfg.color || "") ? cfg.color : (key === "nama" ? NADI_HUFADZ_WARNA_NAMA : "#000000")}
+                            onChange={(e) => setField(key, { color: e.target.value })}
+                            disabled={!canEdit} className="w-10 px-1 py-1 border rounded" />
+                          <input type="text" value={cfg.color ?? (key === "nama" ? NADI_HUFADZ_WARNA_NAMA : "")}
+                            placeholder={key === "nama" ? "#A67C2E" : "#000000"}
+                            onChange={(e) => setField(key, { color: e.target.value })}
+                            disabled={!canEdit} className="flex-1 px-2 py-1 border rounded" />
+                        </span>
                       </label>
                     </div>
                   </div>

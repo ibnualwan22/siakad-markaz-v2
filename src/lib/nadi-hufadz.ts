@@ -104,10 +104,18 @@ export function formatPeriodeArab(tglDari: string, tglSampai: string): string {
   return `${dari} إلى ${sampaiTgl} ${sampaiBulan} ${tahun}`.trim();
 }
 
+/**
+ * Warna field nama syahadah Nadi Hufadz: coklat keemasan yang disamakan
+ * dengan emas judul desain (gradasi judul diukur ~#C0A040–#CBA450;
+ * dipilih sedikit lebih gelap supaya tetap terbaca di kertas putih).
+ * Dipakai sebagai fallback bila posisi tersimpan belum punya warna.
+ */
+export const NADI_HUFADZ_WARNA_NAMA = "#A67C2E";
+
 /** Default posisi field template (persen terhadap background). */
 export function defaultFieldPositions() {
   return {
-    nama: { x: 50, y: 40, fontSize: 44, align: "center", maxWidth: 80 },
+    nama: { x: 50, y: 40, fontSize: 44, align: "center", maxWidth: 80, color: NADI_HUFADZ_WARNA_NAMA },
     juz: { x: 50, y: 54, fontSize: 28, align: "center", maxWidth: 80 },
     predikat: { x: 50, y: 60, fontSize: 28, align: "center", maxWidth: 80 },
     periode: { x: 50, y: 66, fontSize: 22, align: "center", maxWidth: 80 },

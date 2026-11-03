@@ -119,9 +119,9 @@ export const MUNAQOSAH_DOA =
 export const MUNAQOSAH_QR_LABEL = "امسح الكود للتحقق من الأصالة";
 
 // Kalimat dinamis (juz + munaqosah): "وذلك لإكمالها/إكماله حفظ ... من
-// القرآن الكريم ولنجاحه/ها في المناقشة".
+// القرآن الكريم ولنجاحه/ها في المناقشة". Angka juz tampil angka Arab.
 export function kalimatJuz(juzTeks: string): string {
-  return `وذلك لإكمالها/إكماله حفظ ${frasaJuz(juzTeks)} من القرآن الكريم ولنجاحه/ها في المناقشة`;
+  return `وذلك لإكمالها/إكماله حفظ ${frasaJuz(toArabDigits(juzTeks))} من القرآن الكريم ولنجاحه/ها في المناقشة`;
 }
 
 // ---- Posisi default field cetak (persen panggung, referensi 1600px) ----
@@ -134,7 +134,7 @@ export function defaultFieldPositionsMunaqosah(): Record<string, any> {
     periodeLine: { x: 50, y: 59.5, fontSize: 26, maxWidth: 70 },
     tanggalPeriodeLine: { x: 50, y: 63.5, fontSize: 26, maxWidth: 70 },
     doa: { x: 50, y: 68, fontSize: 26, maxWidth: 70 },
-    tabelNilai: { x: 50, y: 79, fontSize: 22, maxWidth: 56 },
+    tabelNilai: { x: 50, y: 79, fontSize: 18, maxWidth: 46 },
     tanggalCetak: { x: 50, y: 92, fontSize: 24, maxWidth: 70 },
     qrLabel: { x: 85, y: 65, fontSize: 20, maxWidth: 14 },
     qr: { x: 85, y: 74, maxWidth: 12 },

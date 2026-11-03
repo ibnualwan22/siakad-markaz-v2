@@ -203,16 +203,14 @@ export default function CetakTemplateClient({
         </div>
       );
     }
-    // QR verifikasi Munaqosah: gambar dari data URL (dibuat server).
+    // QR verifikasi Munaqosah: gambar dari data URL (dibuat server),
+    // dengan logo Markaz di tengahnya — pola yang sama dengan QR
+    // syahadah offline (logo.png, latar putih).
     if (key === "qr") {
       if (!data.qrUrl) return null;
       return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <div
           key={key}
-          src={data.qrUrl}
-          alt="QR verifikasi"
-          draggable={false}
           style={{
             position: "absolute",
             left: `${cfg.x}%`,
@@ -220,7 +218,31 @@ export default function CetakTemplateClient({
             transform: "translate(-50%, -50%)",
             width: maxW,
           }}
-        />
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={data.qrUrl}
+            alt="QR verifikasi"
+            draggable={false}
+            className="block w-full h-auto"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/logo.png"
+            alt=""
+            draggable={false}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "26%",
+              background: "#fff",
+              borderRadius: 8,
+              padding: 2,
+            }}
+          />
+        </div>
       );
     }
     // Tanda tangan dirender sebagai gambar (bukan teks); lebarnya dari

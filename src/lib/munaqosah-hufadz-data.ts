@@ -59,7 +59,9 @@ export async function getMunaqosahPrintData(id: string) {
   try {
     const mod: any = await import("qrcode");
     const toDataURL = mod.toDataURL || mod.default?.toDataURL;
-    if (toDataURL) qrUrl = await toDataURL(verifyUrl, { margin: 1, width: 400 });
+    // errorCorrectionLevel H supaya QR tetap terbaca meski tengahnya
+    // ditutup logo (pola yang sama dengan syahadah offline).
+    if (toDataURL) qrUrl = await toDataURL(verifyUrl, { margin: 1, width: 400, errorCorrectionLevel: "H" });
   } catch {
     qrUrl = null;
   }

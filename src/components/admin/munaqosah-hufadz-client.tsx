@@ -84,6 +84,29 @@ export default function MunaqosahHufadzClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dufahAktif]);
 
+  // Form nilai tampil sebagai modal (bukan kartu di bawah tabel) supaya
+  // pengguna HP tidak perlu scroll ke bawah: modal menempel di viewport
+  // dan isinya bisa di-scroll di dalam modal sendiri.
+  const closeForm = () => {
+    setSelectedId(null);
+    setForm({ ...emptyForm });
+  };
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeForm();
+    };
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
   const selectRow = (row: Row) => {
     setSelectedId(row.santriId);
     if (row.record) {
@@ -128,6 +151,7 @@ export default function MunaqosahHufadzClient({
       if (!res.ok) throw new Error((await res.json()).error || "Gagal menyimpan");
       toast.success("Nilai munaqosah tersimpan");
       await load();
+      closeForm();
     } catch (err: any) {
       toast.error(err.message || "Gagal menyimpan");
     } finally {
@@ -274,8 +298,13 @@ export default function MunaqosahHufadzClient({
           )}
 
           {selected && canEdit && (
-            <div className="bg-white rounded-2xl border p-5 space-y-4">
-              <h3 className="font-bold">Nilai Munaqosah — {selected.nama}</h3>
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+              <div className="absolute inset-0 bg-black/50" onClick={closeForm} />
+              <div className="relative bg-white rounded-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto p-5 space-y-4 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="font-bold">Nilai Munaqosah — {selected.nama}</h3>
+                <button onClick={closeForm} aria-label="Tutup" className="shrink-0 w-8 h-8 rounded-full bg-slate-100 font-bold">✕</button>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {MUNAQOSAH_NILAI_FIELDS.map((f) => (
                   <label key={f.key} className="text-sm font-semibold">
@@ -330,13 +359,22 @@ export default function MunaqosahHufadzClient({
                   )}
                 </p>
               )}
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-50"
-              >
-                {saving ? "Menyimpan..." : "Simpan Nilai"}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-50"
+                >
+                  {saving ? "Menyimpan..." : "Simpan Nilai"}
+                </button>
+                <button
+                  onClick={closeForm}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 font-bold"
+                >
+                  Batal
+                </button>
+              </div>
+              </div>
             </div>
           )}
           {!canEdit && (
@@ -532,10 +570,11 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
                     <div
                       key={key}
                       onPointerDown={(e) => onFieldDown(e, key)}
-                      className="absolute cursor-move border border-dashed border-transparent hover:border-amber-500 bg-white border flex items-center justify-center font-bold"
+                      className="absolute cursor-move border border-dashed border-transparent hover:border-amber-500 bg-white border flex items-center justify-center"
                       style={{ left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)", width: maxW, height: maxW }}
                     >
-                      QR
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/images/logo.png" alt="Logo di tengah QR" draggable={false} style={{ width: "50%" }} />
                     </div>
                   );
                 }

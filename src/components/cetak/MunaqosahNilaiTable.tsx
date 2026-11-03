@@ -1,5 +1,8 @@
+import { toArabDigits } from "@/lib/munaqosah-hufadz";
+
 // Blok tabel nilai syahadah Munaqosah — dipakai halaman cetak dan
 // preview editor layout (satu komponen, satu tampilan).
+// Semua angka tampil angka Arab (bukan Latin).
 export default function MunaqosahNilaiTable({
   rows,
   rataRata,
@@ -40,17 +43,17 @@ export default function MunaqosahNilaiTable({
                   border: "1px solid #999",
                   padding: "2px 10px",
                   textAlign: "center",
-                  width: "30%",
+                  width: "22%",
                 }}
               >
-                {r.nilai}
+                {toArabDigits(r.nilai)}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
       <div style={{ marginTop: 4 }}>
-        بمعدل تراكمي عام ({rataRata}) وبتقدير {predikat}
+        بمعدل تراكمي عام ({toArabDigits(rataRata)}) وبتقدير {predikat}
       </div>
     </div>
   );

@@ -55,6 +55,9 @@ export default function NadiHufadzClient({
   const [loading, setLoading] = useState(true);
   const [pendaftaranDibuka, setPendaftaranDibuka] = useState<boolean | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+  const [minHadir, setMinHadir] = useState<number | null>(null);
+  const [minHadirInput, setMinHadirInput] = useState(String(NADI_HUFADZ_MIN_HADIR));
+  const [simpanMinHadirLoading, setSimpanMinHadirLoading] = useState(false);
 
   const fetchPeserta = async () => {
     setLoading(true);
@@ -74,8 +77,37 @@ export default function NadiHufadzClient({
       const res = await fetch(`/api/admin/nadi-hufadz/periode?dufahNama=${encodeURIComponent(dufahAktif)}`);
       const json = await res.json();
       setPendaftaranDibuka(!!json.dibuka);
+      const ambang =
+        typeof json.minHadir === "number" ? json.minHadir : NADI_HUFADZ_MIN_HADIR;
+      setMinHadir(ambang);
+      setMinHadirInput(String(ambang));
     } catch {
       setPendaftaranDibuka(false);
+    }
+  };
+
+  const simpanMinHadir = async () => {
+    const nilai = Number(minHadirInput);
+    if (!Number.isInteger(nilai) || nilai < 1 || nilai > NADI_HUFADZ_MAX_PERTEMUAN) {
+      toast.error(`Minimal kehadiran harus bilangan bulat 1-${NADI_HUFADZ_MAX_PERTEMUAN}`);
+      return;
+    }
+    setSimpanMinHadirLoading(true);
+    try {
+      const res = await fetch("/api/admin/nadi-hufadz/periode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dufahNama: dufahAktif, minHadir: nilai }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan ambang");
+      setMinHadir(json.minHadir);
+      toast.success(`Minimal kehadiran tasmi' diubah jadi ${json.minHadir}x`);
+      fetchPeserta();
+    } catch (e: any) {
+      toast.error(e.message || "Gagal menyimpan ambang");
+    } finally {
+      setSimpanMinHadirLoading(false);
     }
   };
 
@@ -108,25 +140,59 @@ export default function NadiHufadzClient({
   return (
     <div className="space-y-6">
       {dufahAktif !== "" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3">
-          <p className="text-sm">
-            Pendaftaran {dufahAktif}:{" "}
-            <span className={`font-bold ${pendaftaranDibuka ? "text-emerald-700" : "text-red-600"}`}>
-              {pendaftaranDibuka === null ? "Memuat..." : pendaftaranDibuka ? "DIBUKA" : "DITUTUP"}
-            </span>
-            <span className="text-[var(--color-text-muted)]">
-              {" "}— menutup hanya menghalangi pendaftar baru, peserta yang sudah terdaftar tetap berjalan.
-            </span>
-          </p>
-          {canEdit && (
-            <button
-              onClick={togglePendaftaran}
-              disabled={toggleLoading || pendaftaranDibuka === null}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
-            </button>
-          )}
+        <div className="space-y-3 rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              Pendaftaran {dufahAktif}:{" "}
+              <span className={`font-bold ${pendaftaranDibuka ? "text-emerald-700" : "text-red-600"}`}>
+                {pendaftaranDibuka === null ? "Memuat..." : pendaftaranDibuka ? "DIBUKA" : "DITUTUP"}
+              </span>
+              <span className="text-[var(--color-text-muted)]">
+                {" "}— menutup hanya menghalangi pendaftar baru, peserta yang sudah terdaftar tetap berjalan.
+              </span>
+            </p>
+            {canEdit && (
+              <button
+                onClick={togglePendaftaran}
+                disabled={toggleLoading || pendaftaranDibuka === null}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-surface-dark)] pt-3">
+            <p className="text-sm">
+              Minimal kehadiran untuk tasmi&apos; {dufahAktif}:{" "}
+              <span className="font-bold">
+                {minHadir === null ? "Memuat..." : `${minHadir}x dari ${NADI_HUFADZ_MAX_PERTEMUAN} pertemuan`}
+              </span>
+            </p>
+            {canEdit && (
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  max={NADI_HUFADZ_MAX_PERTEMUAN}
+                  value={minHadirInput}
+                  onChange={(e) => setMinHadirInput(e.target.value)}
+                  aria-label="Minimal kehadiran untuk tasmi'"
+                  className="w-20 rounded-lg border border-[var(--color-surface-dark)] px-2 py-1.5 text-sm font-bold"
+                />
+                <button
+                  onClick={simpanMinHadir}
+                  disabled={simpanMinHadirLoading || minHadir === null}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {simpanMinHadirLoading ? "Menyimpan..." : "Simpan Ambang"}
+                </button>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  Menurunkan ambang langsung membuat peserta yang sudah mencapai angka baru layak tasmi&apos;;
+                  menaikkan ambang tidak membatalkan tasmi&apos; yang sudah tersimpan.
+                </span>
+              </>
+            )}
+          </div>
         </div>
       )}
       <div className="flex gap-2 flex-wrap border-b border-[var(--color-surface-dark)]">
@@ -151,6 +217,7 @@ export default function NadiHufadzClient({
           santriAktif={santriAktif}
           canEdit={canEdit}
           dufahAktif={dufahAktif}
+          minHadir={minHadir ?? NADI_HUFADZ_MIN_HADIR}
           onRefresh={fetchPeserta}
         />
       )}
@@ -172,12 +239,14 @@ function PesertaTab({
   santriAktif,
   canEdit,
   dufahAktif,
+  minHadir,
   onRefresh,
 }: {
   pesertaList: Peserta[];
   santriAktif: { id: string; nama: string }[];
   canEdit: boolean;
   dufahAktif: string;
+  minHadir: number;
   onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -271,7 +340,7 @@ function PesertaTab({
                     <div className="flex items-center gap-2">
                       <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${p.kehadiran >= NADI_HUFADZ_MIN_HADIR ? "bg-emerald-500" : "bg-amber-500"}`}
+                          className={`h-full rounded-full ${p.kehadiran >= minHadir ? "bg-emerald-500" : "bg-amber-500"}`}
                           style={{ width: `${(p.kehadiran / NADI_HUFADZ_MAX_PERTEMUAN) * 100}%` }}
                         />
                       </div>

@@ -1437,7 +1437,8 @@ model NadiHufadzSetoran {
   @@index([pesertaId])
 }
 
-// Hasil tasmi'. Hanya bisa diinput bila kehadiran >= 7.
+// Hasil tasmi'. Hanya bisa diinput bila kehadiran >= ambang dufah
+// (NadiHufadzPeriode.minHadir, default 7).
 model NadiHufadzTasmi {
   id        String   @id @default(cuid())
   pesertaId String   @unique
@@ -1455,10 +1456,13 @@ model NadiHufadzTasmi {
 // Satu baris per dufah; tanpa baris = tertutup (admin membuka eksplisit).
 // Menutup hanya menghalangi pendaftar baru — peserta yang sudah terdaftar
 // tetap berjalan setoran & tasmi'-nya.
+// minHadir: ambang minimal kehadiran untuk tasmi' di dufah ini, diubah
+// admin lewat halaman admin; null = pakai default (7).
 model NadiHufadzPeriode {
   id        String   @id @default(cuid())
   dufahNama String   @unique
   dibuka    Boolean  @default(false)
+  minHadir  Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -1,7 +1,43 @@
 import { toArabicNumerals } from "./arabic-utils";
 
+/**
+ * Ambang default minimal kehadiran untuk tasmi'.
+ * Nilai efektif per dufah disimpan di NadiHufadzPeriode.minHadir
+ * (dapat diubah admin lewat halaman admin Nadi Hufadz); null berarti
+ * pakai default ini, supaya dufah lama tidak berubah perilakunya.
+ */
 export const NADI_HUFADZ_MIN_HADIR = 7;
 export const NADI_HUFADZ_MAX_PERTEMUAN = 10;
+
+/** Ambang efektif: nilai tersimpan yang valid (1..maks pertemuan), atau default. */
+export function resolveNadiHufadzMinHadir(
+  tersimpan: number | null | undefined
+): number {
+  if (
+    typeof tersimpan === "number" &&
+    Number.isInteger(tersimpan) &&
+    tersimpan >= 1 &&
+    tersimpan <= NADI_HUFADZ_MAX_PERTEMUAN
+  ) {
+    return tersimpan;
+  }
+  return NADI_HUFADZ_MIN_HADIR;
+}
+
+/** Validasi input admin untuk ambang baru; mengembalikan pesan error atau null. */
+export function validasiNadiHufadzMinHadir(
+  nilai: unknown
+): string | null {
+  if (
+    typeof nilai !== "number" ||
+    !Number.isInteger(nilai) ||
+    nilai < 1 ||
+    nilai > NADI_HUFADZ_MAX_PERTEMUAN
+  ) {
+    return `minHadir harus bilangan bulat 1-${NADI_HUFADZ_MAX_PERTEMUAN}`;
+  }
+  return null;
+}
 
 export const PREDIKAT_TASMI = ["ممتاز", "جيد جدا", "جيد", "مقبول"] as const;
 

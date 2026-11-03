@@ -7,8 +7,12 @@ import toast from "react-hot-toast";
 // Template Nadi Hufadz, ditambah input font & warna per field.
 // Field syahadah organisasi: nama, periode, tglCetak.
 const FIELD_KEYS = ["nama", "periode", "tglCetak"] as const;
+// Preview memakai data contoh seperti hasil jadi. "Nama Santri" diganti
+// nama contoh (sama dengan dummy preview Nadi) — HANYA label contoh di
+// editor, tidak membuat anggota/syahadah baru. Periode & tanggal cetak
+// contohnya sudah realistis sehingga tidak diubah.
 const FIELD_SAMPLE: Record<string, string> = {
-  nama: "Nama Santri",
+  nama: "Ahmad Ibnu Alwan",
   periode: "11 September 2026 – 05 Oktober 2026",
   tglCetak: "05 Oktober 2026",
 };
@@ -26,8 +30,28 @@ export default function TemplateSyahadahTab({
   const [positions, setPositions] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imgRatio, setImgRatio] = useState(210 / 330);
+  const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<any>(null);
+
+  // Rasio gambar background + skala preview, sama seperti panggung cetak
+  // (lebar referensi 1600px) dan seperti preview tab Nadi, supaya preview
+  // sebangun dengan hasil cetak.
+  useEffect(() => {
+    if (!bg) return;
+    const img = new Image();
+    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
+    img.src = bg;
+  }, [bg]);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / 1600));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [bg]);
 
   const load = async () => {
     const res = await fetch(`${apiBase}?programKey=${programKey}`);
@@ -123,6 +147,9 @@ export default function TemplateSyahadahTab({
           <p className="text-sm text-[var(--color-text-muted)]">Upload background terlebih dahulu.</p>
         ) : (
           <>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Preview memakai data contoh dengan gaya field asli — geser teksnya langsung di atas desain, atau atur angka di bawah.
+            </p>
             <div
               ref={wrapRef}
               className="relative w-full max-w-3xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
@@ -130,26 +157,44 @@ export default function TemplateSyahadahTab({
               onPointerUp={onUp}
               onPointerCancel={onUp}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bg} alt="Template" className="w-full block" draggable={false} />
-              {FIELD_KEYS.map((key) => {
-                const cfg = positions[key] || { x: 50, y: 50 };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => onChipDown(e, key)}
-                    className={`absolute px-2 py-1 rounded text-xs font-bold border-2 whitespace-nowrap ${
-                      canEdit ? "cursor-move bg-yellow-300/90 border-yellow-600" : "bg-white/80 border-slate-400"
-                    }`}
-                    style={{
-                      left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)",
-                      fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
-                    }}
-                  >
-                    {FIELD_SAMPLE[key]}
-                  </div>
-                );
-              })}
+              <div
+                className="relative overflow-hidden bg-white"
+                style={{
+                  width: 1600,
+                  height: Math.round(1600 * imgRatio),
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                  marginBottom: -Math.round(1600 * imgRatio) * (1 - scale),
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={bg} alt="Template" className="absolute inset-0 w-full h-full object-fill" draggable={false} />
+                {FIELD_KEYS.map((key) => {
+                  const cfg = positions[key] || { x: 50, y: 50 };
+                  const maxW = ((cfg.maxWidth ?? 80) / 100) * 1600;
+                  return (
+                    <div
+                      key={key}
+                      onPointerDown={(e) => onChipDown(e, key)}
+                      className={`absolute border border-dashed border-transparent hover:border-amber-500 ${
+                        canEdit ? "cursor-move" : ""
+                      }`}
+                      style={{
+                        left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)",
+                        width: maxW,
+                        textAlign: cfg.align || "center",
+                        direction: "ltr",
+                        fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
+                        fontSize: cfg.fontSize ?? 28,
+                        fontWeight: key === "nama" ? 700 : undefined,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {FIELD_SAMPLE[key]}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

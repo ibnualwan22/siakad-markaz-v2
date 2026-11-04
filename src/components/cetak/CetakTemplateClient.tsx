@@ -1,49 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import AutoFitText from "./AutoFitText";
-import MunaqosahNilaiTable from "./MunaqosahNilaiTable";
-import { NADI_HUFADZ_WARNA_NAMA } from "@/lib/nadi-hufadz";
+import { useRef, useState } from "react";
+import { TemplateStage, TemplateStageZoom } from "./TemplateStage";
+import { STAGE_H_PX, STAGE_W_PX } from "@/lib/template-layout";
 
-const REF_W = 1600;
-
-type FieldCfg = {
-  x: number; // persen
-  y: number; // persen
-  fontSize: number; // px pada skala referensi
-  align?: string;
-  maxWidth?: number; // persen
-  fontFamily?: string; // nama font, diatur lewat web (mis. "The Season", "Poppins")
-  color?: string; // warna teks, mis. "#865b34"
-};
-
-const FIELD_LABEL: Record<string, string> = {
-  nama: "Nama",
-  juz: "Juz",
-  predikat: "Predikat",
-  periode: "Periode",
-  tglCetak: "Tanggal Cetak",
-  // Syahadah MC Akbarnas bulan 1 (field lain programKey tidak punya
-  // cfg-nya sehingga renderField mengembalikan null untuk mereka).
-  pembuka: "Teks Pembuka",
-  penghargaan: "Teks Penghargaan",
-  tahunAjaran: "Tahun Ajaran",
-  tanggalPemberian: "Tanggal Pemberian",
-  tauqi: "Label Tanda Tangan",
-  tandaTangan: "Gambar Tanda Tangan",
-  namaMudir: "Nama Mudir",
-  // Syahadah Munaqosah Hufadz (field lain programKey tidak punya
-  // cfg-nya sehingga renderField mengembalikan null untuk mereka).
-  kalimatJuz: "Kalimat Juz",
-  periodeLine: "Baris Periode",
-  tanggalPeriodeLine: "Baris Tanggal Periode",
-  doa: "Doa Penutup",
-  tabelNilai: "Tabel Nilai",
-  tanggalCetak: "Tanggal Cetak",
-  qrLabel: "Label QR",
-  qr: "Gambar QR",
-};
-
+// Halaman cetak syahadah template (Nadi Hufadz, MC Akbarnas, Munaqosah
+// Hufadz, Lajnah, OSIM). Rendering dokumennya memakai TemplateStage —
+// komponen yang sama dengan preview editor — dengan geometri mm
+// (panggung 330 x 215 mm, posisi mm, font mm), sehingga yang diatur di
+// editor = yang tercetak, seperti syahadah offline.
 export default function CetakTemplateClient({
   programKey,
   data,
@@ -82,23 +47,16 @@ export default function CetakTemplateClient({
       rataRata: number;
       predikat: string;
     } | null;
-    template: { backgroundUrl: string | null; fieldPositions: Record<string, FieldCfg> };
+    template: { backgroundUrl: string | null; fieldPositions: Record<string, any> };
   };
   showPngButton?: boolean;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const pngRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  // Aspek panggung DIKUNCI ke kertas cetak 330 x 215 mm (sama seperti
-  // syahadah offline) — bukan aspek gambar background — supaya layar,
-  // editor, PNG, dan print selalu sebangun. Background di-stretch
-  // object-fill ke panggung di semua tempat.
-  const imgRatio = 215 / 330;
   const [pngDownloading, setPngDownloading] = useState(false);
   const [pngError, setPngError] = useState("");
 
   // Unduh syahadah sebagai PNG: render salinan panggung di luar layar
-  // (ukuran penuh 1600px, tanpa transform skala) lalu tangkap html2canvas.
+  // (ukuran penuh 330mm = 1247px, tanpa zoom) lalu tangkap html2canvas.
   // Teks Arab dirender mesin browser sehingga shaping-nya benar.
   const downloadPng = async () => {
     const el = pngRef.current;
@@ -113,8 +71,8 @@ export default function CetakTemplateClient({
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
-        width: REF_W,
-        height: stageH,
+        width: Math.round(STAGE_W_PX),
+        height: STAGE_H_PX,
       });
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("gagal membuat PNG");
@@ -130,24 +88,6 @@ export default function CetakTemplateClient({
       setPngDownloading(false);
     }
   };
-
-  const bg = data.template.backgroundUrl;
-  const fields = data.template.fieldPositions || {};
-
-  // (Tidak ada lagi penyesuaian aspek dari gambar background: aspek
-  // panggung sudah dikunci ke kertas cetak di atas.)
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setScale(el.clientWidth / REF_W);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const stageH = Math.round(REF_W * imgRatio);
 
   const fieldText: Record<string, string> = {
     nama: data.nama,
@@ -169,149 +109,17 @@ export default function CetakTemplateClient({
     qrLabel: data.qrLabel ?? "",
   };
 
-  // Nadi, MC Akbarnas, & Munaqosah memakai teks Arab (rtl); syahadah
-  // organisasi memakai teks Latin (ltr).
-  const fieldDirection =
-    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz" ? "rtl" : "ltr";
-
-  const renderField = (key: string) => {
-    const cfg = fields[key] as FieldCfg | undefined;
-    if (!cfg) return null;
-    const maxW = ((cfg.maxWidth || 80) / 100) * REF_W;
-    // Tabel nilai Munaqosah: blok tabel (bukan satu baris teks).
-    // Musyarokah: data.tabelNilai null -> blok disembunyikan total.
-    if (key === "tabelNilai") {
-      if (!data.tabelNilai) return null;
-      return (
-        <div
-          key={key}
-          style={{
-            position: "absolute",
-            left: `${cfg.x}%`,
-            top: `${cfg.y}%`,
-            transform: "translate(-50%, -50%)",
-            width: maxW,
-            direction: "rtl",
-          }}
-        >
-          <MunaqosahNilaiTable
-            rows={data.tabelNilai.rows}
-            rataRata={data.tabelNilai.rataRata}
-            predikat={data.tabelNilai.predikat}
-            fontSize={cfg.fontSize}
-          />
-        </div>
-      );
-    }
-    // QR verifikasi Munaqosah: gambar dari data URL (dibuat server),
-    // dengan logo Markaz di tengahnya — pola yang sama dengan QR
-    // syahadah offline (logo.png, latar putih).
-    if (key === "qr") {
-      if (!data.qrUrl) return null;
-      return (
-        <div
-          key={key}
-          style={{
-            position: "absolute",
-            left: `${cfg.x}%`,
-            top: `${cfg.y}%`,
-            transform: "translate(-50%, -50%)",
-            width: maxW,
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={data.qrUrl}
-            alt="QR verifikasi"
-            draggable={false}
-            className="block w-full h-auto"
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/logo.png"
-            alt=""
-            draggable={false}
-            style={{
-              position: "absolute",
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-              width: "26%",
-              background: "#fff",
-              borderRadius: 8,
-              padding: 2,
-            }}
-          />
-        </div>
-      );
-    }
-    // Tanda tangan dirender sebagai gambar (bukan teks); lebarnya dari
-    // maxWidth field tersebut (persen panggung).
-    if (key === "tandaTangan") {
-      if (!data.signatureUrl) return null;
-      return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={key}
-          src={data.signatureUrl}
-          alt="Tanda tangan"
-          draggable={false}
-          style={{
-            position: "absolute",
-            left: `${cfg.x}%`,
-            top: `${cfg.y}%`,
-            transform: "translate(-50%, -50%)",
-            width: maxW,
-          }}
-        />
-      );
-    }
-    const posStyle: React.CSSProperties = {
-      position: "absolute",
-      left: `${cfg.x}%`,
-      top: `${cfg.y}%`,
-      transform: "translate(-50%, -50%)",
-      width: maxW,
-      textAlign: (cfg.align as any) || "center",
-      direction: fieldDirection,
-      fontFamily: cfg.fontFamily || undefined,
-      // Syahadah Nadi: nama jatuh ke emas bila posisi tersimpan belum
-      // punya warna (layout lama tersimpan tanpa warna).
-      color:
-        cfg.color ||
-        (programKey === "nadi-hufadz" && key === "nama"
-          ? NADI_HUFADZ_WARNA_NAMA
-          : undefined),
-    };
-    if (key === "nama") {
-      return (
-        <AutoFitText
-          key={key}
-          text={fieldText[key]}
-          baseFontSize={cfg.fontSize}
-          maxWidth={maxW}
-          style={{ ...posStyle, fontWeight: 700 }}
-        />
-      );
-    }
-    return (
-      <div
-        key={key}
-        style={{
-          ...posStyle,
-          fontSize: cfg.fontSize,
-          lineHeight: 1.4,
-          // Pembuka MC terdiri dari 2 baris (dipisah \n).
-          whiteSpace: "pre-line",
-        }}
-      >
-        {fieldText[key]}
-      </div>
-    );
+  const stageProps = {
+    programKey,
+    backgroundUrl: data.template.backgroundUrl,
+    fieldPositions: data.template.fieldPositions || {},
+    texts: fieldText,
+    signatureUrl: data.signatureUrl,
+    qrUrl: data.qrUrl,
+    tabelNilai: data.tabelNilai ?? null,
   };
 
-  // Kertas cetak: SEMUA program template (Nadi Hufadz, MC Akbarnas,
-  // Munaqosah Hufadz, Lajnah, OSIM) memakai 330 x 215 mm landscape —
+  // Kertas cetak: SEMUA program template memakai 330 x 215 mm landscape —
   // sama seperti syahadah offline — supaya preview sebangun dengan print.
   // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
   // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
@@ -324,8 +132,7 @@ export default function CetakTemplateClient({
         @media print {
           .no-print { display: none !important; }
           .cetak-root { min-height: 0 !important; }
-          .print-stage-wrap { transform: none !important; width: 100% !important; margin-bottom: 0 !important; }
-          .print-stage-wrap.print-f4 { width: 330mm !important; height: 215mm !important; }
+          .template-stage-zoom-inner { transform: none !important; margin-bottom: 0 !important; }
         }
       `}</style>
       {/* Poppins untuk field syahadah organisasi. Font lain (mis. "The Season")
@@ -362,32 +169,10 @@ export default function CetakTemplateClient({
       </div>
       )}
 
-      <div ref={wrapRef} className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
-        <div
-          className="print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none print-f4"
-          style={{
-            width: REF_W,
-            height: stageH,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            marginBottom: -stageH * (1 - scale),
-          }}
-        >
-          {bg ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bg}
-              alt="Template syahadah"
-              className="absolute inset-0 w-full h-full object-fill"
-              draggable={false}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-              Template belum memiliki background — upload di menu Template
-            </div>
-          )}
-          {Object.keys(FIELD_LABEL).map(renderField)}
-        </div>
+      <div className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
+        <TemplateStageZoom>
+          <TemplateStage {...stageProps} className="shadow-lg print:shadow-none" />
+        </TemplateStageZoom>
       </div>
 
       {/* Salinan panggung ukuran penuh di luar layar, khusus tangkapan PNG. */}
@@ -396,22 +181,9 @@ export default function CetakTemplateClient({
           ref={pngRef}
           aria-hidden
           className="relative overflow-hidden bg-white"
-          style={{ position: "fixed", left: -10000, top: 0, width: REF_W, height: stageH }}
+          style={{ position: "fixed", left: -10000, top: 0, width: "330mm", height: "215mm" }}
         >
-          {bg ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bg}
-              alt=""
-              className="absolute inset-0 w-full h-full object-fill"
-              draggable={false}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-              Template belum memiliki background — upload di menu Template
-            </div>
-          )}
-          {Object.keys(FIELD_LABEL).map(renderField)}
+          <TemplateStage {...stageProps} />
         </div>
       )}
     </div>

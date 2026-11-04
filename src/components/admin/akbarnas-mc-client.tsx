@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { TemplateStage, TemplateStageZoom } from "@/components/cetak/TemplateStage";
+import { normalizeFieldPositions } from "@/lib/template-layout";
 import {
   AKBARNAS_MC_FIELD_KEYS,
   AKBARNAS_MC_FIELD_LABEL,
@@ -26,27 +28,15 @@ export default function AkbarnasMcClient({
   initialPositions: Record<string, any>;
 }) {
   const [bg, setBg] = useState<string | null>(initialBg);
-  const [positions, setPositions] = useState<Record<string, any>>(initialPositions);
+  // Posisi dinormalisasi ke mm saat load (data lama %/px dikonversi);
+  // saat save, units:"mm" ikut tersimpan di fieldPositions.
+  const [positions, setPositions] = useState<Record<string, any>>(() => normalizeFieldPositions(initialPositions));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  // Aspek panggung DIKUNCI ke kertas cetak 330 x 215 mm (sama seperti
-  // syahadah offline), bukan aspek gambar background — supaya preview
-  // editor sebangun dengan hasil print.
-  const imgRatio = 215 / 330;
-  const [scale, setScale] = useState(1);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // Panggung preview memakai TemplateStage (330 x 215 mm, posisi mm) —
+  // komponen yang sama dengan halaman cetak, supaya preview sebangun
+  // dengan hasil print seperti syahadah offline.
   const dragRef = useRef<any>(null);
-
-  // (Tidak ada lagi penyesuaian aspek dari gambar background: aspek
-  // panggung sudah dikunci ke kertas cetak di atas.)
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / 1600));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [bg]);
 
   // Upload background khusus template MC (Cloudinary) lalu simpan
   // sebagai backgroundUrl template ini saja.
@@ -95,11 +85,14 @@ export default function AkbarnasMcClient({
   };
 
   const onFieldDown = (e: React.PointerEvent, key: string) => {
-    if (!wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
+    // Rect diukur dari elemen .template-stage terdekat (sudah termasuk
+    // zoom layar), lalu geseran diubah ke mm panggung 330 x 215.
+    const stage = (e.target as HTMLElement).closest(".template-stage");
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
     dragRef.current = {
       key, startX: e.clientX, startY: e.clientY,
-      origX: positions[key]?.x ?? 50, origY: positions[key]?.y ?? 50,
+      origX: positions[key]?.x ?? 165, origY: positions[key]?.y ?? 107.5,
       w: rect.width, h: rect.height,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -107,8 +100,8 @@ export default function AkbarnasMcClient({
   const onMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    const nx = Math.min(100, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 100));
-    const ny = Math.min(100, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 100));
+    const nx = Math.min(330, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 330));
+    const ny = Math.min(215, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 215));
     setPositions((p: any) => ({ ...p, [d.key]: { ...p[d.key], x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } }));
   };
   const onUp = () => { dragRef.current = null; };
@@ -147,63 +140,23 @@ export default function AkbarnasMcClient({
           ) : (
             <>
               <div
-                ref={wrapRef}
                 className="relative w-full max-w-3xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
                 onPointerMove={onMove}
                 onPointerUp={onUp}
                 onPointerCancel={onUp}
               >
-                <div
-                  className="relative overflow-hidden bg-white"
-                  style={{
-                    width: 1600,
-                    height: Math.round(1600 * imgRatio),
-                    transform: `scale(${scale})`,
-                    transformOrigin: "top left",
-                    marginBottom: -Math.round(1600 * imgRatio) * (1 - scale),
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={bg} alt="Template" className="absolute inset-0 w-full h-full object-fill" draggable={false} />
-                  {AKBARNAS_MC_FIELD_KEYS.map((key) => {
-                    const cfg = positions[key] || { x: 50, y: 50 };
-                    const maxW = ((cfg.maxWidth ?? 80) / 100) * 1600;
-                    if (key === "tandaTangan") {
-                      return (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={key}
-                          src="/images/signature.png"
-                          alt="Tanda tangan"
-                          draggable={false}
-                          onPointerDown={(e) => onFieldDown(e, key)}
-                          className="absolute cursor-move border border-dashed border-transparent hover:border-amber-500"
-                          style={{
-                            left: `${cfg.x}%`, top: `${cfg.y}%`,
-                            transform: "translate(-50%, -50%)", width: maxW,
-                          }}
-                        />
-                      );
-                    }
-                    return (
-                      <div
-                        key={key}
-                        onPointerDown={(e) => onFieldDown(e, key)}
-                        className="absolute cursor-move border border-dashed border-transparent hover:border-amber-500"
-                        style={{
-                          left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)",
-                          width: maxW, textAlign: cfg.align || "center", direction: "rtl",
-                          fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
-                          fontSize: cfg.fontSize ?? 28,
-                          fontWeight: key === "nama" ? 700 : undefined,
-                          lineHeight: 1.4, whiteSpace: "pre-line",
-                        }}
-                      >
-                        {sample[key]}
-                      </div>
-                    );
-                  })}
-                </div>
+                <TemplateStageZoom>
+                  <TemplateStage
+                    programKey="akbarnas-mc"
+                    backgroundUrl={bg}
+                    fieldPositions={positions}
+                    fieldKeys={[...AKBARNAS_MC_FIELD_KEYS]}
+                    texts={sample}
+                    signatureUrl="/images/signature.png"
+                    editorMode
+                    onFieldPointerDown={onFieldDown}
+                  />
+                </TemplateStageZoom>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -214,13 +167,13 @@ export default function AkbarnasMcClient({
                     <div key={key} className="border rounded-xl p-3 space-y-2">
                       <p className="font-bold text-sm">{AKBARNAS_MC_FIELD_LABEL[key]}</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <label>X (%)
-                          <input type="number" step="0.5" value={cfg.x ?? 50}
+                        <label>X (mm)
+                          <input type="number" step="0.5" value={cfg.x ?? 165}
                             onChange={(e) => setField(key, { x: Number(e.target.value) })}
                             className="w-full px-2 py-1 border rounded" />
                         </label>
-                        <label>Y (%)
-                          <input type="number" step="0.5" value={cfg.y ?? 50}
+                        <label>Y (mm)
+                          <input type="number" step="0.5" value={cfg.y ?? 107.5}
                             onChange={(e) => setField(key, { y: Number(e.target.value) })}
                             className="w-full px-2 py-1 border rounded" />
                         </label>
@@ -231,8 +184,8 @@ export default function AkbarnasMcClient({
                               className="w-full px-2 py-1 border rounded" />
                           </label>
                         )}
-                        <label>{isSig ? "Lebar (%, panggung)" : "Lebar maks (%)"}
-                          <input type="number" value={cfg.maxWidth ?? 80}
+                        <label>{isSig ? "Lebar (mm, panggung)" : "Lebar maks (mm)"}
+                          <input type="number" value={cfg.maxWidth ?? 264}
                             onChange={(e) => setField(key, { maxWidth: Number(e.target.value) })}
                             className="w-full px-2 py-1 border rounded" />
                         </label>

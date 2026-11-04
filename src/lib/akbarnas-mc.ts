@@ -126,22 +126,21 @@ export type AkbarnasMcFieldCfg = {
   color?: string;
 };
 
-// Posisi awal (persen panggung) mengikuti tata letak desain offline.
-// Admin bisa menggeser/mengubahnya di editor Template & Layout; nilai
-// ini hanya dipakai bila belum ada layout tersimpan.
-export function defaultFieldPositionsAkbarnasMc(): Record<
-  string,
-  AkbarnasMcFieldCfg
-> {
+// Posisi awal (mm panggung 330 x 215, sama seperti syahadah offline)
+// mengikuti tata letak desain offline. Admin bisa menggeser/mengubahnya
+// di editor Template & Layout; nilai ini hanya dipakai bila belum ada
+// layout tersimpan. fontSize tetap angka referensi lama (tidak diubah).
+export function defaultFieldPositionsAkbarnasMc(): Record<string, any> {
   return {
-    pembuka: { x: 50, y: 38, fontSize: 30, maxWidth: 80 },
-    nama: { x: 50, y: 50, fontSize: 44, maxWidth: 80 },
-    penghargaan: { x: 50, y: 60, fontSize: 30, maxWidth: 85 },
-    tahunAjaran: { x: 50, y: 67, fontSize: 30, maxWidth: 60 },
-    tanggalPemberian: { x: 50, y: 73, fontSize: 28, maxWidth: 85 },
-    tauqi: { x: 50, y: 80, fontSize: 30, maxWidth: 30 },
-    tandaTangan: { x: 50, y: 86, fontSize: 28, maxWidth: 12 },
-    namaMudir: { x: 50, y: 94, fontSize: 28, maxWidth: 50 },
+    pembuka: { x: 165, y: 81.7, fontSize: 30, maxWidth: 264 },
+    nama: { x: 165, y: 107.5, fontSize: 44, maxWidth: 264 },
+    penghargaan: { x: 165, y: 129, fontSize: 30, maxWidth: 280.5 },
+    tahunAjaran: { x: 165, y: 144.05, fontSize: 30, maxWidth: 198 },
+    tanggalPemberian: { x: 165, y: 156.95, fontSize: 28, maxWidth: 280.5 },
+    tauqi: { x: 165, y: 172, fontSize: 30, maxWidth: 99 },
+    tandaTangan: { x: 165, y: 184.9, fontSize: 28, maxWidth: 39.6 },
+    namaMudir: { x: 165, y: 202.1, fontSize: 28, maxWidth: 165 },
+    units: "mm",
   };
 }
 

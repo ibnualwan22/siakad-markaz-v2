@@ -112,13 +112,14 @@ export function formatPeriodeArab(tglDari: string, tglSampai: string): string {
  */
 export const NADI_HUFADZ_WARNA_NAMA = "#A67C2E";
 
-/** Default posisi field template (persen terhadap background). */
+/** Default posisi field template (mm panggung 330 x 215). fontSize tetap angka referensi lama. */
 export function defaultFieldPositions() {
   return {
-    nama: { x: 50, y: 40, fontSize: 44, align: "center", maxWidth: 80, color: NADI_HUFADZ_WARNA_NAMA },
-    juz: { x: 50, y: 54, fontSize: 28, align: "center", maxWidth: 80 },
-    predikat: { x: 50, y: 60, fontSize: 28, align: "center", maxWidth: 80 },
-    periode: { x: 50, y: 66, fontSize: 22, align: "center", maxWidth: 80 },
+    nama: { x: 165, y: 86, fontSize: 44, align: "center", maxWidth: 264, color: NADI_HUFADZ_WARNA_NAMA },
+    juz: { x: 165, y: 116.1, fontSize: 28, align: "center", maxWidth: 264 },
+    predikat: { x: 165, y: 129, fontSize: 28, align: "center", maxWidth: 264 },
+    periode: { x: 165, y: 141.9, fontSize: 22, align: "center", maxWidth: 264 },
+    units: "mm",
   };
 }
 

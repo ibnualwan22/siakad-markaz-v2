@@ -36,7 +36,6 @@ export async function getMunaqosahPrintData(id: string) {
     nilaiKelancaran: rec.nilaiKelancaran,
     nilaiTajwid: rec.nilaiTajwid,
     nilaiMakhorijulHuruf: rec.nilaiMakhorijulHuruf,
-    nilaiAdab: rec.nilaiAdab,
   };
   const nilaiAkhir = hitungNilaiAkhir(nilai);
   const musyarokah = isMusyarokah(nilaiAkhir);

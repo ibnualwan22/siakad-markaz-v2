@@ -1553,7 +1553,7 @@ model MunaqosahHufadz {
   nilaiKelancaran      Int
   nilaiTajwid          Int
   nilaiMakhorijulHuruf Int
-  nilaiAdab            Int
+  nilaiAdab            Int?           // Legacy: tidak lagi dinilai (diabaikan kode), dipertahankan agar data lama tidak hilang
   juzTeks              String
   tanggal              DateTime @db.Date
   pengujiId            String?

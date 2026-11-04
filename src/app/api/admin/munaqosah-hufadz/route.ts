@@ -67,7 +67,6 @@ export async function GET(request: Request) {
             nilaiKelancaran: rec.nilaiKelancaran,
             nilaiTajwid: rec.nilaiTajwid,
             nilaiMakhorijulHuruf: rec.nilaiMakhorijulHuruf,
-            nilaiAdab: rec.nilaiAdab,
             juzTeks: rec.juzTeks,
             tanggal: rec.tanggal,
             catatan: rec.catatan,
@@ -85,7 +84,7 @@ export async function GET(request: Request) {
 }
 
 // POST { santriId, dufahNama?, nilaiHafalan, nilaiKelancaran, nilaiTajwid,
-//   nilaiMakhorijulHuruf, nilaiAdab, juzTeks, tanggal?, catatan? } —
+//   nilaiMakhorijulHuruf, juzTeks, tanggal?, catatan? } —
 // simpan / perbarui nilai munaqosah (upsert per santri per dufah).
 export async function POST(request: Request) {
   const session = await getSession();
@@ -104,7 +103,6 @@ export async function POST(request: Request) {
     "nilaiKelancaran",
     "nilaiTajwid",
     "nilaiMakhorijulHuruf",
-    "nilaiAdab",
   ] as const;
   for (const k of nilaiKeys) {
     const v = Number(body[k]);
@@ -125,7 +123,6 @@ export async function POST(request: Request) {
       nilaiKelancaran: Number(body.nilaiKelancaran),
       nilaiTajwid: Number(body.nilaiTajwid),
       nilaiMakhorijulHuruf: Number(body.nilaiMakhorijulHuruf),
-      nilaiAdab: Number(body.nilaiAdab),
       juzTeks: String(body.juzTeks).trim(),
       tanggal: body.tanggal ? new Date(body.tanggal) : new Date(),
       catatan: body.catatan || null,
@@ -138,7 +135,6 @@ export async function POST(request: Request) {
       nilaiKelancaran: Number(body.nilaiKelancaran),
       nilaiTajwid: Number(body.nilaiTajwid),
       nilaiMakhorijulHuruf: Number(body.nilaiMakhorijulHuruf),
-      nilaiAdab: Number(body.nilaiAdab),
       juzTeks: String(body.juzTeks).trim(),
       tanggal: body.tanggal ? new Date(body.tanggal) : new Date(),
       catatan: body.catatan || null,

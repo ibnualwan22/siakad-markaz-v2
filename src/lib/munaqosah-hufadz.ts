@@ -7,7 +7,6 @@ export type MunaqosahNilai = {
   nilaiKelancaran: number;
   nilaiTajwid: number;
   nilaiMakhorijulHuruf: number;
-  nilaiAdab: number;
 };
 
 export const MUNAQOSAH_NILAI_FIELDS: {
@@ -19,18 +18,17 @@ export const MUNAQOSAH_NILAI_FIELDS: {
   { key: "nilaiKelancaran", label: "Kelancaran", arab: "الطلاقة" },
   { key: "nilaiTajwid", label: "Tajwid", arab: "التجويد" },
   { key: "nilaiMakhorijulHuruf", label: "Makhorijul Huruf", arab: "مخارج الحروف" },
-  { key: "nilaiAdab", label: "Adab dan Sikap", arab: "الأخلاق والأدب" },
 ];
 
-// Nilai akhir = rata-rata 5 kolom, dibulatkan ke bilangan bulat terdekat.
+// Nilai akhir = rata-rata 4 kolom (Adab tidak masuk penilaian),
+// dibulatkan ke bilangan bulat terdekat.
 export function hitungNilaiAkhir(n: MunaqosahNilai): number {
   const sum =
     n.nilaiHafalan +
     n.nilaiKelancaran +
     n.nilaiTajwid +
-    n.nilaiMakhorijulHuruf +
-    n.nilaiAdab;
-  return Math.round(sum / 5);
+    n.nilaiMakhorijulHuruf;
+  return Math.round(sum / 4);
 }
 
 // Predikat Arab; null = musyarokah (< 60, tanpa predikat).
@@ -124,20 +122,22 @@ export function kalimatJuz(juzTeks: string): string {
   return `وذلك لإكمالها/إكماله حفظ ${frasaJuz(toArabDigits(juzTeks))} من القرآن الكريم ولنجاحه/ها في المناقشة`;
 }
 
-// ---- Posisi default field cetak (persen panggung, referensi 1600px) ----
+// ---- Posisi default field cetak (mm panggung 330 x 215) ----
+// fontSize tetap angka referensi lama (tidak diubah).
 
 export function defaultFieldPositionsMunaqosah(): Record<string, any> {
   return {
-    pembuka: { x: 50, y: 33, fontSize: 26, maxWidth: 70 },
-    nama: { x: 50, y: 45, fontSize: 46, maxWidth: 70, color: "#0E8A3E" },
-    kalimatJuz: { x: 50, y: 54, fontSize: 26, maxWidth: 72 },
-    periodeLine: { x: 50, y: 59.5, fontSize: 26, maxWidth: 70 },
-    tanggalPeriodeLine: { x: 50, y: 63.5, fontSize: 26, maxWidth: 70 },
-    doa: { x: 50, y: 68, fontSize: 26, maxWidth: 70 },
-    tabelNilai: { x: 50, y: 79, fontSize: 18, maxWidth: 46 },
-    tanggalCetak: { x: 50, y: 92, fontSize: 24, maxWidth: 70 },
-    qrLabel: { x: 85, y: 65, fontSize: 20, maxWidth: 14 },
-    qr: { x: 85, y: 74, maxWidth: 12 },
+    pembuka: { x: 165, y: 70.95, fontSize: 26, maxWidth: 231 },
+    nama: { x: 165, y: 96.75, fontSize: 46, maxWidth: 231, color: "#0E8A3E" },
+    kalimatJuz: { x: 165, y: 116.1, fontSize: 26, maxWidth: 237.6 },
+    periodeLine: { x: 165, y: 127.925, fontSize: 26, maxWidth: 231 },
+    tanggalPeriodeLine: { x: 165, y: 136.525, fontSize: 26, maxWidth: 231 },
+    doa: { x: 165, y: 146.2, fontSize: 26, maxWidth: 231 },
+    tabelNilai: { x: 165, y: 169.85, fontSize: 18, maxWidth: 151.8 },
+    tanggalCetak: { x: 165, y: 197.8, fontSize: 24, maxWidth: 231 },
+    qrLabel: { x: 280.5, y: 139.75, fontSize: 20, maxWidth: 46.2 },
+    qr: { x: 280.5, y: 159.1, maxWidth: 39.6 },
+    units: "mm",
   };
 }
 

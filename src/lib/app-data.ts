@@ -452,6 +452,35 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
           return { score: (n.nilaiAkhir || 0) + (n.nilaiTambahan || 0), bobot: pm?.mapel.bobot ?? 1 };
         })
       );
+
+      // Nilai akumulatif (patokan peringkat): sama seperti rekap Akumulatif —
+      // per mapel nilai akhir + tambahan yang dibatasi 100, hanya mapel yang
+      // masuk akumulasi, berbobot. BEDA dari `average` di atas yang menambah
+      // tambahan mentah-mentah tanpa batas. Mapel yang nilainya belum terisi
+      // tidak ikut (seperti rekap).
+      const nilaiAkumulatif = calcAkumulatif(
+        accumulativeNilai
+          .filter((n: any) => n.nilaiAkhir != null)
+          .map((n: any) => {
+            const pm = program?.programMapels.find((p: any) => p.mapelId === n.mapelId);
+            let tambahan = n.nilaiTambahan ?? 0;
+            if (isAkbarnas) {
+              // nilaiList gabungan tidak membawa nilaiTambahan — ambil dari
+              // entri riwayat Akbarnas terakhir per mapel (seperti rekap).
+              tambahan = 0;
+              for (const r of riwayatList) {
+                if (r.santriId !== masterSantri.id) continue;
+                if (!r.program?.nama_indo.toLowerCase().includes("akbarnas")) continue;
+                for (const rec of (r.nilaiList ?? [])) {
+                  if (rec.mapelId === n.mapelId && rec.nilaiTambahan && rec.nilaiTambahan > 0) {
+                    tambahan = rec.nilaiTambahan;
+                  }
+                }
+              }
+            }
+            return { score: applyNilaiTambahan(n.nilaiAkhir, tambahan), bobot: pm?.mapel.bobot ?? 1 };
+          })
+      );
       const isTurats = (program as any)?.kategori === "TURATS";
       const averagePredikat = isTurats ? getPredikatTurats(Math.round(average)) : getPredikat(Math.round(average));
 
@@ -484,6 +513,8 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
         riwayatId: riwayat?.id ?? null,
         average,
         averagePredikat,
+        nilaiAkumulatif,
+        isBulanPertamaAkbarnas,
         programKategori: isUsbuain ? "USBUAIN" : ((program as any)?.kategori ?? "REGULER"),
         bulanKe: masterSantri.bulanKe,
       };

@@ -500,10 +500,17 @@ export function HaflahWadaClient({
     }
   }, [activeTab, exporting, dufahLabel]);
 
-  // Export SATU slide denah sebagai JPG. Tiap slide ditangkap sendiri
-  // (blok pendek ±520px) — bukan satu gambar panjang per gender, karena
-  // tangkapan tunggal yang terlalu tinggi itulah yang rusak sebelumnya.
-  // Nama file membawa nomor slide + total slide, jadi urutannya jelas.
+  // Export SATU slide denah sebagai JPG langsung (bukan dibungkus PDF).
+  // Tiap slide ditangkap sendiri (blok pendek ±520px) — bukan satu gambar
+  // panjang per gender, karena tangkapan tunggal yang terlalu tinggi
+  // itulah yang rusak sebelumnya. Nama file membawa nomor slide + total
+  // slide, jadi urutannya jelas.
+  //
+  // PENTING: setup tangkapan disamakan PERSIS dengan export PDF yang sudah
+  // terbukti jalan (windowWidth 1200 + onclone yang membuka overflow dan
+  // mematok lebar kartu) — bedanya hanya output: JPG langsung, bukan PDF.
+  // Unduhan pun lewat Blob (seperti jsPDF.save), bukan data-URL, karena
+  // data-URL pada gambar besar tidak andal di semua browser.
   const handleExportDenahSlideJPG = useCallback(async (gender: "banin" | "banat", slideIdx: number, totalSlides: number) => {
     const target = slideRefs.current.get(`${gender}-${slideIdx}`);
     if (!target || exporting) return;
@@ -513,25 +520,43 @@ export function HaflahWadaClient({
       const html2canvas = (await import("html2canvas")).default;
       const canvas = await html2canvas(target, {
         scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff",
+        windowWidth: 1200,
         onclone: (clonedDoc: Document) => {
           clonedDoc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove());
           const resetStyle = clonedDoc.createElement("style");
           resetStyle.textContent = `* { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-sizing: border-box; }`;
           clonedDoc.head.appendChild(resetStyle);
+          const cloneContainer = clonedDoc.querySelector('.neu-card-white');
+          if (cloneContainer) {
+            (cloneContainer as HTMLElement).style.overflow = 'visible';
+            (cloneContainer as HTMLElement).style.width = `1200px`;
+            (cloneContainer as HTMLElement).style.maxWidth = 'none';
+          }
+          // Patok lebar slide ke 800px (sama dengan minWidth tabel) agar
+          // hasil JPG berasio F4 landscape (330:215), bukan melebar
+          // mengikuti kartu.
           const cloneTarget = clonedDoc.querySelector(`[data-denah-slide="${slideIdx}"][data-denah-gender="${gender}"]`);
           if (cloneTarget) {
             (cloneTarget as HTMLElement).style.overflow = "visible";
             (cloneTarget as HTMLElement).style.maxWidth = "none";
-            (cloneTarget as HTMLElement).style.width = "max-content";
+            (cloneTarget as HTMLElement).style.width = "800px";
             (cloneTarget as HTMLElement).style.marginTop = "0";
           }
         },
       });
 
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.95)
+      );
+      if (!blob) throw new Error("Gagal membuat file JPG dari canvas");
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
+      link.href = url;
       link.download = `Denah_${gender === "banin" ? "Banin" : "Banat"}_Slide${slideIdx + 1}_dari_${totalSlides}_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
-      link.href = canvas.toDataURL("image/jpeg", 0.95);
+      document.body.appendChild(link);
       link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error("Export denah slide JPG failed:", err);
       alert("Gagal export JPG. Silakan coba lagi.");

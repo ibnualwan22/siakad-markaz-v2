@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import AutoFitText from "./AutoFitText";
 import MunaqosahNilaiTable from "./MunaqosahNilaiTable";
 import { NADI_HUFADZ_WARNA_NAMA } from "@/lib/nadi-hufadz";
+import { toArabDigits } from "@/lib/munaqosah-hufadz";
 import {
   STAGE_H_MM,
   STAGE_W_MM,
@@ -42,6 +43,7 @@ export const FIELD_LABEL: Record<string, string> = {
   tanggalPeriodeLine: "Baris Tanggal Periode",
   doa: "Doa Penutup",
   tabelNilai: "Tabel Nilai",
+  rataRata: "Rata-rata & Predikat",
   tanggalCetak: "Tanggal Cetak",
   qrLabel: "Label QR",
   qr: "Gambar QR",
@@ -107,6 +109,62 @@ export function TemplateStage({
 
   const renderField = (key: string) => {
     const cfg = (positions as any)[key] as TemplateFieldCfg | undefined;
+    const editorCls = editorMode
+      ? `absolute border border-dashed border-transparent hover:border-amber-500 ${
+          onFieldPointerDown ? "cursor-move" : ""
+        }`
+      : "absolute";
+    const editorProps = editorMode && onFieldPointerDown
+      ? { onPointerDown: (e: React.PointerEvent) => onFieldPointerDown(e, key) }
+      : {};
+
+    // Baris rata-rata & predikat Munaqosah sebagai FIELD SENDIRI (bukan
+    // jeda margin di dalam tabel) — posisinya diatur independen (drag /
+    // X-Y / font / warna) di editor. Musyarokah: tabelNilai null -> blok
+    // disembunyikan total (sama seperti tabelnya).
+    // Bila belum ada posisi tersimpan, jatuh ke posisi lama (di bawah
+    // tabel, dihitung dari tinggi tabel) supaya cetakan yang sudah ada
+    // tidak berubah sebelum admin mengaturnya. Cabang ini harus jalan
+    // walau cfg kosong, jadi ditempatkan SEBELUM early-return di bawah.
+    if (key === "rataRata") {
+      if (!tabelNilai) return null;
+      const tableCfg = (positions as any)["tabelNilai"] as TemplateFieldCfg | undefined;
+      const fs = cfg?.fontSize ?? tableCfg?.fontSize ?? (editorMode ? 22 : defaultFontSize);
+      const fontMm = pxRefToMm(fs);
+      // Tinggi tabel (judul + baris) dalam mm, untuk posisi fallback.
+      const padV = pxRefToMm(2);
+      const borderMm = 0.53; // border sel 2px CSS pada panggung 330mm
+      const titleH = fontMm * 1.5 + padV * 2 + borderMm + pxRefToMm(4);
+      const rowH = fontMm * 1.5 + padV * 2 + borderMm;
+      const tableH = titleH + tabelNilai.rows.length * rowH;
+      const x = cfg?.x ?? tableCfg?.x ?? STAGE_W_MM / 2;
+      const y = cfg?.y ?? (tableCfg?.y !== undefined
+        ? tableCfg.y + (tableH + pxRefToMm(16)) / 2
+        : STAGE_H_MM / 2);
+      const maxWmm = cfg?.maxWidth ?? tableCfg?.maxWidth ?? 264;
+      return (
+        <div
+          key={key}
+          {...editorProps}
+          className={editorCls}
+          style={{
+            left: `${x}mm`,
+            top: `${y}mm`,
+            transform: "translate(-50%, -50%)",
+            width: `${maxWmm}mm`,
+            direction: "rtl",
+            textAlign: "center",
+            fontSize: `${fontMm}mm`,
+            lineHeight: 1.5,
+            color: cfg?.color || "#111",
+            fontFamily: cfg?.fontFamily || undefined,
+          }}
+        >
+          بمعدل تراكمي عام ({toArabDigits(tabelNilai.rataRata)}) وبتقدير {tabelNilai.predikat}
+        </div>
+      );
+    }
+
     if (!cfg) {
       // Halaman cetak hanya merender field yang punya posisi tersimpan.
       // Editor merender semua field kuncinya (default tengah panggung)
@@ -118,14 +176,6 @@ export function TemplateStage({
     const maxWmm = cfg?.maxWidth ?? 264;
     const fontSize =
       cfg?.fontSize ?? (key === "tabelNilai" && editorMode ? 22 : defaultFontSize);
-    const editorCls = editorMode
-      ? `absolute border border-dashed border-transparent hover:border-amber-500 ${
-          onFieldPointerDown ? "cursor-move" : ""
-        }`
-      : "absolute";
-    const editorProps = editorMode && onFieldPointerDown
-      ? { onPointerDown: (e: React.PointerEvent) => onFieldPointerDown(e, key) }
-      : {};
 
     // Tabel nilai Munaqosah: blok tabel (bukan satu baris teks).
     // Musyarokah: tabelNilai null -> blok disembunyikan total.
@@ -146,8 +196,6 @@ export function TemplateStage({
         >
           <MunaqosahNilaiTable
             rows={tabelNilai.rows}
-            rataRata={tabelNilai.rataRata}
-            predikat={tabelNilai.predikat}
             fontSize={fontSize}
           />
         </div>

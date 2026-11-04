@@ -7,15 +7,15 @@ import { pxRefToMm } from "@/lib/template-layout";
 // fontSize diterima sebagai angka referensi lama (tidak diubah) dan
 // dirender dalam mm; padding sel ikut dikonversi supaya proporsinya
 // terhadap font tetap sama seperti sebelumnya.
+// CATATAN: baris rata-rata & predikat BUKAN bagian komponen ini lagi —
+// ia adalah field layout sendiri ("rataRata") di TemplateStage, supaya
+// posisinya bisa diatur independen (drag / X-Y) di editor, bukan sekadar
+// jeda margin di bawah tabel.
 export default function MunaqosahNilaiTable({
   rows,
-  rataRata,
-  predikat,
   fontSize,
 }: {
   rows: { arab: string; nilai: number }[];
-  rataRata: number;
-  predikat: string;
   fontSize: number; // angka referensi lama (px pada skala 1600)
 }) {
   const fontMm = `${pxRefToMm(fontSize)}mm`;
@@ -67,9 +67,6 @@ export default function MunaqosahNilaiTable({
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: `${pxRefToMm(16)}mm` }}>
-        بمعدل تراكمي عام ({toArabDigits(rataRata)}) وبتقدير {predikat}
-      </div>
     </div>
   );
 }

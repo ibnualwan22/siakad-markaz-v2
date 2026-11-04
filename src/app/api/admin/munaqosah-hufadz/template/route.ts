@@ -14,7 +14,7 @@ const PROGRAM_KEY = "munaqosah-hufadz";
 // connector — hanya file teks UTF-8 yang bisa didorong).
 export async function GET(request: Request) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz");
+  const hasPerm = await checkPermission("huffadz");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 // PUT { programKey?, nama?, backgroundUrl?, backgroundId?, fieldPositions?, isActive? }
 export async function PUT(request: Request) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz_edit");
+  const hasPerm = await checkPermission("huffadz_edit");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

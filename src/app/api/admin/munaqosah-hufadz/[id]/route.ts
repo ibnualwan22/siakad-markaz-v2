@@ -12,7 +12,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz_edit");
+  const hasPerm = await checkPermission("huffadz_edit");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -11,7 +11,7 @@ export default async function CetakMunaqosahPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz");
+  const hasPerm = await checkPermission("huffadz");
   if (!session || !hasPerm) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">

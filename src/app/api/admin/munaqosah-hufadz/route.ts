@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // munaqosah-nya (bila sudah dinilai) + nilai akhir/predikat terhitung.
 export async function GET(request: Request) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz");
+  const hasPerm = await checkPermission("huffadz");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -89,7 +89,7 @@ export async function GET(request: Request) {
 // simpan / perbarui nilai munaqosah (upsert per santri per dufah).
 export async function POST(request: Request) {
   const session = await getSession();
-  const hasPerm = await checkPermission("nadi_hufadz_edit");
+  const hasPerm = await checkPermission("huffadz_edit");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

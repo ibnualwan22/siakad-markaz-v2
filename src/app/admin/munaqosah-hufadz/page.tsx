@@ -9,7 +9,7 @@ export const metadata = {
 };
 
 export default async function MunaqosahHufadzPage() {
-  const canEdit = await checkPermission("nadi_hufadz_edit");
+  const canEdit = await checkPermission("huffadz_edit");
   const dufahAktif = (await getActiveDufahName()) || "";
 
   return (

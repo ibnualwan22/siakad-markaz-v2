@@ -86,6 +86,9 @@ export function HaflahWadaClient({
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  // Ref blok denah per gender — untuk export JPG terpisah Banin / Banat.
+  const denahBaninRef = useRef<HTMLDivElement>(null);
+  const denahBanatRef = useRef<HTMLDivElement>(null);
 
   // Manage manual sorting modal
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -492,6 +495,45 @@ export function HaflahWadaClient({
     }
   }, [activeTab, exporting, dufahLabel]);
 
+  // Export denah per gender sebagai JPG — Banin dan Banat jadi dua file
+  // gambar terpisah. Menangkap blok denah gender tersebut saja (banner +
+  // tabel kursi); panggung & pengumuman tidak ikut.
+  const handleExportDenahJPG = useCallback(async (gender: "banin" | "banat") => {
+    const target = gender === "banin" ? denahBaninRef.current : denahBanatRef.current;
+    if (!target || exporting) return;
+    setExporting(true);
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(target, {
+        scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff",
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove());
+          const resetStyle = clonedDoc.createElement("style");
+          resetStyle.textContent = `* { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-sizing: border-box; }`;
+          clonedDoc.head.appendChild(resetStyle);
+          const cloneTarget = clonedDoc.querySelector(`[data-denah-gender="${gender}"]`);
+          if (cloneTarget) {
+            (cloneTarget as HTMLElement).style.overflow = "visible";
+            (cloneTarget as HTMLElement).style.maxWidth = "none";
+            (cloneTarget as HTMLElement).style.width = "max-content";
+            (cloneTarget as HTMLElement).style.marginTop = "0";
+          }
+        },
+      });
+
+      const link = document.createElement("a");
+      link.download = `Denah_${gender === "banin" ? "Banin" : "Banat"}_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
+      link.href = canvas.toDataURL("image/jpeg", 0.95);
+      link.click();
+    } catch (err) {
+      console.error("Export denah JPG failed:", err);
+      alert("Gagal export JPG. Silakan coba lagi.");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, dufahLabel]);
+
   if (!mounted) return null;
 
   // Render a cell for denah grid — with seat number
@@ -627,14 +669,35 @@ export function HaflahWadaClient({
             <span className="hidden md:inline">Urutan Kelas</span>
           </button>
 
-          <button
-            onClick={handleExportPDF}
-            disabled={exporting}
-            className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-            {exporting ? "Mengekspor..." : "Export PDF"}
-          </button>
+          {activeTab === "denah" ? (
+            <>
+              <button
+                onClick={() => handleExportDenahJPG("banin")}
+                disabled={exporting || denahBanin.length === 0}
+                className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                {exporting ? "Mengekspor..." : "Export JPG Banin"}
+              </button>
+              <button
+                onClick={() => handleExportDenahJPG("banat")}
+                disabled={exporting || denahBanat.length === 0}
+                className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
+              >
+                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                {exporting ? "Mengekspor..." : "Export JPG Banat"}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              {exporting ? "Mengekspor..." : "Export PDF"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -743,7 +806,7 @@ export function HaflahWadaClient({
             </div>
 
             {/* BANIN */}
-            <div data-pdf-section style={{ marginTop: 16 }}>
+            <div ref={denahBaninRef} data-denah-gender="banin" data-pdf-section style={{ marginTop: 16 }}>
               <div style={{ width: "100%", backgroundColor: "#a3c2e6", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
                 ★★★ BANIN ★★★
               </div>
@@ -755,6 +818,10 @@ export function HaflahWadaClient({
                       const paddedChunk = padAndDirection(chunk, colCount, startFrom);
                       return (
                         <tr key={rowIdx}>
+                          {/* Penanda nomor barisan: 1 = paling depan (dekat panggung), bertambah ke belakang */}
+                          <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
+                            {rowIdx + 1}
+                          </td>
                           {paddedChunk.map((student, colIdx) => {
                             const actualIdx = student ? denahBanin.indexOf(student) : -1;
                             return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
@@ -763,7 +830,7 @@ export function HaflahWadaClient({
                       );
                     })}
                     {denahBanin.length === 0 && (
-                      <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banin</td></tr>
+                      <tr><td colSpan={colCount + 1} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banin</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -771,7 +838,7 @@ export function HaflahWadaClient({
             </div>
 
             {/* BANAT */}
-            <div data-pdf-section style={{ marginTop: 32 }}>
+            <div ref={denahBanatRef} data-denah-gender="banat" data-pdf-section style={{ marginTop: 32 }}>
               <div style={{ width: "100%", backgroundColor: "#f4b084", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
                 ★★★ BANAT ★★★
               </div>
@@ -783,6 +850,10 @@ export function HaflahWadaClient({
                       const paddedChunk = padAndDirection(chunk, colCount, startFrom);
                       return (
                         <tr key={rowIdx}>
+                          {/* Penanda nomor barisan: 1 = paling depan (dekat panggung), bertambah ke belakang */}
+                          <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
+                            {rowIdx + 1}
+                          </td>
                           {paddedChunk.map((student, colIdx) => {
                             const actualIdx = student ? denahBanat.indexOf(student) : -1;
                             return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
@@ -791,7 +862,7 @@ export function HaflahWadaClient({
                       );
                     })}
                     {denahBanat.length === 0 && (
-                      <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banat</td></tr>
+                      <tr><td colSpan={colCount + 1} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banat</td></tr>
                     )}
                   </tbody>
                 </table>

@@ -156,7 +156,7 @@ export function SyahadahCacDocument({ qrUrl, data, layout, editorMode, selectedE
               transform: `translate(${lo.teksPeriode.offsetX}mm, ${lo.teksPeriode.offsetY}mm)`,
             }}
           >
-            {serialNumber === "Sedang mengambil serial..." || serialNumber === "Gagal mengambil Serial" ? serialNumber : `No. : ${serialNumber}`}
+            {serialNumber}
           </div>
 
           {/* Paragraf Pembuka dihapus */}

@@ -114,6 +114,8 @@ export default function NadiHufadzSantriPage() {
         )
       )}
 
+      {sudahDaftar && <AngketSection />}
+
       {riwayat.length === 0 && sudahDaftar && (
         <div className="bg-white rounded-2xl border p-6 text-center text-sm text-slate-500">
           Anda belum pernah mengikuti Nadi Hufadz.
@@ -217,6 +219,99 @@ export default function NadiHufadzSantriPage() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Bagian angket dufah aktif: satu kolom bebas per santri. Menulis/mengubah
+// hanya saat admin membuka pengisian; isi yang sudah ditulis tetap bisa
+// dilihat walau pengisian ditutup.
+function AngketSection() {
+  const [dibuka, setDibuka] = useState<boolean | null>(null);
+  const [isi, setIsi] = useState("");
+  const [punyaIsi, setPunyaIsi] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pesan, setPesan] = useState("");
+
+  useEffect(() => {
+    fetch("/api/santri/nadi-hufadz/angket")
+      .then((r) => r.json())
+      .then((j) => {
+        setDibuka(!!j.angketDibuka);
+        setIsi(j.angket?.isi || "");
+        setPunyaIsi(!!j.angket);
+      })
+      .catch(() => setDibuka(false));
+  }, []);
+
+  const simpan = async () => {
+    setSaving(true);
+    setPesan("");
+    try {
+      const res = await fetch("/api/santri/nadi-hufadz/angket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isi }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan angket");
+      setPunyaIsi(!!json.angket);
+      setPesan(json.angket ? "Angket tersimpan." : "Angket dihapus.");
+    } catch (e: any) {
+      setPesan(e.message || "Gagal menyimpan angket.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-bold">Angket Nadi Hufadz</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Tulis catatan, masukan, atau hal lain yang ingin Anda sampaikan.
+          </p>
+        </div>
+        <span
+          className={`shrink-0 text-xs font-bold px-2 py-1 rounded-full ${
+            dibuka ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {dibuka === null ? "Memuat..." : dibuka ? "DIBUKA" : "DITUTUP"}
+        </span>
+      </div>
+      {dibuka === false && !punyaIsi ? (
+        <p className="text-sm text-slate-500 mt-4">
+          Pengisian angket sedang ditutup. Silakan menunggu sampai admin membukanya.
+        </p>
+      ) : (
+        <>
+          <textarea
+            value={isi}
+            onChange={(e) => setIsi(e.target.value)}
+            disabled={dibuka !== true}
+            rows={5}
+            placeholder="Tulis di sini..."
+            className="w-full mt-4 px-3 py-2 border rounded-xl text-sm disabled:bg-slate-50"
+          />
+          {dibuka === true && (
+            <>
+              <button
+                onClick={simpan}
+                disabled={saving}
+                className="mt-3 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {saving ? "Menyimpan..." : "Simpan Angket"}
+              </button>
+              <p className="text-xs text-slate-400 mt-2">
+                Mengosongkan lalu menyimpan akan menghapus angket Anda.
+              </p>
+            </>
+          )}
+          {pesan && <p className="text-sm text-slate-600 mt-3">{pesan}</p>}
+        </>
+      )}
     </div>
   );
 }

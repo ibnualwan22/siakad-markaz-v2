@@ -29,6 +29,7 @@ const TABS = [
   { id: "peserta", label: "Peserta" },
   { id: "setoran", label: "Input Setoran" },
   { id: "tasmi", label: "Tasmi'" },
+  { id: "angket", label: "Angket" },
   { id: "template", label: "Template & Layout" },
   { id: "cetak", label: "Cetak" },
 ] as const;
@@ -58,6 +59,8 @@ export default function NadiHufadzClient({
   const [loading, setLoading] = useState(true);
   const [pendaftaranDibuka, setPendaftaranDibuka] = useState<boolean | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+  const [angketDibuka, setAngketDibuka] = useState<boolean | null>(null);
+  const [toggleAngketLoading, setToggleAngketLoading] = useState(false);
   const [minHadir, setMinHadir] = useState<number | null>(null);
   const [minHadirInput, setMinHadirInput] = useState(String(NADI_HUFADZ_MIN_HADIR));
   const [simpanMinHadirLoading, setSimpanMinHadirLoading] = useState(false);
@@ -80,6 +83,7 @@ export default function NadiHufadzClient({
       const res = await fetch(`/api/admin/nadi-hufadz/periode?dufahNama=${encodeURIComponent(dufahAktif)}`);
       const json = await res.json();
       setPendaftaranDibuka(!!json.dibuka);
+      setAngketDibuka(!!json.angketDibuka);
       const ambang =
         typeof json.minHadir === "number" ? json.minHadir : NADI_HUFADZ_MIN_HADIR;
       setMinHadir(ambang);
@@ -134,6 +138,26 @@ export default function NadiHufadzClient({
     }
   };
 
+  const toggleAngket = async () => {
+    if (angketDibuka === null) return;
+    setToggleAngketLoading(true);
+    try {
+      const res = await fetch("/api/admin/nadi-hufadz/periode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dufahNama: dufahAktif, angketDibuka: !angketDibuka }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal mengubah status");
+      setAngketDibuka(!!json.angketDibuka);
+      toast.success(json.angketDibuka ? "Pengisian angket dibuka" : "Pengisian angket ditutup");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal mengubah status");
+    } finally {
+      setToggleAngketLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPeserta();
     fetchPendaftaran();
@@ -161,6 +185,26 @@ export default function NadiHufadzClient({
                 className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
               >
                 {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-surface-dark)] pt-3">
+            <p className="text-sm">
+              Pengisian angket {dufahAktif}:{" "}
+              <span className={`font-bold ${angketDibuka ? "text-emerald-700" : "text-red-600"}`}>
+                {angketDibuka === null ? "Memuat..." : angketDibuka ? "DIBUKA" : "DITUTUP"}
+              </span>
+              <span className="text-[var(--color-text-muted)]">
+                {" "}— menutup hanya menghalangi santri menulis/mengubah; angket yang sudah masuk tetap bisa dilihat di tab Angket.
+              </span>
+            </p>
+            {canEdit && (
+              <button
+                onClick={toggleAngket}
+                disabled={toggleAngketLoading || angketDibuka === null}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {toggleAngketLoading ? "Menyimpan..." : angketDibuka ? "Tutup Angket" : "Buka Angket"}
               </button>
             )}
           </div>
@@ -229,6 +273,9 @@ export default function NadiHufadzClient({
       )}
       {tab === "tasmi" && (
         <TasmiTab pesertaList={pesertaList} canEdit={canEdit} onRefresh={fetchPeserta} />
+      )}
+      {tab === "angket" && (
+        <AngketTab dufahAktif={dufahAktif} />
       )}
       {tab === "template" && <TemplateTab canEdit={canEdit} />}
       {tab === "cetak" && <CetakTab pesertaList={pesertaList} loading={loading} />}
@@ -1022,6 +1069,129 @@ function CetakTab({ pesertaList, loading }: { pesertaList: Peserta[]; loading: b
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================= TAB ANGKET ================= */
+type AngketAnak = {
+  santriId: string;
+  nama: string;
+  sakan: string | null;
+  kelas: string | null;
+  angket: { isi: string; updatedAt: string } | null;
+};
+
+// Kartu per anak: nama, sakan, kelas, preview isi. Klik kartu (yang sudah
+// mengisi) membuka modal isi lengkap.
+function AngketTab({ dufahAktif }: { dufahAktif: string }) {
+  const [data, setData] = useState<AngketAnak[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pilih, setPilih] = useState<AngketAnak | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/nadi-hufadz/angket?dufahNama=${encodeURIComponent(dufahAktif)}`)
+      .then((r) => r.json())
+      .then((j) => setData(j.data || []))
+      .catch(() => toast.error("Gagal memuat angket"))
+      .finally(() => setLoading(false));
+  }, [dufahAktif]);
+
+  useEffect(() => {
+    if (!pilih) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPilih(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [pilih]);
+
+  const sudahIsi = data.filter((d) => d.angket).length;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-text-muted)]">
+        {loading
+          ? "Memuat..."
+          : `${sudahIsi} dari ${data.length} peserta sudah mengisi angket ${dufahAktif}.`}
+      </p>
+      {loading ? (
+        <p className="text-sm">Memuat...</p>
+      ) : data.length === 0 ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Belum ada peserta.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {data.map((d) => {
+            const preview = d.angket
+              ? d.angket.isi.length > 150
+                ? d.angket.isi.slice(0, 150) + "…"
+                : d.angket.isi
+              : null;
+            return (
+              <button
+                key={d.santriId}
+                onClick={() => d.angket && setPilih(d)}
+                disabled={!d.angket}
+                className="text-left bg-white rounded-2xl border p-4 hover:shadow-md transition-shadow disabled:opacity-100 disabled:cursor-default"
+              >
+                <p className="font-bold">{d.nama}</p>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  {[d.sakan, d.kelas].filter(Boolean).join(" • ") || "—"}
+                </p>
+                {preview ? (
+                  <p className="text-sm mt-3 whitespace-pre-wrap break-words">{preview}</p>
+                ) : (
+                  <p className="text-sm mt-3 text-[var(--color-text-muted)] italic">Belum mengisi</p>
+                )}
+                {d.angket && (
+                  <p className="text-xs text-[var(--color-text-muted)] mt-3">
+                    Terakhir diubah:{" "}
+                    {new Date(d.angket.updatedAt).toLocaleString("id-ID", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {pilih && pilih.angket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setPilih(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">{pilih.nama}</h3>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  {[pilih.sakan, pilih.kelas].filter(Boolean).join(" • ") || "—"}
+                  {" • "}
+                  {new Date(pilih.angket.updatedAt).toLocaleString("id-ID", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </p>
+              </div>
+              <button
+                onClick={() => setPilih(null)}
+                aria-label="Tutup"
+                className="shrink-0 w-8 h-8 rounded-full bg-slate-100 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm mt-4 whitespace-pre-wrap break-words">{pilih.angket.isi}</p>
+          </div>
         </div>
       )}
     </div>

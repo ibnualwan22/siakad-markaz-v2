@@ -1470,9 +1470,25 @@ model NadiHufadzPeriode {
   dufahNama String   @unique
   dibuka    Boolean  @default(false)
   minHadir  Int?
+  // Toggle pengisian angket per dufah (admin). Mati = santri hanya bisa
+  // melihat isi yang sudah ditulisnya; angket yang masuk tetap tampil di admin.
+  angketDibuka Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([dufahNama])
+}
+
+// Angket Nadi Hufadz: satu kolom bebas per santri per dufah.
+model NadiHufadzAngket {
+  id        String   @id @default(cuid())
+  santriId  String
+  dufahNama String
+  isi       String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([santriId, dufahNama])
   @@index([dufahNama])
 }
 

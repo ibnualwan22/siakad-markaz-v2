@@ -556,7 +556,12 @@ export function HaflahWadaClient({
       document.body.appendChild(link);
       link.click();
       link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Jangan cabut object URL terlalu cepat: Download Manager Chrome
+      // Android mengambil file secara asinkron dan bisa mulai lebih dari
+      // 1 detik setelah klik — kalau URL sudah dicabut, unduhan gagal
+      // dengan "Error download" padahal file sempat masuk daftar unduhan.
+      // 60 detik cukup untuk mulai mengunduh, tanpa membocorkan memori.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
       console.error("Export denah slide JPG failed:", err);
       alert("Gagal export JPG. Silakan coba lagi.");

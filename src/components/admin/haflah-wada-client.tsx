@@ -51,6 +51,11 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
+// Baris per slide denah: banner ±40px + 4 baris × 120px ≈ 520px pada lebar
+// tabel 800px → rasio ≈ 330:215 (kertas F4 landscape). Nomor kursi & nomor
+// barisan TIDAK mengulang per slide — keduanya lanjut dari slide sebelumnya.
+const ROWS_PER_SLIDE = 4;
+
 function padAndDirection(chunk: any[], size: number, start: "right" | "left") {
   const padded = [...chunk];
   while (padded.length < size) {
@@ -86,9 +91,9 @@ export function HaflahWadaClient({
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-  // Ref blok denah per gender — untuk export JPG terpisah Banin / Banat.
-  const denahBaninRef = useRef<HTMLDivElement>(null);
-  const denahBanatRef = useRef<HTMLDivElement>(null);
+  // Ref tiap slide denah — kunci "banin-0", "banin-1", "banat-0", dst.
+  // Dipakai tombol download JPG per slide.
+  const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Manage manual sorting modal
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -495,11 +500,12 @@ export function HaflahWadaClient({
     }
   }, [activeTab, exporting, dufahLabel]);
 
-  // Export denah per gender sebagai JPG — Banin dan Banat jadi dua file
-  // gambar terpisah. Menangkap blok denah gender tersebut saja (banner +
-  // tabel kursi); panggung & pengumuman tidak ikut.
-  const handleExportDenahJPG = useCallback(async (gender: "banin" | "banat") => {
-    const target = gender === "banin" ? denahBaninRef.current : denahBanatRef.current;
+  // Export SATU slide denah sebagai JPG. Tiap slide ditangkap sendiri
+  // (blok pendek ±520px) — bukan satu gambar panjang per gender, karena
+  // tangkapan tunggal yang terlalu tinggi itulah yang rusak sebelumnya.
+  // Nama file membawa nomor slide + total slide, jadi urutannya jelas.
+  const handleExportDenahSlideJPG = useCallback(async (gender: "banin" | "banat", slideIdx: number, totalSlides: number) => {
+    const target = slideRefs.current.get(`${gender}-${slideIdx}`);
     if (!target || exporting) return;
     setExporting(true);
 
@@ -512,7 +518,7 @@ export function HaflahWadaClient({
           const resetStyle = clonedDoc.createElement("style");
           resetStyle.textContent = `* { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-sizing: border-box; }`;
           clonedDoc.head.appendChild(resetStyle);
-          const cloneTarget = clonedDoc.querySelector(`[data-denah-gender="${gender}"]`);
+          const cloneTarget = clonedDoc.querySelector(`[data-denah-slide="${slideIdx}"][data-denah-gender="${gender}"]`);
           if (cloneTarget) {
             (cloneTarget as HTMLElement).style.overflow = "visible";
             (cloneTarget as HTMLElement).style.maxWidth = "none";
@@ -523,11 +529,11 @@ export function HaflahWadaClient({
       });
 
       const link = document.createElement("a");
-      link.download = `Denah_${gender === "banin" ? "Banin" : "Banat"}_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
+      link.download = `Denah_${gender === "banin" ? "Banin" : "Banat"}_Slide${slideIdx + 1}_dari_${totalSlides}_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
       link.href = canvas.toDataURL("image/jpeg", 0.95);
       link.click();
     } catch (err) {
-      console.error("Export denah JPG failed:", err);
+      console.error("Export denah slide JPG failed:", err);
       alert("Gagal export JPG. Silakan coba lagi.");
     } finally {
       setExporting(false);
@@ -566,6 +572,96 @@ export function HaflahWadaClient({
         )}
       </td>
     )
+  };
+
+  // Render denah satu gender sebagai slide-slide F4 (4 baris per slide).
+  // Tiap slide adalah layout baru (banner + tabelnya sendiri), BUKAN
+  // potongan dari satu tabel panjang. Nomor kursi lanjut antar slide karena
+  // diambil dari indeks global di daftar denah; nomor barisan juga lanjut
+  // (baris pertama slide ke-2 = barisan 5, bukan 1 lagi).
+  const renderGenderDenah = (gender: "banin" | "banat", denahList: any[], topMargin: number) => {
+    const label = gender === "banin" ? "BANIN" : "BANAT";
+    const labelTitle = gender === "banin" ? "Banin" : "Banat";
+    const bannerBg = gender === "banin" ? "#a3c2e6" : "#f4b084";
+    const banner = (
+      <div style={{ width: "100%", backgroundColor: bannerBg, color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
+        ★★★ {label} ★★★
+      </div>
+    );
+
+    const rowChunks = chunkArray(denahList, colCount);
+    if (rowChunks.length === 0) {
+      return (
+        <div style={{ marginTop: topMargin }}>
+          {banner}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
+              <tbody>
+                <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data {labelTitle}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    const slides = chunkArray(rowChunks, ROWS_PER_SLIDE);
+    return (
+      <div>
+        {slides.map((slideRows, slideIdx) => {
+          const startBaris = slideIdx * ROWS_PER_SLIDE + 1;
+          const endBaris = slideIdx * ROWS_PER_SLIDE + slideRows.length;
+          return (
+            <div key={slideIdx} style={{ marginTop: slideIdx === 0 ? topMargin : 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>
+                  Slide {slideIdx + 1} dari {slides.length} — {labelTitle} (Baris {startBaris}–{endBaris})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleExportDenahSlideJPG(gender, slideIdx, slides.length)}
+                  disabled={exporting}
+                  className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition"
+                >
+                  {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                  {exporting ? "Mengekspor..." : "Download JPG"}
+                </button>
+              </div>
+              <div
+                ref={(el) => { const k = `${gender}-${slideIdx}`; if (el) slideRefs.current.set(k, el); else slideRefs.current.delete(k); }}
+                data-denah-slide={slideIdx}
+                data-denah-gender={gender}
+              >
+                {banner}
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
+                    <tbody>
+                      {slideRows.map((chunk, rowIdx) => {
+                        const globalRowIdx = slideIdx * ROWS_PER_SLIDE + rowIdx;
+                        const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
+                        const paddedChunk = padAndDirection(chunk, colCount, startFrom);
+                        return (
+                          <tr key={rowIdx}>
+                            {/* Penanda nomor barisan — lanjut antar slide */}
+                            <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
+                              {globalRowIdx + 1}
+                            </td>
+                            {paddedChunk.map((student, colIdx) => {
+                              const actualIdx = student ? denahList.indexOf(student) : -1;
+                              return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Render pemanggilan row — with column borders
@@ -670,24 +766,7 @@ export function HaflahWadaClient({
           </button>
 
           {activeTab === "denah" ? (
-            <>
-              <button
-                onClick={() => handleExportDenahJPG("banin")}
-                disabled={exporting || denahBanin.length === 0}
-                className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
-              >
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                {exporting ? "Mengekspor..." : "Export JPG Banin"}
-              </button>
-              <button
-                onClick={() => handleExportDenahJPG("banat")}
-                disabled={exporting || denahBanat.length === 0}
-                className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
-              >
-                {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-                {exporting ? "Mengekspor..." : "Export JPG Banat"}
-              </button>
-            </>
+            <span className="text-xs font-semibold text-[var(--color-text-muted)]">JPG diunduh per slide (tombol di atas tiap slide)</span>
           ) : (
             <button
               onClick={handleExportPDF}
@@ -805,69 +884,11 @@ export function HaflahWadaClient({
               </div>
             </div>
 
-            {/* BANIN */}
-            <div ref={denahBaninRef} data-denah-gender="banin" data-pdf-section style={{ marginTop: 16 }}>
-              <div style={{ width: "100%", backgroundColor: "#a3c2e6", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
-                ★★★ BANIN ★★★
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
-                  <tbody>
-                    {chunkArray(denahBanin, colCount).map((chunk, rowIdx) => {
-                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
-                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
-                      return (
-                        <tr key={rowIdx}>
-                          {/* Penanda nomor barisan: 1 = paling depan (dekat panggung), bertambah ke belakang */}
-                          <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
-                            {rowIdx + 1}
-                          </td>
-                          {paddedChunk.map((student, colIdx) => {
-                            const actualIdx = student ? denahBanin.indexOf(student) : -1;
-                            return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
-                          })}
-                        </tr>
-                      );
-                    })}
-                    {denahBanin.length === 0 && (
-                      <tr><td colSpan={colCount + 1} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banin</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* BANIN — slide-slide F4, 4 baris per slide */}
+            {renderGenderDenah("banin", denahBanin, 16)}
 
-            {/* BANAT */}
-            <div ref={denahBanatRef} data-denah-gender="banat" data-pdf-section style={{ marginTop: 32 }}>
-              <div style={{ width: "100%", backgroundColor: "#f4b084", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
-                ★★★ BANAT ★★★
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
-                  <tbody>
-                    {chunkArray(denahBanat, colCount).map((chunk, rowIdx) => {
-                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
-                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
-                      return (
-                        <tr key={rowIdx}>
-                          {/* Penanda nomor barisan: 1 = paling depan (dekat panggung), bertambah ke belakang */}
-                          <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
-                            {rowIdx + 1}
-                          </td>
-                          {paddedChunk.map((student, colIdx) => {
-                            const actualIdx = student ? denahBanat.indexOf(student) : -1;
-                            return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
-                          })}
-                        </tr>
-                      );
-                    })}
-                    {denahBanat.length === 0 && (
-                      <tr><td colSpan={colCount + 1} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banat</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* BANAT — slide-slide F4, 4 baris per slide */}
+            {renderGenderDenah("banat", denahBanat, 32)}
 
             {/* PENGUMUMAN */}
             <div data-pdf-section style={{ marginTop: 48, border: "2px solid black", maxWidth: 800, marginLeft: "auto", marginRight: "auto" }}>

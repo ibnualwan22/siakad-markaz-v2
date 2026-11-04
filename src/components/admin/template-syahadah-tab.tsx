@@ -30,20 +30,16 @@ export default function TemplateSyahadahTab({
   const [positions, setPositions] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [imgRatio, setImgRatio] = useState(210 / 330);
+  // Aspek panggung DIKUNCI ke kertas cetak 330 x 215 mm (sama seperti
+  // syahadah offline), bukan aspek gambar background — supaya preview
+  // editor sebangun dengan hasil print.
+  const imgRatio = 215 / 330;
   const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<any>(null);
 
-  // Rasio gambar background + skala preview, sama seperti panggung cetak
-  // (lebar referensi 1600px) dan seperti preview tab Nadi, supaya preview
-  // sebangun dengan hasil cetak.
-  useEffect(() => {
-    if (!bg) return;
-    const img = new Image();
-    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
-    img.src = bg;
-  }, [bg]);
+  // (Tidak ada lagi penyesuaian aspek dari gambar background: aspek
+  // panggung sudah dikunci ke kertas cetak di atas.)
 
   useEffect(() => {
     const el = wrapRef.current;

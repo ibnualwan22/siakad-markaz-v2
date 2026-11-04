@@ -89,7 +89,11 @@ export default function CetakTemplateClient({
   const wrapRef = useRef<HTMLDivElement>(null);
   const pngRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const [imgRatio, setImgRatio] = useState(9 / 16);
+  // Aspek panggung DIKUNCI ke kertas cetak 330 x 215 mm (sama seperti
+  // syahadah offline) — bukan aspek gambar background — supaya layar,
+  // editor, PNG, dan print selalu sebangun. Background di-stretch
+  // object-fill ke panggung di semua tempat.
+  const imgRatio = 215 / 330;
   const [pngDownloading, setPngDownloading] = useState(false);
   const [pngError, setPngError] = useState("");
 
@@ -130,12 +134,8 @@ export default function CetakTemplateClient({
   const bg = data.template.backgroundUrl;
   const fields = data.template.fieldPositions || {};
 
-  useEffect(() => {
-    if (!bg) return;
-    const img = new Image();
-    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
-    img.src = bg;
-  }, [bg]);
+  // (Tidak ada lagi penyesuaian aspek dari gambar background: aspek
+  // panggung sudah dikunci ke kertas cetak di atas.)
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -310,23 +310,22 @@ export default function CetakTemplateClient({
     );
   };
 
-  // Kertas cetak: Nadi Hufadz, MC Akbarnas, & Munaqosah memakai F4
-  // landscape (330 x 210 mm) — desain ketiganya landscape.
+  // Kertas cetak: SEMUA program template (Nadi Hufadz, MC Akbarnas,
+  // Munaqosah Hufadz, Lajnah, OSIM) memakai 330 x 215 mm landscape —
+  // sama seperti syahadah offline — supaya preview sebangun dengan print.
   // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
   // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
-  // (Letter portrait, 2 lembar). Program lain tetap landscape generik.
-  const isNadi = programKey === "nadi-hufadz";
-  const isF4 = isNadi || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz";
+  // (Letter portrait, 2 lembar).
 
   return (
     <div className={bulkMode ? "cetak-root print:bg-white" : "cetak-root min-h-screen bg-slate-200 print:bg-white"}>
       <style>{`
-        ${bulkMode ? "" : `@page { size: ${isF4 ? "330mm 210mm" : "landscape"}; margin: 0; }`}
+        ${bulkMode ? "" : `@page { size: 330mm 215mm; margin: 0; }`}
         @media print {
           .no-print { display: none !important; }
           .cetak-root { min-height: 0 !important; }
           .print-stage-wrap { transform: none !important; width: 100% !important; margin-bottom: 0 !important; }
-          .print-stage-wrap.print-f4 { width: 330mm !important; height: 210mm !important; }
+          .print-stage-wrap.print-f4 { width: 330mm !important; height: 215mm !important; }
         }
       `}</style>
       {/* Poppins untuk field syahadah organisasi. Font lain (mis. "The Season")
@@ -365,7 +364,7 @@ export default function CetakTemplateClient({
 
       <div ref={wrapRef} className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
         <div
-          className={`print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none${isF4 ? " print-f4" : ""}`}
+          className="print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none print-f4"
           style={{
             width: REF_W,
             height: stageH,

@@ -29,17 +29,16 @@ export default function AkbarnasMcClient({
   const [positions, setPositions] = useState<Record<string, any>>(initialPositions);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [imgRatio, setImgRatio] = useState(1869 / 2870);
+  // Aspek panggung DIKUNCI ke kertas cetak 330 x 215 mm (sama seperti
+  // syahadah offline), bukan aspek gambar background — supaya preview
+  // editor sebangun dengan hasil print.
+  const imgRatio = 215 / 330;
   const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<any>(null);
 
-  useEffect(() => {
-    if (!bg) return;
-    const img = new Image();
-    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
-    img.src = bg;
-  }, [bg]);
+  // (Tidak ada lagi penyesuaian aspek dari gambar background: aspek
+  // panggung sudah dikunci ke kertas cetak di atas.)
 
   useEffect(() => {
     const el = wrapRef.current;

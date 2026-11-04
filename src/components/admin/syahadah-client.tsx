@@ -103,14 +103,23 @@ export function SyahadahClient({
     return santri.kelasId === filterKelasId;
   });
 
-  // Urutan tampil: peringkat nilai akumulatif menurun; seri -> abjad.
+  // Urutan tampil: Banin dulu, baru Banat (tanpa gender: paling akhir);
+  // di dalam tiap kelompok: peringkat nilai akumulatif menurun, seri -> abjad.
   // Baris Akbarnas bulan 1 tidak ikut pemeringkatan (syahadahnya MC) —
-  // mereka diletakkan di bawah, berurutan abjad.
+  // mereka diletakkan di bawah, tetap Banin dulu baru Banat, berurutan abjad.
+  const genderRank = (g: string) => (g === "BANIN" ? 0 : g === "BANAT" ? 1 : 2);
   const sortedSantri = useMemo(() => {
     const ranked = filteredSantri.filter((s) => !s.isBulanPertamaAkbarnas);
     const bulanPertama = filteredSantri.filter((s) => s.isBulanPertamaAkbarnas);
-    ranked.sort((a, b) => b.nilaiAkumulatif - a.nilaiAkumulatif || a.nama.localeCompare(b.nama, "id"));
-    bulanPertama.sort((a, b) => a.nama.localeCompare(b.nama, "id"));
+    ranked.sort(
+      (a, b) =>
+        genderRank(a.gender) - genderRank(b.gender) ||
+        b.nilaiAkumulatif - a.nilaiAkumulatif ||
+        a.nama.localeCompare(b.nama, "id")
+    );
+    bulanPertama.sort(
+      (a, b) => genderRank(a.gender) - genderRank(b.gender) || a.nama.localeCompare(b.nama, "id")
+    );
     return [...ranked, ...bulanPertama];
   }, [filteredSantri]);
 

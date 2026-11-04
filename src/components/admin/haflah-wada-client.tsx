@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { Armchair, ListOrdered, Printer, Loader2 } from "lucide-react";
+import { Armchair, ListOrdered, Printer, Loader2, PauseCircle } from "lucide-react";
 
 type SantriRow = {
   id: string;
@@ -18,6 +18,8 @@ type SantriRow = {
   canViewIjazah: boolean;
   isMartabahUla?: boolean;
   programKategori?: string;
+  isDitahan?: boolean;
+  catatanDitahan?: string | null;
 };
 
 type KelasItem = {
@@ -60,13 +62,25 @@ function padAndDirection(chunk: any[], size: number, start: "right" | "left") {
 export function HaflahWadaClient({
   santriRows,
   kelasList,
-  dufahLabel
+  dufahLabel,
+  ditahanList,
+  dufahNama
 }: {
   santriRows: SantriRow[];
   kelasList: KelasItem[];
   dufahLabel: string;
+  ditahanList: { santriId: string; catatan: string | null }[];
+  dufahNama: string | null;
 }) {
-  const [activeTab, setActiveTab] = useState<"denah" | "pemanggilan">("denah");
+  const [activeTab, setActiveTab] = useState<"denah" | "pemanggilan" | "ditahan">("denah");
+  // Penanda syahadah ditahan (per dufah aktif). Hanya berpengaruh di prosesi.
+  const [heldMap, setHeldMap] = useState<Map<string, string | null>>(
+    () => new Map(ditahanList.map((d) => [d.santriId, d.catatan]))
+  );
+  const [tahanTarget, setTahanTarget] = useState("");
+  const [tahanCatatan, setTahanCatatan] = useState("");
+  const [lepasTarget, setLepasTarget] = useState("");
+  const [savingTahan, setSavingTahan] = useState(false);
   const [colCount, setColCount] = useState<number>(10);
   const [doorOption, setDoorOption] = useState<"masuk-kanan-keluar-kiri" | "masuk-kiri-keluar-kanan" | "kanan-kiri" | "kanan" | "kiri">("masuk-kanan-keluar-kiri");
   const [mounted, setMounted] = useState(false);
@@ -158,7 +172,9 @@ export function HaflahWadaClient({
 
     let mapped = santriRows.map(s => ({
       ...s,
-      isMartabahUla: topByProgram.get(s.programId || "unknown_program") === s.id
+      isMartabahUla: topByProgram.get(s.programId || "unknown_program") === s.id,
+      isDitahan: heldMap.has(s.id),
+      catatanDitahan: heldMap.get(s.id) ?? null
     }));
 
     let allSantriList = [...mapped];
@@ -195,11 +211,14 @@ export function HaflahWadaClient({
       return b.average - a.average;
     });
 
-    let graduates = allSantriList.filter(s => s.statusKelulusan !== "TIDAK_LULUS");
-    let nonGraduates = allSantriList.filter(s => s.statusKelulusan === "TIDAK_LULUS");
+    // Syahadah ditahan HANYA berpengaruh di prosesi: yang ditahan
+    // dikelompokkan bersama yang tidak lulus (barisan belakang denah,
+    // tidak dipanggil). Status kelulusan & cetak syahadah tidak berubah.
+    let graduates = allSantriList.filter(s => s.statusKelulusan !== "TIDAK_LULUS" && !s.isDitahan);
+    let nonGraduates = allSantriList.filter(s => s.statusKelulusan === "TIDAK_LULUS" || s.isDitahan);
 
     return { allSantriList, graduates, nonGraduates };
-  }, [santriRows, kelasMap]);
+  }, [santriRows, kelasMap, heldMap]);
 
   const denahBanin = useMemo(() => [
     ...processedSantri.graduates.filter((s: SantriRow) => s.gender === "BANIN"),
@@ -254,6 +273,65 @@ export function HaflahWadaClient({
       };
     });
   }, [processedSantri, kelasMap]);
+
+  // Daftar Ditahan: semua yang ditahan, dalam urutan prosesi yang sama.
+  // Yang tidak lulus ikut tampil di sini dengan keterangan tidak mendapat syahadah.
+  const daftarDitahan = useMemo(
+    () => processedSantri.allSantriList.filter((s) => s.isDitahan),
+    [processedSantri]
+  );
+
+  const kandidatTahan = useMemo(
+    () => processedSantri.allSantriList.filter((s) => !s.isDitahan),
+    [processedSantri]
+  );
+
+  const kandidatTerpilih = kandidatTahan.find((s) => s.id === tahanTarget);
+
+  const handleTahan = async () => {
+    if (!dufahNama || !tahanTarget || savingTahan) return;
+    setSavingTahan(true);
+    try {
+      const res = await fetch("/api/admin/haflah-wada/ditahan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ santriId: tahanTarget, dufahNama, ditahan: true, catatan: tahanCatatan || null }),
+      });
+      if (!res.ok) throw new Error("Gagal menahan syahadah");
+      setHeldMap((prev) => new Map(prev).set(tahanTarget, tahanCatatan || null));
+      setTahanTarget("");
+      setTahanCatatan("");
+    } catch (e) {
+      console.error("Gagal menahan syahadah", e);
+      alert("Gagal menahan syahadah. Silakan coba lagi.");
+    } finally {
+      setSavingTahan(false);
+    }
+  };
+
+  const handleLepas = async () => {
+    if (!dufahNama || !lepasTarget || savingTahan) return;
+    setSavingTahan(true);
+    try {
+      const res = await fetch("/api/admin/haflah-wada/ditahan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ santriId: lepasTarget, dufahNama, ditahan: false }),
+      });
+      if (!res.ok) throw new Error("Gagal melepas tahanan");
+      setHeldMap((prev) => {
+        const next = new Map(prev);
+        next.delete(lepasTarget);
+        return next;
+      });
+      setLepasTarget("");
+    } catch (e) {
+      console.error("Gagal melepas tahanan", e);
+      alert("Gagal melepas tahanan. Silakan coba lagi.");
+    } finally {
+      setSavingTahan(false);
+    }
+  };
 
   const handleExportPDF = useCallback(async () => {
     if (!printRef.current || exporting) return;
@@ -401,7 +479,9 @@ export function HaflahWadaClient({
 
       const filename = activeTab === "denah"
         ? `Denah_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
-        : `Pemanggilan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+        : activeTab === "ditahan"
+          ? `Daftar_Ditahan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
+          : `Pemanggilan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
 
       pdf.save(filename);
     } catch (err) {
@@ -488,6 +568,13 @@ export function HaflahWadaClient({
             <ListOrdered className="w-4 h-4" />
             Urutan Pemanggilan
           </button>
+          <button
+            onClick={() => setActiveTab("ditahan")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "ditahan" ? "bg-white text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}
+          >
+            <PauseCircle className="w-4 h-4" />
+            Daftar Ditahan {daftarDitahan.length > 0 && `(${daftarDitahan.length})`}
+          </button>
         </div>
 
         {/* Settings Bar */}
@@ -526,7 +613,8 @@ export function HaflahWadaClient({
 
         <div className="flex items-center justify-between w-full md:w-auto gap-4">
           <div className="hidden lg:block text-sm font-semibold text-[var(--color-text-muted)]">
-            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.graduates.length}</span> |
+            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.allSantriList.filter((s) => s.statusKelulusan !== "TIDAK_LULUS").length}</span> |
+            Ditahan: <span className="font-bold text-amber-600">{daftarDitahan.length}</span> |
             Total Denah: <span className="font-bold text-[var(--color-text)]">{denahBanin.length + denahBanat.length}</span>
           </div>
 
@@ -549,6 +637,78 @@ export function HaflahWadaClient({
           </button>
         </div>
       </div>
+
+      {/* Kelola Daftar Ditahan — di luar area cetak, hanya di tab Ditahan */}
+      {activeTab === "ditahan" && (
+        <div className="neu-card-white p-4 md:p-5 space-y-4">
+          <div>
+            <h3 className="font-black text-[var(--color-text)]">Kelola Daftar Ditahan</h3>
+            <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
+              Penanda ini hanya berpengaruh di prosesi Haflah Wada&apos; (denah &amp; pemanggilan).
+              Syahadah tetap bisa dicetak seperti biasa; yang ditahan hanya ditahan dulu untuk disidang, baru diberikan.
+            </p>
+          </div>
+          {!dufahNama ? (
+            <p className="text-sm font-bold text-red-600">Dufah aktif tidak terdeteksi — penanda tidak dapat disimpan.</p>
+          ) : (
+            <>
+              <div className="flex flex-col md:flex-row gap-2">
+                <select
+                  value={tahanTarget}
+                  onChange={(e) => setTahanTarget(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Pilih santri untuk ditahan...</option>
+                  {kandidatTahan.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} — {s.kelasNama}{s.statusKelulusan === "TIDAK_LULUS" ? " (Tidak lulus)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={tahanCatatan}
+                  onChange={(e) => setTahanCatatan(e.target.value)}
+                  placeholder="Catatan sidang (opsional)"
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={handleTahan}
+                  disabled={!tahanTarget || savingTahan}
+                  className="px-4 py-2 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Tahan Syahadah
+                </button>
+              </div>
+              {kandidatTerpilih?.statusKelulusan === "TIDAK_LULUS" && (
+                <p className="text-sm font-semibold text-amber-700">
+                  Santri ini tidak lulus — dia akan tetap muncul di Daftar Ditahan dengan keterangan tidak mendapat syahadah.
+                </p>
+              )}
+              <div className="flex flex-col md:flex-row gap-2">
+                <select
+                  value={lepasTarget}
+                  onChange={(e) => setLepasTarget(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Pilih santri untuk dilepas...</option>
+                  {daftarDitahan.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} — {s.kelasNama}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleLepas}
+                  disabled={!lepasTarget || savingTahan}
+                  className="px-4 py-2 text-sm font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-xl hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Lepas Tahanan
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Content that gets captured for PDF */}
       <div ref={printRef} className="neu-card-white overflow-hidden bg-white">
@@ -795,6 +955,49 @@ export function HaflahWadaClient({
                   Belum ada data santri yang dapat dipanggil.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab: DAFTAR DITAHAN */}
+        {activeTab === "ditahan" && (
+          <div style={{ padding: "24px 32px" }}>
+            <div data-pdf-section style={{ textAlign: "center", marginBottom: 32 }}>
+              <p style={{ fontSize: 14, textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: 2 }}>Daftar Syahadah Ditahan</p>
+              <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: "uppercase", letterSpacing: 4, color: "#0f172a", marginTop: 8 }}>
+                HAFLAH WADA&apos; {dufahLabel.toUpperCase()}
+              </h1>
+              <h2 style={{ fontSize: 20, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginTop: 4 }}>
+                Markaz Arabiyah
+              </h2>
+            </div>
+            <div data-pdf-section>
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse", border: "2px solid black" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                    <th style={{ width: 28, textAlign: "center", border: "1px solid #000", padding: "6px 2px" }}>No</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Nama</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Kelas</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Program</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Status</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daftarDitahan.length > 0 ? daftarDitahan.map((s, idx) => (
+                    <tr key={s.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ width: 28, textAlign: "center", borderRight: "1px solid #cbd5e1", padding: "6px 2px", fontWeight: 700, color: "#94a3b8", fontSize: 11 }}>{idx + 1}</td>
+                      <td style={{ padding: "6px 8px", fontWeight: 500 }}>{s.nama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.kelasNama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.programNama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.statusKelulusan === "TIDAK_LULUS" ? "Tidak Lulus" : s.statusKelulusan === "MUSYAROKAH" ? "Musyarokah" : "Lulus"}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.statusKelulusan === "TIDAK_LULUS" ? "Tidak lulus — tidak mendapat syahadah" : (s.catatanDitahan || "Ditahan — menunggu sidang")}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: "#cbd5e1", fontSize: 11 }}>Belum ada santri yang ditahan.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

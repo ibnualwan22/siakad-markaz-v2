@@ -32,6 +32,15 @@ export default async function HaflahWadaPage() {
     santri.isAktif && !santri.isCheckedOut && santri.programId
   );
 
+  // Penanda syahadah ditahan untuk dufah aktif. Hanya dipakai prosesi
+  // (denah & pemanggilan); cetak dan status kelulusan tidak membacanya.
+  const ditahanRows = activeDufahName
+    ? await prisma.syahadahDitahan.findMany({
+        where: { dufahNama: activeDufahName },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+
   return (
     <div className="space-y-6 print:space-y-0">
       <div className="flex flex-col gap-2 print:hidden">
@@ -47,6 +56,8 @@ export default async function HaflahWadaPage() {
         santriRows={eligibleRows} 
         kelasList={kelasList}
         dufahLabel={dufahLabel}
+        ditahanList={ditahanRows.map((d) => ({ santriId: d.santriId, catatan: d.catatan }))}
+        dufahNama={activeDufahName}
       />
     </div>
   );

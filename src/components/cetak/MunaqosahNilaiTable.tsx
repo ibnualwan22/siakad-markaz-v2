@@ -23,7 +23,15 @@ export default function MunaqosahNilaiTable({
   const padMm = `${pxRefToMm(2)}mm ${pxRefToMm(10)}mm`;
   return (
     <div dir="rtl" style={{ fontSize: fontMm, lineHeight: 1.5, color: "#111" }}>
-      <div style={{ fontWeight: 700, marginBottom: `${pxRefToMm(4)}mm` }}>
+      <div
+        style={{
+          fontWeight: 700,
+          textAlign: "center",
+          border: "2px solid #999",
+          padding: padMm,
+          marginBottom: `${pxRefToMm(4)}mm`,
+        }}
+      >
         حصيلة نتيجة الطالب/الطالبة
       </div>
       <table
@@ -38,7 +46,7 @@ export default function MunaqosahNilaiTable({
             <tr key={r.arab}>
               <td
                 style={{
-                  border: "1px solid #999",
+                  border: "2px solid #999",
                   padding: padMm,
                   textAlign: "right",
                 }}
@@ -47,7 +55,7 @@ export default function MunaqosahNilaiTable({
               </td>
               <td
                 style={{
-                  border: "1px solid #999",
+                  border: "2px solid #999",
                   padding: padMm,
                   textAlign: "center",
                   width: "22%",
@@ -59,7 +67,7 @@ export default function MunaqosahNilaiTable({
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: `${pxRefToMm(4)}mm` }}>
+      <div style={{ marginTop: `${pxRefToMm(16)}mm` }}>
         بمعدل تراكمي عام ({toArabDigits(rataRata)}) وبتقدير {predikat}
       </div>
     </div>

@@ -239,6 +239,20 @@ model SyahadahTemplate {
   tgl_selesai_turats       String?
 }
 
+// Penanda syahadah ditahan untuk prosesi Haflah Wada' (per santri per dufah).
+// HANYA berpengaruh di denah & pemanggilan haflah: yang ditahan dikelompokkan
+// bersama yang tidak lulus. Cetak syahadah, status kelulusan, dan portal TIDAK berubah.
+model SyahadahDitahan {
+  id        String   @id @default(cuid())
+  santriId  String
+  dufahNama String
+  catatan   String?
+  createdAt DateTime @default(now())
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
+}
+
 model SyahadahLayout {
   id                       String         @id @default(cuid())
   riwayatId                String?        @unique

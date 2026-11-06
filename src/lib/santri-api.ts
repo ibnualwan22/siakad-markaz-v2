@@ -24,7 +24,9 @@ export type MasterSantri = {
 /**
  * Membaca data santri dari database lokal (SantriInternal).
  * TIDAK lagi menembak API PPDB secara langsung.
- * Untuk update data, gunakan tombol Sinkronisasi (POST /api/admin/sync-santri).
+ * Untuk update data, sinkronisasi berjalan otomatis di belakang layar
+ * via webhook PPDB; kirim ulang dilakukan dari Bawwabah (/periode,
+ * tombol Kirim Ulang) — tombol manual di sidebar dihapus (Fase 7).
  */
 export async function getMasterSantriList(): Promise<MasterSantri[]> {
   try {

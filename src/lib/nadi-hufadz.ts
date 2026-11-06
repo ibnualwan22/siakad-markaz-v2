@@ -1,7 +1,43 @@
 import { toArabicNumerals } from "./arabic-utils";
 
+/**
+ * Ambang default minimal kehadiran untuk tasmi'.
+ * Nilai efektif per dufah disimpan di NadiHufadzPeriode.minHadir
+ * (dapat diubah admin lewat halaman admin Nadi Hufadz); null berarti
+ * pakai default ini, supaya dufah lama tidak berubah perilakunya.
+ */
 export const NADI_HUFADZ_MIN_HADIR = 7;
 export const NADI_HUFADZ_MAX_PERTEMUAN = 10;
+
+/** Ambang efektif: nilai tersimpan yang valid (1..maks pertemuan), atau default. */
+export function resolveNadiHufadzMinHadir(
+  tersimpan: number | null | undefined
+): number {
+  if (
+    typeof tersimpan === "number" &&
+    Number.isInteger(tersimpan) &&
+    tersimpan >= 1 &&
+    tersimpan <= NADI_HUFADZ_MAX_PERTEMUAN
+  ) {
+    return tersimpan;
+  }
+  return NADI_HUFADZ_MIN_HADIR;
+}
+
+/** Validasi input admin untuk ambang baru; mengembalikan pesan error atau null. */
+export function validasiNadiHufadzMinHadir(
+  nilai: unknown
+): string | null {
+  if (
+    typeof nilai !== "number" ||
+    !Number.isInteger(nilai) ||
+    nilai < 1 ||
+    nilai > NADI_HUFADZ_MAX_PERTEMUAN
+  ) {
+    return `minHadir harus bilangan bulat 1-${NADI_HUFADZ_MAX_PERTEMUAN}`;
+  }
+  return null;
+}
 
 export const PREDIKAT_TASMI = ["ممتاز", "جيد جدا", "جيد", "مقبول"] as const;
 
@@ -68,13 +104,22 @@ export function formatPeriodeArab(tglDari: string, tglSampai: string): string {
   return `${dari} إلى ${sampaiTgl} ${sampaiBulan} ${tahun}`.trim();
 }
 
-/** Default posisi field template (persen terhadap background). */
+/**
+ * Warna field nama syahadah Nadi Hufadz: coklat keemasan yang disamakan
+ * dengan emas judul desain (gradasi judul diukur ~#C0A040–#CBA450;
+ * dipilih sedikit lebih gelap supaya tetap terbaca di kertas putih).
+ * Dipakai sebagai fallback bila posisi tersimpan belum punya warna.
+ */
+export const NADI_HUFADZ_WARNA_NAMA = "#A67C2E";
+
+/** Default posisi field template (mm panggung 330 x 215). fontSize tetap angka referensi lama. */
 export function defaultFieldPositions() {
   return {
-    nama: { x: 50, y: 40, fontSize: 44, align: "center", maxWidth: 80 },
-    juz: { x: 50, y: 54, fontSize: 28, align: "center", maxWidth: 80 },
-    predikat: { x: 50, y: 60, fontSize: 28, align: "center", maxWidth: 80 },
-    periode: { x: 50, y: 66, fontSize: 22, align: "center", maxWidth: 80 },
+    nama: { x: 165, y: 86, fontSize: 44, align: "center", maxWidth: 264, color: NADI_HUFADZ_WARNA_NAMA },
+    juz: { x: 165, y: 116.1, fontSize: 28, align: "center", maxWidth: 264 },
+    predikat: { x: 165, y: 129, fontSize: 28, align: "center", maxWidth: 264 },
+    periode: { x: 165, y: 141.9, fontSize: 22, align: "center", maxWidth: 264 },
+    units: "mm",
   };
 }
 

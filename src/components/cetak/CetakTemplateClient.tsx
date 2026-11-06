@@ -1,53 +1,62 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import AutoFitText from "./AutoFitText";
+import { useRef, useState } from "react";
+import { TemplateStage, TemplateStageZoom } from "./TemplateStage";
+import { STAGE_H_PX, STAGE_W_PX } from "@/lib/template-layout";
 
-const REF_W = 1600;
-
-type FieldCfg = {
-  x: number; // persen
-  y: number; // persen
-  fontSize: number; // px pada skala referensi
-  align?: string;
-  maxWidth?: number; // persen
-  fontFamily?: string; // nama font, diatur lewat web (mis. "The Season", "Poppins")
-  color?: string; // warna teks, mis. "#865b34"
-};
-
-const FIELD_LABEL: Record<string, string> = {
-  nama: "Nama",
-  juz: "Juz",
-  predikat: "Predikat",
-  periode: "Periode",
-  tglCetak: "Tanggal Cetak",
-};
-
+// Halaman cetak syahadah template (Nadi Hufadz, MC Akbarnas, Munaqosah
+// Hufadz, Lajnah, OSIM). Rendering dokumennya memakai TemplateStage —
+// komponen yang sama dengan preview editor — dengan geometri mm
+// (panggung 330 x 215 mm, posisi mm, font mm), sehingga yang diatur di
+// editor = yang tercetak, seperti syahadah offline.
 export default function CetakTemplateClient({
   programKey,
   data,
   showPngButton,
+  bulkMode,
 }: {
   programKey: string;
+  // bulkMode: dipakai halaman cetak bulk (banyak panggung satu dokumen).
+  // @page tidak dirender dari sini supaya tidak menimpa @page dokumen
+  // bulk; aturan @media print untuk panggung tetap dirender.
+  bulkMode?: boolean;
   data: {
     nama: string;
     juz?: string;
     predikat?: string;
     periode: string;
     tglCetak?: string;
-    template: { backgroundUrl: string | null; fieldPositions: Record<string, FieldCfg> };
+    // Syahadah MC Akbarnas bulan 1.
+    pembuka?: string;
+    penghargaan?: string;
+    tahunAjaran?: string;
+    tanggalPemberian?: string;
+    tauqi?: string;
+    namaMudir?: string;
+    signatureUrl?: string | null;
+    // Syahadah Munaqosah Hufadz.
+    kalimatJuz?: string;
+    periodeLine?: string;
+    tanggalPeriodeLine?: string;
+    doa?: string;
+    tanggalCetak?: string;
+    qrLabel?: string;
+    qrUrl?: string | null;
+    tabelNilai?: {
+      rows: { arab: string; nilai: number }[];
+      rataRata: number;
+      predikat: string;
+    } | null;
+    template: { backgroundUrl: string | null; fieldPositions: Record<string, any> };
   };
   showPngButton?: boolean;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
   const pngRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [imgRatio, setImgRatio] = useState(9 / 16);
   const [pngDownloading, setPngDownloading] = useState(false);
   const [pngError, setPngError] = useState("");
 
   // Unduh syahadah sebagai PNG: render salinan panggung di luar layar
-  // (ukuran penuh 1600px, tanpa transform skala) lalu tangkap html2canvas.
+  // (ukuran penuh 330mm = 1247px, tanpa zoom) lalu tangkap html2canvas.
   // Teks Arab dirender mesin browser sehingga shaping-nya benar.
   const downloadPng = async () => {
     const el = pngRef.current;
@@ -62,8 +71,8 @@ export default function CetakTemplateClient({
         scale: 2,
         useCORS: true,
         backgroundColor: "#ffffff",
-        width: REF_W,
-        height: stageH,
+        width: Math.round(STAGE_W_PX),
+        height: STAGE_H_PX,
       });
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
       if (!blob) throw new Error("gagal membuat PNG");
@@ -80,79 +89,50 @@ export default function CetakTemplateClient({
     }
   };
 
-  const bg = data.template.backgroundUrl;
-  const fields = data.template.fieldPositions || {};
-
-  useEffect(() => {
-    if (!bg) return;
-    const img = new Image();
-    img.onload = () => setImgRatio(img.naturalHeight / img.naturalWidth);
-    img.src = bg;
-  }, [bg]);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setScale(el.clientWidth / REF_W);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const stageH = Math.round(REF_W * imgRatio);
-
   const fieldText: Record<string, string> = {
     nama: data.nama,
     juz: data.juz ?? "",
     predikat: data.predikat ?? "",
     periode: data.periode,
     tglCetak: data.tglCetak ?? "",
+    pembuka: data.pembuka ?? "",
+    penghargaan: data.penghargaan ?? "",
+    tahunAjaran: data.tahunAjaran ?? "",
+    tanggalPemberian: data.tanggalPemberian ?? "",
+    tauqi: data.tauqi ?? "",
+    namaMudir: data.namaMudir ?? "",
+    kalimatJuz: data.kalimatJuz ?? "",
+    periodeLine: data.periodeLine ?? "",
+    tanggalPeriodeLine: data.tanggalPeriodeLine ?? "",
+    doa: data.doa ?? "",
+    tanggalCetak: data.tanggalCetak ?? "",
+    qrLabel: data.qrLabel ?? "",
   };
 
-  // Nadi memakai teks Arab (rtl); syahadah organisasi memakai teks Latin (ltr).
-  const fieldDirection = programKey === "nadi-hufadz" ? "rtl" : "ltr";
-
-  const renderField = (key: string) => {
-    const cfg = fields[key] as FieldCfg | undefined;
-    if (!cfg) return null;
-    const maxW = ((cfg.maxWidth || 80) / 100) * REF_W;
-    const posStyle: React.CSSProperties = {
-      position: "absolute",
-      left: `${cfg.x}%`,
-      top: `${cfg.y}%`,
-      transform: "translate(-50%, -50%)",
-      width: maxW,
-      textAlign: (cfg.align as any) || "center",
-      direction: fieldDirection,
-      fontFamily: cfg.fontFamily || undefined,
-      color: cfg.color || undefined,
-    };
-    if (key === "nama") {
-      return (
-        <AutoFitText
-          key={key}
-          text={fieldText[key]}
-          baseFontSize={cfg.fontSize}
-          maxWidth={maxW}
-          style={{ ...posStyle, fontWeight: 700 }}
-        />
-      );
-    }
-    return (
-      <div key={key} style={{ ...posStyle, fontSize: cfg.fontSize, lineHeight: 1.4 }}>
-        {fieldText[key]}
-      </div>
-    );
+  const stageProps = {
+    programKey,
+    backgroundUrl: data.template.backgroundUrl,
+    fieldPositions: data.template.fieldPositions || {},
+    texts: fieldText,
+    signatureUrl: data.signatureUrl,
+    qrUrl: data.qrUrl,
+    tabelNilai: data.tabelNilai ?? null,
   };
+
+  // Kertas cetak: SEMUA program template memakai 330 x 215 mm landscape —
+  // sama seperti syahadah offline — supaya preview sebangun dengan print.
+  // @page WAJIB di level atas (bukan bersarang di @media) — bila bersarang,
+  // Chrome mengabaikan ukuran/orientasinya dan jatuh ke default printer
+  // (Letter portrait, 2 lembar).
 
   return (
-    <div className="min-h-screen bg-slate-200 print:bg-white">
+    <div className={bulkMode ? "cetak-root print:bg-white" : "cetak-root min-h-screen bg-slate-200 print:bg-white"}>
       <style>{`
+        ${bulkMode ? "" : `@page { size: 330mm 215mm; margin: 0; }`}
         @media print {
           .no-print { display: none !important; }
-          .print-stage-wrap { transform: none !important; width: 100% !important; }
-          @page { size: landscape; margin: 0; }
+          .cetak-root { min-height: 0 !important; }
+          .template-stage-zoom-inner { transform: none !important; margin-bottom: 0 !important; }
         }
       `}</style>
       {/* Poppins untuk field syahadah organisasi. Font lain (mis. "The Season")
@@ -162,6 +142,7 @@ export default function CetakTemplateClient({
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
 
+      {!bulkMode && (
       <div className="no-print sticky top-0 z-10 bg-white/90 backdrop-blur border-b px-4 py-3 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-bold">Cetak Syahadah — {programKey}</h1>
@@ -186,33 +167,12 @@ export default function CetakTemplateClient({
           </button>
         </div>
       </div>
+      )}
 
-      <div ref={wrapRef} className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
-        <div
-          className="print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none"
-          style={{
-            width: REF_W,
-            height: stageH,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            marginBottom: -stageH * (1 - scale),
-          }}
-        >
-          {bg ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bg}
-              alt="Template syahadah"
-              className="absolute inset-0 w-full h-full object-fill"
-              draggable={false}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-              Template belum memiliki background — upload di menu Template
-            </div>
-          )}
-          {Object.keys(FIELD_LABEL).map(renderField)}
-        </div>
+      <div className="mx-auto max-w-6xl p-4 print:p-0 print:max-w-none">
+        <TemplateStageZoom>
+          <TemplateStage {...stageProps} className="shadow-lg print:shadow-none" />
+        </TemplateStageZoom>
       </div>
 
       {/* Salinan panggung ukuran penuh di luar layar, khusus tangkapan PNG. */}
@@ -221,22 +181,9 @@ export default function CetakTemplateClient({
           ref={pngRef}
           aria-hidden
           className="relative overflow-hidden bg-white"
-          style={{ position: "fixed", left: -10000, top: 0, width: REF_W, height: stageH }}
+          style={{ position: "fixed", left: -10000, top: 0, width: "330mm", height: "215mm" }}
         >
-          {bg ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bg}
-              alt=""
-              className="absolute inset-0 w-full h-full object-fill"
-              draggable={false}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-              Template belum memiliki background — upload di menu Template
-            </div>
-          )}
-          {Object.keys(FIELD_LABEL).map(renderField)}
+          <TemplateStage {...stageProps} />
         </div>
       )}
     </div>

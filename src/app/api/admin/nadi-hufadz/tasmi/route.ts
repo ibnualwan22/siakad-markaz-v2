@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
-import { NADI_HUFADZ_MIN_HADIR, PREDIKAT_TASMI } from "@/lib/nadi-hufadz";
+import { PREDIKAT_TASMI, resolveNadiHufadzMinHadir } from "@/lib/nadi-hufadz";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,10 @@ export async function GET(request: Request) {
   return NextResponse.json(list);
 }
 
-// POST { pesertaId, juzTeks, predikat, tanggal } — hanya bila kehadiran >= 7
+// POST { pesertaId, juzTeks, predikat, tanggal } — hanya bila kehadiran
+// >= ambang dufah peserta (NadiHufadzPeriode.minHadir, default 7).
+// Tasmi' yang sudah tersimpan TIDAK dicabut bila ambang belakangan dinaikkan;
+// gerbang ini hanya berlaku untuk input baru.
 export async function POST(request: Request) {
   const session = await getSession();
   const hasPerm = await checkPermission("nadi_hufadz_edit");
@@ -60,10 +63,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "predikat tidak valid" }, { status: 400 });
   }
 
+  const peserta = await prisma.nadiHufadzPeserta.findUnique({
+    where: { id: pesertaId },
+    select: { dufahNama: true },
+  });
+  if (!peserta) {
+    return NextResponse.json({ error: "Peserta tidak ditemukan" }, { status: 404 });
+  }
+  const periode = await prisma.nadiHufadzPeriode.findUnique({
+    where: { dufahNama: peserta.dufahNama },
+  });
+  const minHadir = resolveNadiHufadzMinHadir(periode?.minHadir);
+
   const jumlahHadir = await prisma.nadiHufadzSetoran.count({ where: { pesertaId } });
-  if (jumlahHadir < NADI_HUFADZ_MIN_HADIR) {
+  if (jumlahHadir < minHadir) {
     return NextResponse.json(
-      { error: `Kehadiran baru ${jumlahHadir}x, minimal ${NADI_HUFADZ_MIN_HADIR}x untuk tasmi'` },
+      { error: `Kehadiran baru ${jumlahHadir}x, minimal ${minHadir}x untuk tasmi'` },
       { status: 400 }
     );
   }

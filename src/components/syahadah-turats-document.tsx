@@ -392,7 +392,7 @@ export function SyahadahTuratsDocument({ qrUrl, data, layout, editorMode, select
             }}
           >
             وذلك لإكماله/لإكمالها الدراسات والامتحانات التي أقيمت
-            في <strong style={{ color: "#8B1A1A" }}>المرحلة الرابعة</strong>
+            في <strong style={{ color: "#8B1A1A" }}>المرحلة الخامسة</strong>
           </p>
 
           {/* Teks Program */}

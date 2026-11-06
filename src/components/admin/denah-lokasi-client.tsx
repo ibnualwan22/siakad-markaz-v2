@@ -19,6 +19,8 @@ interface Lokasi {
   imageUrl?: string | null;
   publicId?: string | null;
   isActive: boolean;
+  sakan?: string | null;
+  lantai?: number;
 }
 
 const fileToDataUri = (file: File) => new Promise<string>((resolve, reject) => {
@@ -33,7 +35,10 @@ export function DenahLokasiClient() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  
+  // Daftar sakan terdaftar (dari data santri) untuk dropdown + deteksi
+  // sakan yang belum punya titik.
+  const [sakanList, setSakanList] = useState<string[]>([]);
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [existingImage, setExistingImage] = useState<string | null>(null);
   const [removeImage, setRemoveImage] = useState(false);
@@ -44,6 +49,8 @@ export function DenahLokasiClient() {
     latitude: "",
     longitude: "",
     isActive: true,
+    sakan: "",
+    lantai: "1",
   });
 
   const fetchData = async () => {
@@ -63,9 +70,20 @@ export function DenahLokasiClient() {
 
   useEffect(() => {
     fetchData();
+    fetch("/api/admin/denah-lokasi/sakan")
+      .then((r) => r.json())
+      .then((j) => { if (Array.isArray(j.data)) setSakanList(j.data); })
+      .catch(() => {});
   }, []);
 
-  const handleOpenModal = (item?: Lokasi) => {
+  // Sakan yang sudah punya titik AKTIF (dipakai untuk menonaktifkan opsi
+  // di dropdown + menghitung sakan yang belum terplot).
+  const sakanTerplot = new Set(
+    data.filter((d) => d.isActive && d.sakan).map((d) => d.sakan as string)
+  );
+  const sakanBelumTerplot = sakanList.filter((s) => !sakanTerplot.has(s));
+
+  const handleOpenModal = (item?: Lokasi, sakanAwal?: string) => {
     if (item) {
       setEditId(item.id);
       setFormData({
@@ -74,6 +92,8 @@ export function DenahLokasiClient() {
         latitude: item.latitude.toString(),
         longitude: item.longitude.toString(),
         isActive: item.isActive,
+        sakan: item.sakan || "",
+        lantai: String(item.lantai ?? 1),
       });
       setExistingImage(item.imageUrl || null);
       setImageFile(null);
@@ -81,11 +101,13 @@ export function DenahLokasiClient() {
     } else {
       setEditId(null);
       setFormData({
-        nama: "",
+        nama: sakanAwal || "",
         deskripsi: "",
         latitude: "",
         longitude: "",
         isActive: true,
+        sakan: sakanAwal || "",
+        lantai: "1",
       });
       setExistingImage(null);
       setImageFile(null);
@@ -184,12 +206,33 @@ export function DenahLokasiClient() {
         </button>
       </div>
 
+      {!loading && sakanBelumTerplot.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+          <p className="text-sm font-bold text-amber-800">
+            {sakanBelumTerplot.length} sakan belum punya titik di peta:
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {sakanBelumTerplot.map((s) => (
+              <button
+                key={s}
+                onClick={() => handleOpenModal(undefined, s)}
+                className="px-3 py-1.5 rounded-full bg-white border border-amber-300 text-amber-800 text-xs font-bold hover:bg-amber-100"
+                title={`Buat titik untuk ${s}`}
+              >
+                + {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-gray-50/50 border-b border-gray-200 text-gray-500">
               <tr>
-                <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs">Nama Sakan</th>
+                <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs">Nama Titik</th>
+                <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs">Sakan</th>
                 <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs">Koordinat</th>
                 <th className="px-6 py-4 font-semibold uppercase tracking-wider text-xs">Status</th>
                 <th className="px-6 py-4 font-semibold text-right">Aksi</th>
@@ -198,13 +241,13 @@ export function DenahLokasiClient() {
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                     Memuat data...
                   </td>
                 </tr>
               ) : data.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                     Belum ada data lokasi
                   </td>
                 </tr>
@@ -214,6 +257,16 @@ export function DenahLokasiClient() {
                     <td className="px-6 py-4">
                       <div className="font-semibold text-gray-900">{item.nama}</div>
                       {item.deskripsi && <div className="text-xs text-gray-500">{item.deskripsi}</div>}
+                    </td>
+                    <td className="px-6 py-4">
+                      {item.sakan ? (
+                        <span className="font-semibold text-gray-900">{item.sakan}</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">Titik umum</span>
+                      )}
+                      {item.sakan && (
+                        <div className="text-xs text-gray-500">{item.lantai ?? 1} lantai (3D)</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 font-mono text-[13px] text-gray-600">
                       {item.latitude}, {item.longitude}
@@ -255,7 +308,7 @@ export function DenahLokasiClient() {
             <h2 className="text-xl font-bold mb-4">{editId ? "Edit Lokasi" : "Tambah Lokasi Baru"}</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Sakan *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Titik *</label>
                 <input
                   type="text"
                   required
@@ -264,6 +317,45 @@ export function DenahLokasiClient() {
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
                   placeholder="Misal: Sakan A"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Sakan terdaftar</label>
+                  <select
+                    value={formData.sakan}
+                    onChange={(e) => {
+                      const s = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        sakan: s,
+                        nama: prev.nama.trim() ? prev.nama : s,
+                      }));
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none bg-white"
+                  >
+                    <option value="">Titik umum (bukan sakan)</option>
+                    {sakanList.map((s) => {
+                      const dipakaiOrangLain = sakanTerplot.has(s) && s !== data.find((d) => d.id === editId)?.sakan;
+                      return (
+                        <option key={s} value={s} disabled={dipakaiOrangLain}>
+                          {s}{dipakaiOrangLain ? " — sudah punya titik" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">Satu sakan hanya boleh punya satu titik aktif.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Jumlah lantai (tinggi balok 3D)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={formData.lantai}
+                    onChange={(e) => setFormData({ ...formData, lantai: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Deskripsi</label>

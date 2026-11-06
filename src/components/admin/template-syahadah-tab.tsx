@@ -2,13 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
+import { TemplateStage, TemplateStageZoom } from "@/components/cetak/TemplateStage";
+import { normalizeFieldPositions } from "@/lib/template-layout";
 
 // Tab "Template & Layout" syahadah organisasi (Lajnah & OSIM) — cermin tab
 // Template Nadi Hufadz, ditambah input font & warna per field.
 // Field syahadah organisasi: nama, periode, tglCetak.
 const FIELD_KEYS = ["nama", "periode", "tglCetak"] as const;
+// Preview memakai data contoh seperti hasil jadi. "Nama Santri" diganti
+// nama contoh (sama dengan dummy preview Nadi) — HANYA label contoh di
+// editor, tidak membuat anggota/syahadah baru. Periode & tanggal cetak
+// contohnya sudah realistis sehingga tidak diubah.
 const FIELD_SAMPLE: Record<string, string> = {
-  nama: "Nama Santri",
+  nama: "Ahmad Ibnu Alwan",
   periode: "11 September 2026 – 05 Oktober 2026",
   tglCetak: "05 Oktober 2026",
 };
@@ -26,7 +32,9 @@ export default function TemplateSyahadahTab({
   const [positions, setPositions] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // Panggung preview memakai TemplateStage (330 x 215 mm, posisi mm) —
+  // komponen yang sama dengan halaman cetak, supaya preview sebangun
+  // dengan hasil print seperti syahadah offline.
   const dragRef = useRef<any>(null);
 
   const load = async () => {
@@ -34,7 +42,9 @@ export default function TemplateSyahadahTab({
     if (!res.ok) return;
     const tpl = await res.json();
     setBg(tpl.backgroundUrl);
-    setPositions(tpl.fieldPositions || {});
+    // Posisi dinormalisasi ke mm saat load (data lama %/px dikonversi);
+    // saat save, units:"mm" ikut tersimpan di fieldPositions.
+    setPositions(normalizeFieldPositions(tpl.fieldPositions || {}));
   };
   useEffect(() => { load(); }, []);
 
@@ -83,11 +93,15 @@ export default function TemplateSyahadahTab({
   };
 
   const onChipDown = (e: React.PointerEvent, key: string) => {
-    if (!canEdit || !wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
+    if (!canEdit) return;
+    // Rect diukur dari elemen .template-stage terdekat (sudah termasuk
+    // zoom layar), lalu geseran diubah ke mm panggung 330 x 215.
+    const stage = (e.target as HTMLElement).closest(".template-stage");
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
     dragRef.current = {
       key, startX: e.clientX, startY: e.clientY,
-      origX: positions[key]?.x ?? 50, origY: positions[key]?.y ?? 50,
+      origX: positions[key]?.x ?? 165, origY: positions[key]?.y ?? 107.5,
       w: rect.width, h: rect.height,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -95,8 +109,8 @@ export default function TemplateSyahadahTab({
   const onMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    const nx = Math.min(100, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 100));
-    const ny = Math.min(100, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 100));
+    const nx = Math.min(330, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 330));
+    const ny = Math.min(215, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 215));
     setPositions((p: any) => ({ ...p, [d.key]: { ...p[d.key], x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } }));
   };
   const onUp = () => { dragRef.current = null; };
@@ -123,33 +137,26 @@ export default function TemplateSyahadahTab({
           <p className="text-sm text-[var(--color-text-muted)]">Upload background terlebih dahulu.</p>
         ) : (
           <>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Preview memakai data contoh dengan gaya field asli — geser teksnya langsung di atas desain, atau atur angka di bawah.
+            </p>
             <div
-              ref={wrapRef}
               className="relative w-full max-w-3xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
               onPointerMove={onMove}
               onPointerUp={onUp}
               onPointerCancel={onUp}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bg} alt="Template" className="w-full block" draggable={false} />
-              {FIELD_KEYS.map((key) => {
-                const cfg = positions[key] || { x: 50, y: 50 };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => onChipDown(e, key)}
-                    className={`absolute px-2 py-1 rounded text-xs font-bold border-2 whitespace-nowrap ${
-                      canEdit ? "cursor-move bg-yellow-300/90 border-yellow-600" : "bg-white/80 border-slate-400"
-                    }`}
-                    style={{
-                      left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)",
-                      fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
-                    }}
-                  >
-                    {FIELD_SAMPLE[key]}
-                  </div>
-                );
-              })}
+              <TemplateStageZoom>
+                <TemplateStage
+                  programKey={programKey}
+                  backgroundUrl={bg}
+                  fieldPositions={positions}
+                  fieldKeys={[...FIELD_KEYS]}
+                  texts={FIELD_SAMPLE}
+                  editorMode
+                  onFieldPointerDown={canEdit ? onChipDown : undefined}
+                />
+              </TemplateStageZoom>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -159,13 +166,13 @@ export default function TemplateSyahadahTab({
                   <div key={key} className="border rounded-xl p-3 space-y-2">
                     <p className="font-bold text-sm capitalize">{key === "tglCetak" ? "Tanggal Cetak" : key}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <label>X (%)
-                        <input type="number" step="0.5" value={cfg.x ?? 50}
+                      <label>X (mm)
+                        <input type="number" step="0.5" value={cfg.x ?? 165}
                           onChange={(e) => setField(key, { x: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
-                      <label>Y (%)
-                        <input type="number" step="0.5" value={cfg.y ?? 50}
+                      <label>Y (mm)
+                        <input type="number" step="0.5" value={cfg.y ?? 107.5}
                           onChange={(e) => setField(key, { y: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
@@ -174,8 +181,8 @@ export default function TemplateSyahadahTab({
                           onChange={(e) => setField(key, { fontSize: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
-                      <label>Lebar maks (%)
-                        <input type="number" value={cfg.maxWidth ?? 80}
+                      <label>Lebar maks (mm)
+                        <input type="number" value={cfg.maxWidth ?? 264}
                           onChange={(e) => setField(key, { maxWidth: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>

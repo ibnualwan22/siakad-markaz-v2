@@ -15,8 +15,13 @@ type DashboardSantri = {
   kelasNama: string;
   kelasId: string | null;
   statusKelulusan: StatusKelulusan;
+  nilaiAkumulatif: number;
+  isBulanPertamaAkbarnas: boolean;
   isTasmi: boolean;
   canPrintSyahadah: boolean;
+  // Akbarnas bulan pertama: tombol cetak mengarah ke syahadah MC.
+  canPrintMcSyahadah: boolean;
+  mcRiwayatId: string | null;
   canViewIjazah: boolean;
   isAktif: boolean;
 };
@@ -98,12 +103,32 @@ export function SyahadahClient({
     return santri.kelasId === filterKelasId;
   });
 
+  // Urutan tampil: Banin dulu, baru Banat (tanpa gender: paling akhir);
+  // di dalam tiap kelompok: peringkat nilai akumulatif menurun, seri -> abjad.
+  // Baris Akbarnas bulan 1 tidak ikut pemeringkatan (syahadahnya MC) —
+  // mereka diletakkan di bawah, tetap Banin dulu baru Banat, berurutan abjad.
+  const genderRank = (g: string) => (g === "BANIN" ? 0 : g === "BANAT" ? 1 : 2);
+  const sortedSantri = useMemo(() => {
+    const ranked = filteredSantri.filter((s) => !s.isBulanPertamaAkbarnas);
+    const bulanPertama = filteredSantri.filter((s) => s.isBulanPertamaAkbarnas);
+    ranked.sort(
+      (a, b) =>
+        genderRank(a.gender) - genderRank(b.gender) ||
+        b.nilaiAkumulatif - a.nilaiAkumulatif ||
+        a.nama.localeCompare(b.nama, "id")
+    );
+    bulanPertama.sort(
+      (a, b) => genderRank(a.gender) - genderRank(b.gender) || a.nama.localeCompare(b.nama, "id")
+    );
+    return [...ranked, ...bulanPertama];
+  }, [filteredSantri]);
+
   // Compute stats for filtered
   const stats = useMemo(() => {
     const lulus = filteredSantri.filter(s => s.statusKelulusan === "LULUS").length;
     const musyarokah = filteredSantri.filter(s => s.statusKelulusan === "MUSYAROKAH").length;
     const tidakLulus = filteredSantri.filter(s => s.statusKelulusan === "TIDAK_LULUS").length;
-    const siapCetak = filteredSantri.filter(s => s.canPrintSyahadah).length;
+    const siapCetak = filteredSantri.filter(s => s.canPrintSyahadah || s.canPrintMcSyahadah).length;
     const totalTasmi = filteredSantri.filter(s => s.isTasmi).length;
     return { lulus, musyarokah, tidakLulus, siapCetak, totalTasmi, total: filteredSantri.length };
   }, [filteredSantri]);
@@ -187,6 +212,14 @@ export function SyahadahClient({
             >
               Layout Syahadah
             </Link>
+            {filteredSantri.some((s) => s.programNama.toLowerCase().includes("akbarnas")) && (
+              <Link
+                href="/admin/akbarnas-mc"
+                className="rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-[var(--color-info)] transition hover:border-blue-300 hover:bg-blue-100"
+              >
+                Layout Syahadah MC
+              </Link>
+            )}
             {isRealKelas && (
               <a
                 href={`/cetak-bulk/${filterKelasId}`}
@@ -213,11 +246,12 @@ export function SyahadahClient({
                 <th className="px-6 py-4">Kelas</th>
                 <th className="px-6 py-4">Tasmi&apos;</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Nilai Akumulatif</th>
                 <th className="px-6 py-4 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-surface)] text-sm text-[var(--color-text-muted)]">
-              {filteredSantri.map((santri, index) => (
+              {sortedSantri.map((santri, index) => (
                 <tr key={santri.id} className="align-top hover:bg-[var(--color-secondary)]/80">
                   {/* No urut */}
                   <td className="px-4 py-4 text-center">
@@ -265,6 +299,14 @@ export function SyahadahClient({
                       {santri.statusKelulusan}
                     </span>
                   </td>
+                  {/* Nilai Akumulatif (patokan peringkat; bulan 1 tidak diperingkat) */}
+                  <td className="px-6 py-4">
+                    {santri.isBulanPertamaAkbarnas ? (
+                      <span className="text-[var(--color-text-subtle)]">-</span>
+                    ) : (
+                      <span className="font-bold text-[var(--color-text)]">{santri.nilaiAkumulatif.toFixed(2)}</span>
+                    )}
+                  </td>
                   {/* Aksi */}
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap justify-end gap-2">
@@ -294,7 +336,16 @@ export function SyahadahClient({
                           Ijazah Terkunci
                         </span>
                       )}
-                      {santri.canPrintSyahadah ? (
+                      {santri.canPrintMcSyahadah && santri.mcRiwayatId ? (
+                        // Akbarnas bulan pertama: tombol cetak yang sama,
+                        // tapi yang terbuka adalah syahadah MC.
+                        <Link
+                          href={`/cetak-template/akbarnas-mc/${santri.mcRiwayatId}`}
+                          className="rounded-full bg-[var(--color-warning)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--color-warning)]"
+                        >
+                          Cetak Syahadah MC
+                        </Link>
+                      ) : santri.canPrintSyahadah ? (
                         <Link
                           href={`/cetak/${santri.id}`}
                           className="rounded-full bg-[var(--color-warning)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--color-warning)]"
@@ -310,9 +361,9 @@ export function SyahadahClient({
                   </td>
                 </tr>
               ))}
-              {filteredSantri.length === 0 && (
+              {sortedSantri.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-[var(--color-text-muted)]">
+                  <td colSpan={8} className="px-6 py-8 text-center text-[var(--color-text-muted)]">
                     Tidak ada santri di kelas ini.
                   </td>
                 </tr>

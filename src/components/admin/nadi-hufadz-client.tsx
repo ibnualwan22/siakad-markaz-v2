@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { PREDIKAT_TASMI, NADI_HUFADZ_MAX_PERTEMUAN, NADI_HUFADZ_MIN_HADIR } from "@/lib/nadi-hufadz";
+import { PREDIKAT_TASMI, NADI_HUFADZ_MAX_PERTEMUAN, NADI_HUFADZ_MIN_HADIR, NADI_HUFADZ_WARNA_NAMA, formatJuzTeks, formatPeriodeArab } from "@/lib/nadi-hufadz";
+import { TemplateStage, TemplateStageZoom } from "@/components/cetak/TemplateStage";
+import { normalizeFieldPositions } from "@/lib/template-layout";
 
 type Peserta = {
   id: string;
@@ -29,16 +31,20 @@ const TABS = [
   { id: "peserta", label: "Peserta" },
   { id: "setoran", label: "Input Setoran" },
   { id: "tasmi", label: "Tasmi'" },
+  { id: "angket", label: "Angket" },
   { id: "template", label: "Template & Layout" },
   { id: "cetak", label: "Cetak" },
 ] as const;
 
 const FIELD_KEYS = ["nama", "juz", "predikat", "periode"] as const;
+// Preview editor memakai data contoh yang DIHITUNG lewat formatter yang
+// sama dengan halaman cetak, supaya preview = hasil jadi. Ini HANYA label
+// contoh di editor — tidak membuat peserta/syahadah baru.
 const FIELD_SAMPLE: Record<string, string> = {
-  nama: "Nama Santri",
-  juz: "٢٣",
+  nama: "Ahmad Ibnu Alwan",
+  juz: formatJuzTeks("1,2,5"),
   predikat: "ممتاز",
-  periode: "١١ أبريل إلى ٥ مايو ٢٠٢٦",
+  periode: formatPeriodeArab("2026-04-11", "2026-05-05"),
 };
 
 export default function NadiHufadzClient({
@@ -55,6 +61,11 @@ export default function NadiHufadzClient({
   const [loading, setLoading] = useState(true);
   const [pendaftaranDibuka, setPendaftaranDibuka] = useState<boolean | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
+  const [angketDibuka, setAngketDibuka] = useState<boolean | null>(null);
+  const [toggleAngketLoading, setToggleAngketLoading] = useState(false);
+  const [minHadir, setMinHadir] = useState<number | null>(null);
+  const [minHadirInput, setMinHadirInput] = useState(String(NADI_HUFADZ_MIN_HADIR));
+  const [simpanMinHadirLoading, setSimpanMinHadirLoading] = useState(false);
 
   const fetchPeserta = async () => {
     setLoading(true);
@@ -74,8 +85,38 @@ export default function NadiHufadzClient({
       const res = await fetch(`/api/admin/nadi-hufadz/periode?dufahNama=${encodeURIComponent(dufahAktif)}`);
       const json = await res.json();
       setPendaftaranDibuka(!!json.dibuka);
+      setAngketDibuka(!!json.angketDibuka);
+      const ambang =
+        typeof json.minHadir === "number" ? json.minHadir : NADI_HUFADZ_MIN_HADIR;
+      setMinHadir(ambang);
+      setMinHadirInput(String(ambang));
     } catch {
       setPendaftaranDibuka(false);
+    }
+  };
+
+  const simpanMinHadir = async () => {
+    const nilai = Number(minHadirInput);
+    if (!Number.isInteger(nilai) || nilai < 1 || nilai > NADI_HUFADZ_MAX_PERTEMUAN) {
+      toast.error(`Minimal kehadiran harus bilangan bulat 1-${NADI_HUFADZ_MAX_PERTEMUAN}`);
+      return;
+    }
+    setSimpanMinHadirLoading(true);
+    try {
+      const res = await fetch("/api/admin/nadi-hufadz/periode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dufahNama: dufahAktif, minHadir: nilai }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan ambang");
+      setMinHadir(json.minHadir);
+      toast.success(`Minimal kehadiran tasmi' diubah jadi ${json.minHadir}x`);
+      fetchPeserta();
+    } catch (e: any) {
+      toast.error(e.message || "Gagal menyimpan ambang");
+    } finally {
+      setSimpanMinHadirLoading(false);
     }
   };
 
@@ -99,6 +140,26 @@ export default function NadiHufadzClient({
     }
   };
 
+  const toggleAngket = async () => {
+    if (angketDibuka === null) return;
+    setToggleAngketLoading(true);
+    try {
+      const res = await fetch("/api/admin/nadi-hufadz/periode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dufahNama: dufahAktif, angketDibuka: !angketDibuka }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal mengubah status");
+      setAngketDibuka(!!json.angketDibuka);
+      toast.success(json.angketDibuka ? "Pengisian angket dibuka" : "Pengisian angket ditutup");
+    } catch (e: any) {
+      toast.error(e.message || "Gagal mengubah status");
+    } finally {
+      setToggleAngketLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchPeserta();
     fetchPendaftaran();
@@ -108,25 +169,79 @@ export default function NadiHufadzClient({
   return (
     <div className="space-y-6">
       {dufahAktif !== "" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3">
-          <p className="text-sm">
-            Pendaftaran {dufahAktif}:{" "}
-            <span className={`font-bold ${pendaftaranDibuka ? "text-emerald-700" : "text-red-600"}`}>
-              {pendaftaranDibuka === null ? "Memuat..." : pendaftaranDibuka ? "DIBUKA" : "DITUTUP"}
-            </span>
-            <span className="text-[var(--color-text-muted)]">
-              {" "}— menutup hanya menghalangi pendaftar baru, peserta yang sudah terdaftar tetap berjalan.
-            </span>
-          </p>
-          {canEdit && (
-            <button
-              onClick={togglePendaftaran}
-              disabled={toggleLoading || pendaftaranDibuka === null}
-              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
-            </button>
-          )}
+        <div className="space-y-3 rounded-2xl border border-[var(--color-surface-dark)] bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              Pendaftaran {dufahAktif}:{" "}
+              <span className={`font-bold ${pendaftaranDibuka ? "text-emerald-700" : "text-red-600"}`}>
+                {pendaftaranDibuka === null ? "Memuat..." : pendaftaranDibuka ? "DIBUKA" : "DITUTUP"}
+              </span>
+              <span className="text-[var(--color-text-muted)]">
+                {" "}— menutup hanya menghalangi pendaftar baru, peserta yang sudah terdaftar tetap berjalan.
+              </span>
+            </p>
+            {canEdit && (
+              <button
+                onClick={togglePendaftaran}
+                disabled={toggleLoading || pendaftaranDibuka === null}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {toggleLoading ? "Menyimpan..." : pendaftaranDibuka ? "Tutup Pendaftaran" : "Buka Pendaftaran"}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-surface-dark)] pt-3">
+            <p className="text-sm">
+              Pengisian angket {dufahAktif}:{" "}
+              <span className={`font-bold ${angketDibuka ? "text-emerald-700" : "text-red-600"}`}>
+                {angketDibuka === null ? "Memuat..." : angketDibuka ? "DIBUKA" : "DITUTUP"}
+              </span>
+              <span className="text-[var(--color-text-muted)]">
+                {" "}— menutup hanya menghalangi santri menulis/mengubah; angket yang sudah masuk tetap bisa dilihat di tab Angket.
+              </span>
+            </p>
+            {canEdit && (
+              <button
+                onClick={toggleAngket}
+                disabled={toggleAngketLoading || angketDibuka === null}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {toggleAngketLoading ? "Menyimpan..." : angketDibuka ? "Tutup Angket" : "Buka Angket"}
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 border-t border-[var(--color-surface-dark)] pt-3">
+            <p className="text-sm">
+              Minimal kehadiran untuk tasmi&apos; {dufahAktif}:{" "}
+              <span className="font-bold">
+                {minHadir === null ? "Memuat..." : `${minHadir}x dari ${NADI_HUFADZ_MAX_PERTEMUAN} pertemuan`}
+              </span>
+            </p>
+            {canEdit && (
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  max={NADI_HUFADZ_MAX_PERTEMUAN}
+                  value={minHadirInput}
+                  onChange={(e) => setMinHadirInput(e.target.value)}
+                  aria-label="Minimal kehadiran untuk tasmi'"
+                  className="w-20 rounded-lg border border-[var(--color-surface-dark)] px-2 py-1.5 text-sm font-bold"
+                />
+                <button
+                  onClick={simpanMinHadir}
+                  disabled={simpanMinHadirLoading || minHadir === null}
+                  className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {simpanMinHadirLoading ? "Menyimpan..." : "Simpan Ambang"}
+                </button>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  Menurunkan ambang langsung membuat peserta yang sudah mencapai angka baru layak tasmi&apos;;
+                  menaikkan ambang tidak membatalkan tasmi&apos; yang sudah tersimpan.
+                </span>
+              </>
+            )}
+          </div>
         </div>
       )}
       <div className="flex gap-2 flex-wrap border-b border-[var(--color-surface-dark)]">
@@ -151,6 +266,7 @@ export default function NadiHufadzClient({
           santriAktif={santriAktif}
           canEdit={canEdit}
           dufahAktif={dufahAktif}
+          minHadir={minHadir ?? NADI_HUFADZ_MIN_HADIR}
           onRefresh={fetchPeserta}
         />
       )}
@@ -159,6 +275,9 @@ export default function NadiHufadzClient({
       )}
       {tab === "tasmi" && (
         <TasmiTab pesertaList={pesertaList} canEdit={canEdit} onRefresh={fetchPeserta} />
+      )}
+      {tab === "angket" && (
+        <AngketTab dufahAktif={dufahAktif} />
       )}
       {tab === "template" && <TemplateTab canEdit={canEdit} />}
       {tab === "cetak" && <CetakTab pesertaList={pesertaList} loading={loading} />}
@@ -172,12 +291,14 @@ function PesertaTab({
   santriAktif,
   canEdit,
   dufahAktif,
+  minHadir,
   onRefresh,
 }: {
   pesertaList: Peserta[];
   santriAktif: { id: string; nama: string }[];
   canEdit: boolean;
   dufahAktif: string;
+  minHadir: number;
   onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
@@ -271,7 +392,7 @@ function PesertaTab({
                     <div className="flex items-center gap-2">
                       <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${p.kehadiran >= NADI_HUFADZ_MIN_HADIR ? "bg-emerald-500" : "bg-amber-500"}`}
+                          className={`h-full rounded-full ${p.kehadiran >= minHadir ? "bg-emerald-500" : "bg-amber-500"}`}
                           style={{ width: `${(p.kehadiran / NADI_HUFADZ_MAX_PERTEMUAN) * 100}%` }}
                         />
                       </div>
@@ -682,14 +803,18 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
   const [positions, setPositions] = useState<Record<string, any>>({});
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // Panggung preview memakai TemplateStage (330 x 215 mm, posisi mm) —
+  // komponen yang sama dengan halaman cetak, supaya preview sebangun
+  // dengan hasil print seperti syahadah offline.
   const dragRef = useRef<any>(null);
 
   const load = async () => {
     const res = await fetch("/api/admin/nadi-hufadz/template?programKey=nadi-hufadz");
     const tpl = await res.json();
     setBg(tpl.backgroundUrl);
-    setPositions(tpl.fieldPositions || {});
+    // Posisi dinormalisasi ke mm saat load (data lama %/px dikonversi);
+    // saat save, units:"mm" ikut tersimpan di fieldPositions.
+    setPositions(normalizeFieldPositions(tpl.fieldPositions || {}));
   };
   useEffect(() => { load(); }, []);
 
@@ -738,11 +863,15 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
   };
 
   const onChipDown = (e: React.PointerEvent, key: string) => {
-    if (!canEdit || !wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
+    if (!canEdit) return;
+    // Rect diukur dari elemen .template-stage terdekat (sudah termasuk
+    // zoom layar), lalu geseran diubah ke mm panggung 330 x 215.
+    const stage = (e.target as HTMLElement).closest(".template-stage");
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
     dragRef.current = {
       key, startX: e.clientX, startY: e.clientY,
-      origX: positions[key]?.x ?? 50, origY: positions[key]?.y ?? 50,
+      origX: positions[key]?.x ?? 165, origY: positions[key]?.y ?? 107.5,
       w: rect.width, h: rect.height,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -750,8 +879,8 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
   const onMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    const nx = Math.min(100, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 100));
-    const ny = Math.min(100, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 100));
+    const nx = Math.min(330, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 330));
+    const ny = Math.min(215, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 215));
     setPositions((p: any) => ({ ...p, [d.key]: { ...p[d.key], x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } }));
   };
   const onUp = () => { dragRef.current = null; };
@@ -778,30 +907,27 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
           <p className="text-sm text-[var(--color-text-muted)]">Upload background terlebih dahulu.</p>
         ) : (
           <>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Preview memakai data contoh (Ahmad Ibnu Alwan, juz 1, 2, 5, predikat ممتاز, periode 11 April – 5 Mei 2026)
+              dengan gaya field asli — geser teksnya langsung di atas desain, atau atur angka di bawah.
+            </p>
             <div
-              ref={wrapRef}
               className="relative w-full max-w-3xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
               onPointerMove={onMove}
               onPointerUp={onUp}
               onPointerCancel={onUp}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bg} alt="Template" className="w-full block" draggable={false} />
-              {FIELD_KEYS.map((key) => {
-                const cfg = positions[key] || { x: 50, y: 50 };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => onChipDown(e, key)}
-                    className={`absolute px-2 py-1 rounded text-xs font-bold border-2 whitespace-nowrap ${
-                      canEdit ? "cursor-move bg-yellow-300/90 border-yellow-600" : "bg-white/80 border-slate-400"
-                    }`}
-                    style={{ left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)" }}
-                  >
-                    {FIELD_SAMPLE[key]}
-                  </div>
-                );
-              })}
+              <TemplateStageZoom>
+                <TemplateStage
+                  programKey="nadi-hufadz"
+                  backgroundUrl={bg}
+                  fieldPositions={positions}
+                  fieldKeys={[...FIELD_KEYS]}
+                  texts={FIELD_SAMPLE}
+                  editorMode
+                  onFieldPointerDown={canEdit ? onChipDown : undefined}
+                />
+              </TemplateStageZoom>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -811,13 +937,13 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
                   <div key={key} className="border rounded-xl p-3 space-y-2">
                     <p className="font-bold text-sm capitalize">{key}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <label>X (%)
-                        <input type="number" step="0.5" value={cfg.x ?? 50}
+                      <label>X (mm)
+                        <input type="number" step="0.5" value={cfg.x ?? 165}
                           onChange={(e) => setField(key, { x: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
-                      <label>Y (%)
-                        <input type="number" step="0.5" value={cfg.y ?? 50}
+                      <label>Y (mm)
+                        <input type="number" step="0.5" value={cfg.y ?? 107.5}
                           onChange={(e) => setField(key, { y: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
@@ -826,10 +952,22 @@ function TemplateTab({ canEdit }: { canEdit: boolean }) {
                           onChange={(e) => setField(key, { fontSize: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
                       </label>
-                      <label>Lebar maks (%)
-                        <input type="number" value={cfg.maxWidth ?? 80}
+                      <label>Lebar maks (mm)
+                        <input type="number" value={cfg.maxWidth ?? 264}
                           onChange={(e) => setField(key, { maxWidth: Number(e.target.value) })}
                           disabled={!canEdit} className="w-full px-2 py-1 border rounded" />
+                      </label>
+                      <label className="col-span-2">Warna
+                        <span className="flex gap-2">
+                          <input type="color"
+                            value={/^#[0-9a-fA-F]{6}$/.test(cfg.color || "") ? cfg.color : (key === "nama" ? NADI_HUFADZ_WARNA_NAMA : "#000000")}
+                            onChange={(e) => setField(key, { color: e.target.value })}
+                            disabled={!canEdit} className="w-10 px-1 py-1 border rounded" />
+                          <input type="text" value={cfg.color ?? (key === "nama" ? NADI_HUFADZ_WARNA_NAMA : "")}
+                            placeholder={key === "nama" ? "#A67C2E" : "#000000"}
+                            onChange={(e) => setField(key, { color: e.target.value })}
+                            disabled={!canEdit} className="flex-1 px-2 py-1 border rounded" />
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -891,6 +1029,129 @@ function CetakTab({ pesertaList, loading }: { pesertaList: Peserta[]; loading: b
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================= TAB ANGKET ================= */
+type AngketAnak = {
+  santriId: string;
+  nama: string;
+  sakan: string | null;
+  kelas: string | null;
+  angket: { isi: string; updatedAt: string } | null;
+};
+
+// Kartu per anak: nama, sakan, kelas, preview isi. Klik kartu (yang sudah
+// mengisi) membuka modal isi lengkap.
+function AngketTab({ dufahAktif }: { dufahAktif: string }) {
+  const [data, setData] = useState<AngketAnak[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pilih, setPilih] = useState<AngketAnak | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/nadi-hufadz/angket?dufahNama=${encodeURIComponent(dufahAktif)}`)
+      .then((r) => r.json())
+      .then((j) => setData(j.data || []))
+      .catch(() => toast.error("Gagal memuat angket"))
+      .finally(() => setLoading(false));
+  }, [dufahAktif]);
+
+  useEffect(() => {
+    if (!pilih) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPilih(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [pilih]);
+
+  const sudahIsi = data.filter((d) => d.angket).length;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--color-text-muted)]">
+        {loading
+          ? "Memuat..."
+          : `${sudahIsi} dari ${data.length} peserta sudah mengisi angket ${dufahAktif}.`}
+      </p>
+      {loading ? (
+        <p className="text-sm">Memuat...</p>
+      ) : data.length === 0 ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Belum ada peserta.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {data.map((d) => {
+            const preview = d.angket
+              ? d.angket.isi.length > 150
+                ? d.angket.isi.slice(0, 150) + "…"
+                : d.angket.isi
+              : null;
+            return (
+              <button
+                key={d.santriId}
+                onClick={() => d.angket && setPilih(d)}
+                disabled={!d.angket}
+                className="text-left bg-white rounded-2xl border p-4 hover:shadow-md transition-shadow disabled:opacity-100 disabled:cursor-default"
+              >
+                <p className="font-bold">{d.nama}</p>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  {[d.sakan, d.kelas].filter(Boolean).join(" • ") || "—"}
+                </p>
+                {preview ? (
+                  <p className="text-sm mt-3 whitespace-pre-wrap break-words">{preview}</p>
+                ) : (
+                  <p className="text-sm mt-3 text-[var(--color-text-muted)] italic">Belum mengisi</p>
+                )}
+                {d.angket && (
+                  <p className="text-xs text-[var(--color-text-muted)] mt-3">
+                    Terakhir diubah:{" "}
+                    {new Date(d.angket.updatedAt).toLocaleString("id-ID", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {pilih && pilih.angket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setPilih(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-bold text-lg">{pilih.nama}</h3>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  {[pilih.sakan, pilih.kelas].filter(Boolean).join(" • ") || "—"}
+                  {" • "}
+                  {new Date(pilih.angket.updatedAt).toLocaleString("id-ID", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </p>
+              </div>
+              <button
+                onClick={() => setPilih(null)}
+                aria-label="Tutup"
+                className="shrink-0 w-8 h-8 rounded-full bg-slate-100 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm mt-4 whitespace-pre-wrap break-words">{pilih.angket.isi}</p>
+          </div>
         </div>
       )}
     </div>

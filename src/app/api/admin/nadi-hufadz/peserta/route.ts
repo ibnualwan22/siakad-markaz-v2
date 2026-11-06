@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
 import { getActiveDufahName } from "@/lib/absensi";
-import { NADI_HUFADZ_MIN_HADIR } from "@/lib/nadi-hufadz";
+import { resolveNadiHufadzMinHadir } from "@/lib/nadi-hufadz";
 
 export const dynamic = "force-dynamic";
 
@@ -18,15 +18,21 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dufahNama = searchParams.get("dufahNama") || (await getActiveDufahName()) || "";
 
-  const peserta = await prisma.nadiHufadzPeserta.findMany({
-    where: { dufahNama },
-    include: {
-      santri: { select: { id: true, nama: true } },
-      setoran: { select: { id: true } },
-      tasmi: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  const [peserta, periode] = await Promise.all([
+    prisma.nadiHufadzPeserta.findMany({
+      where: { dufahNama },
+      include: {
+        santri: { select: { id: true, nama: true } },
+        setoran: { select: { id: true } },
+        tasmi: true,
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    dufahNama
+      ? prisma.nadiHufadzPeriode.findUnique({ where: { dufahNama } })
+      : null,
+  ]);
+  const minHadir = resolveNadiHufadzMinHadir(periode?.minHadir);
 
   const data = peserta.map((p) => ({
     id: p.id,
@@ -34,11 +40,11 @@ export async function GET(request: Request) {
     nama: p.santri.nama,
     tanggalDaftar: p.tanggalDaftar,
     kehadiran: p.setoran.length,
-    eligibleTasmi: p.setoran.length >= NADI_HUFADZ_MIN_HADIR,
+    eligibleTasmi: p.setoran.length >= minHadir,
     tasmi: p.tasmi,
   }));
 
-  return NextResponse.json({ dufahNama, data });
+  return NextResponse.json({ dufahNama, minHadir, data });
 }
 
 // POST { santriId, dufahNama? } — tambah peserta

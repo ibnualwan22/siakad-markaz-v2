@@ -37,7 +37,11 @@ const baseNavItems = [
   { href: "/santri/perizinan", label: "Perizinan", icon: Shield },
   { href: "/santri/denah-lokasi", label: "Denah Sakan", icon: MapPin },
   { href: "/santri/daftar-ulang", label: "Daftar Ulang", icon: RefreshCw },
-  { href: "/santri/no-wa", label: "WhatsApp AI", icon: MessageCircle },
+  // DISEMBUNYIKAN SEMENTARA (5 Nov 2026, perintah user): menu WhatsApp AI
+  // disembunyikan dari sidebar portal santri — halaman /santri/no-wa tetap
+  // ada dan masih bisa dibuka lewat URL langsung. Untuk menampilkan lagi,
+  // hapus komentar pada baris di bawah ini.
+  // { href: "/santri/no-wa", label: "WhatsApp AI", icon: MessageCircle },
   { href: "/santri/arsip-galeri", label: "Galeri", icon: Images },
   { href: "/santri/pemilihan-lajnah", label: "Pemilihan", icon: Vote },
   { href: "/santri/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen },

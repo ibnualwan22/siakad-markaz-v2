@@ -5,7 +5,6 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
-import { SyncSantriButton } from "./sync-santri-button";
 
 const navigationGroups = [
   {
@@ -81,11 +80,13 @@ const navigationGroups = [
     title: "Divisi Syahadah",
     items: [
       { href: "/admin/syahadah", label: "Data Syahadah", icon: GraduationCap, permissionId: "data_syahadah" },
+      { href: "/admin/akbarnas-mc", label: "Layout Syahadah MC", icon: GraduationCap, permissionId: "data_syahadah" },
       { href: "/admin/syahadah-online", label: "Syahadah Online", icon: GraduationCap, permissionId: "syahadah_online" },
       { href: "/admin/martabah-ula", label: "Martabah Ula", icon: Medal, permissionId: "martabah_ula" },
       { href: "/admin/haflah-wada", label: "Haflah Wada'", icon: Armchair, permissionId: "haflah_wada" },
       { href: "/admin/input-tasmi", label: "Input Tasmi'", icon: BookOpen, permissionId: "input_tasmi" },
       { href: "/admin/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen, permissionId: "nadi_hufadz" },
+      { href: "/admin/munaqosah-hufadz", label: "Munaqosah Hufadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/huffadz/tasmi", label: "Tasmi' Huffadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/input-nilai-kelas", label: "Input Nilai", icon: BookOpen, permissionId: "input_nilai" },
       { href: "/admin/nilai-kosong", label: "Nilai Kosong", icon: AlertTriangle, permissionId: "monitor_nilai_kosong" },
@@ -346,12 +347,6 @@ export function Sidebar({ user, permissions = [] }: { user: any, permissions?: s
           })}
         </nav>
 
-        {/* Sync Button */}
-        {user?.role === "ADMIN" && (
-          <div className="px-4 mt-auto pt-2">
-            <SyncSantriButton />
-          </div>
-        )}
 
         {/* User Card */}
         <div className="p-4 pt-0">

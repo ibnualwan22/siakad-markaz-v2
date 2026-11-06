@@ -1,14 +1,30 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
 
+// Fase 7: Bawwabah mengirim tanggal Usbu otomatis (saat ditetapkan di
+// Bawwabah) lewat header `x-bawwabah-key` == env BAWABAH_API_KEY.
+// Jalur sesi + izin lama tetap berlaku untuk UI Siakad.
+function kunciBawwabahValid(request: Request): boolean {
+  const key = process.env.BAWABAH_API_KEY;
+  if (!key) return false;
+  const got = request.headers.get("x-bawwabah-key");
+  if (!got) return false;
+  const a = Buffer.from(got);
+  const b = Buffer.from(key);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
 const prisma = new PrismaClient();
 
 export async function POST(request: Request) {
+  const kunciOk = kunciBawwabahValid(request);
   const session = await getSession();
   const hasPermission = await checkPermission("manajemen_dufah_edit");
-  if (!session || !hasPermission) {
+  if (!kunciOk && (!session || !hasPermission)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

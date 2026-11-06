@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
 import { getActiveDufahName } from "@/lib/absensi";
-import { NADI_HUFADZ_MIN_HADIR } from "@/lib/nadi-hufadz";
+import { resolveNadiHufadzMinHadir } from "@/lib/nadi-hufadz";
 
 export const dynamic = "force-dynamic";
 
@@ -13,9 +13,15 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const dufahAktif = (await getActiveDufahName()) || "";
-  const periode = dufahAktif
-    ? await prisma.nadiHufadzPeriode.findUnique({ where: { dufahNama: dufahAktif } })
-    : null;
+  const [periode, semuaPeriode] = await Promise.all([
+    dufahAktif
+      ? prisma.nadiHufadzPeriode.findUnique({ where: { dufahNama: dufahAktif } })
+      : null,
+    prisma.nadiHufadzPeriode.findMany({ select: { dufahNama: true, minHadir: true } }),
+  ]);
+  const minHadirPerDufah = new Map(
+    semuaPeriode.map((p) => [p.dufahNama, resolveNadiHufadzMinHadir(p.minHadir)])
+  );
 
   const riwayat = await prisma.nadiHufadzPeserta.findMany({
     where: { santriId: session.santriId },
@@ -34,7 +40,9 @@ export async function GET() {
     dufahNama: p.dufahNama,
     tanggalDaftar: p.tanggalDaftar,
     kehadiran: p.setoran.length,
-    eligibleTasmi: p.setoran.length >= NADI_HUFADZ_MIN_HADIR,
+    eligibleTasmi:
+      p.setoran.length >=
+      (minHadirPerDufah.get(p.dufahNama) ?? resolveNadiHufadzMinHadir(null)),
     setoran: p.setoran.map((s) => ({
       pertemuanKe: s.pertemuanKe,
       tanggal: s.tanggal,

@@ -6,10 +6,12 @@ import prisma from "@/lib/prisma";
 // tampil bila font tersebut tersedia di browser (terinstal / webfont yang dipasang).
 // Poppins sendiri ditarik dari Google Fonts oleh CetakTemplateClient.
 export function defaultFieldPositionsOrganisasi() {
+  // Posisi dalam mm panggung 330 x 215; fontSize tetap angka referensi lama.
   return {
-    nama: { x: 50, y: 40, fontSize: 44, align: "center", maxWidth: 80, fontFamily: "The Season", color: "#865b34" },
-    periode: { x: 50, y: 54, fontSize: 28, align: "center", maxWidth: 80, fontFamily: "Poppins", color: "#000000" },
-    tglCetak: { x: 50, y: 62, fontSize: 28, align: "center", maxWidth: 80, fontFamily: "Poppins", color: "#000000" },
+    nama: { x: 165, y: 86, fontSize: 44, align: "center", maxWidth: 264, fontFamily: "The Season", color: "#865b34" },
+    periode: { x: 165, y: 116.1, fontSize: 28, align: "center", maxWidth: 264, fontFamily: "Poppins", color: "#000000" },
+    tglCetak: { x: 165, y: 133.3, fontSize: 28, align: "center", maxWidth: 264, fontFamily: "Poppins", color: "#000000" },
+    units: "mm",
   };
 }
 

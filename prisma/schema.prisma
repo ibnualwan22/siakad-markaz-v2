@@ -114,6 +114,7 @@ model SantriInternal {
   waOtpList             WaOtp[]
   nadiHufadzPesertaList NadiHufadzPeserta[]
   huffadzTasmiList      HuffadzTasmi[]
+  munaqosahHufadzList   MunaqosahHufadz[]
 }
 
 // OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
@@ -236,6 +237,20 @@ model SyahadahTemplate {
   tgl_cetak_turats         String?
   tgl_mulai_turats         String?
   tgl_selesai_turats       String?
+}
+
+// Penanda syahadah ditahan untuk prosesi Haflah Wada' (per santri per dufah).
+// HANYA berpengaruh di denah & pemanggilan haflah: yang ditahan dikelompokkan
+// bersama yang tidak lulus. Cetak syahadah, status kelulusan, dan portal TIDAK berubah.
+model SyahadahDitahan {
+  id        String   @id @default(cuid())
+  santriId  String
+  dufahNama String
+  catatan   String?
+  createdAt DateTime @default(now())
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
 }
 
 model SyahadahLayout {
@@ -430,6 +445,7 @@ model User {
   nadiHufadzSetoranDisimak NadiHufadzSetoran[]
   nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
   huffadzTasmiDinilai      HuffadzTasmi[]
+  munaqosahHufadzDiuji     MunaqosahHufadz[]
   pushSubscriptions         PushSubscription[]
 }
 
@@ -1116,6 +1132,11 @@ model LokasiDenah {
   imageUrl  String?
   publicId  String?
   isActive  Boolean  @default(true)
+  // Sakan terdaftar yang diwakili titik ini (null = titik umum, bukan
+  // sakan). Satu sakan maksimal satu titik aktif (dijaga API + indeks
+  // parsial di DB). Lantai = tinggi balok gedung di mode 3D.
+  sakan     String?
+  lantai    Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1437,7 +1458,8 @@ model NadiHufadzSetoran {
   @@index([pesertaId])
 }
 
-// Hasil tasmi'. Hanya bisa diinput bila kehadiran >= 7.
+// Hasil tasmi'. Hanya bisa diinput bila kehadiran >= ambang dufah
+// (NadiHufadzPeriode.minHadir, default 7).
 model NadiHufadzTasmi {
   id        String   @id @default(cuid())
   pesertaId String   @unique
@@ -1455,13 +1477,32 @@ model NadiHufadzTasmi {
 // Satu baris per dufah; tanpa baris = tertutup (admin membuka eksplisit).
 // Menutup hanya menghalangi pendaftar baru — peserta yang sudah terdaftar
 // tetap berjalan setoran & tasmi'-nya.
+// minHadir: ambang minimal kehadiran untuk tasmi' di dufah ini, diubah
+// admin lewat halaman admin; null = pakai default (7).
 model NadiHufadzPeriode {
   id        String   @id @default(cuid())
   dufahNama String   @unique
   dibuka    Boolean  @default(false)
+  minHadir  Int?
+  // Toggle pengisian angket per dufah (admin). Mati = santri hanya bisa
+  // melihat isi yang sudah ditulisnya; angket yang masuk tetap tampil di admin.
+  angketDibuka Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([dufahNama])
+}
+
+// Angket Nadi Hufadz: satu kolom bebas per santri per dufah.
+model NadiHufadzAngket {
+  id        String   @id @default(cuid())
+  santriId  String
+  dufahNama String
+  isi       String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([santriId, dufahNama])
   @@index([dufahNama])
 }
 
@@ -1509,6 +1550,37 @@ model HuffadzTasmi {
 
   @@index([santriId])
   @@index([waktuSubmit])
+}
+
+// Munaqosah Hufadz — ujian akhir hafalan per santri per dufah.
+// 5 nilai input (0–100); nilai akhir = rata-rata dibulatkan terdekat dan
+// predikat DIHITUNG dari nilai akhir (tidak disimpan mentah) — lihat
+// src/lib/munaqosah-hufadz.ts. <60 = musyarokah (tetap bisa cetak,
+// nilai + predikat tidak ditampilkan di syahadah).
+// juzTeks diinput per santri (mis. "30،29،1"). verifyToken untuk QR
+// verifikasi keaslian di halaman publik /verifikasi-munaqosah/<token>.
+model MunaqosahHufadz {
+  id                   String   @id @default(cuid())
+  santriId             String
+  dufahNama            String
+  nilaiHafalan         Int
+  nilaiKelancaran      Int
+  nilaiTajwid          Int
+  nilaiMakhorijulHuruf Int
+  nilaiAdab            Int?           // Legacy: tidak lagi dinilai (diabaikan kode), dipertahankan agar data lama tidak hilang
+  juzTeks              String
+  tanggal              DateTime @db.Date
+  pengujiId            String?
+  catatan              String?
+  verifyToken          String   @unique @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  santri  SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  penguji User?          @relation(fields: [pengujiId], references: [id], onDelete: SetNull)
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
 }
 
 // Token SSO sekali pakai yang sudah dikonsumsi (anti-replay, Fase 5 Bawwabah).

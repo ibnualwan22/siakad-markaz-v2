@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { Armchair, ListOrdered, Printer, Loader2 } from "lucide-react";
+import { Armchair, ListOrdered, Printer, Loader2, PauseCircle } from "lucide-react";
 
 type SantriRow = {
   id: string;
@@ -18,6 +18,8 @@ type SantriRow = {
   canViewIjazah: boolean;
   isMartabahUla?: boolean;
   programKategori?: string;
+  isDitahan?: boolean;
+  catatanDitahan?: string | null;
 };
 
 type KelasItem = {
@@ -49,6 +51,11 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
+// Baris per slide denah: banner ±40px + 4 baris × 120px ≈ 520px pada lebar
+// tabel 800px → rasio ≈ 330:215 (kertas F4 landscape). Nomor kursi & nomor
+// barisan TIDAK mengulang per slide — keduanya lanjut dari slide sebelumnya.
+const ROWS_PER_SLIDE = 4;
+
 function padAndDirection(chunk: any[], size: number, start: "right" | "left") {
   const padded = [...chunk];
   while (padded.length < size) {
@@ -60,18 +67,33 @@ function padAndDirection(chunk: any[], size: number, start: "right" | "left") {
 export function HaflahWadaClient({
   santriRows,
   kelasList,
-  dufahLabel
+  dufahLabel,
+  ditahanList,
+  dufahNama
 }: {
   santriRows: SantriRow[];
   kelasList: KelasItem[];
   dufahLabel: string;
+  ditahanList: { santriId: string; catatan: string | null }[];
+  dufahNama: string | null;
 }) {
-  const [activeTab, setActiveTab] = useState<"denah" | "pemanggilan">("denah");
+  const [activeTab, setActiveTab] = useState<"denah" | "pemanggilan" | "ditahan">("denah");
+  // Penanda syahadah ditahan (per dufah aktif). Hanya berpengaruh di prosesi.
+  const [heldMap, setHeldMap] = useState<Map<string, string | null>>(
+    () => new Map(ditahanList.map((d) => [d.santriId, d.catatan]))
+  );
+  const [tahanTarget, setTahanTarget] = useState("");
+  const [tahanCatatan, setTahanCatatan] = useState("");
+  const [lepasTarget, setLepasTarget] = useState("");
+  const [savingTahan, setSavingTahan] = useState(false);
   const [colCount, setColCount] = useState<number>(10);
   const [doorOption, setDoorOption] = useState<"masuk-kanan-keluar-kiri" | "masuk-kiri-keluar-kanan" | "kanan-kiri" | "kanan" | "kiri">("masuk-kanan-keluar-kiri");
   const [mounted, setMounted] = useState(false);
   const [exporting, setExporting] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  // Ref tiap slide denah — kunci "banin-0", "banin-1", "banat-0", dst.
+  // Dipakai tombol download JPG per slide.
+  const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   // Manage manual sorting modal
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -158,7 +180,9 @@ export function HaflahWadaClient({
 
     let mapped = santriRows.map(s => ({
       ...s,
-      isMartabahUla: topByProgram.get(s.programId || "unknown_program") === s.id
+      isMartabahUla: topByProgram.get(s.programId || "unknown_program") === s.id,
+      isDitahan: heldMap.has(s.id),
+      catatanDitahan: heldMap.get(s.id) ?? null
     }));
 
     let allSantriList = [...mapped];
@@ -195,11 +219,14 @@ export function HaflahWadaClient({
       return b.average - a.average;
     });
 
-    let graduates = allSantriList.filter(s => s.statusKelulusan !== "TIDAK_LULUS");
-    let nonGraduates = allSantriList.filter(s => s.statusKelulusan === "TIDAK_LULUS");
+    // Syahadah ditahan HANYA berpengaruh di prosesi: yang ditahan
+    // dikelompokkan bersama yang tidak lulus (barisan belakang denah,
+    // tidak dipanggil). Status kelulusan & cetak syahadah tidak berubah.
+    let graduates = allSantriList.filter(s => s.statusKelulusan !== "TIDAK_LULUS" && !s.isDitahan);
+    let nonGraduates = allSantriList.filter(s => s.statusKelulusan === "TIDAK_LULUS" || s.isDitahan);
 
     return { allSantriList, graduates, nonGraduates };
-  }, [santriRows, kelasMap]);
+  }, [santriRows, kelasMap, heldMap]);
 
   const denahBanin = useMemo(() => [
     ...processedSantri.graduates.filter((s: SantriRow) => s.gender === "BANIN"),
@@ -254,6 +281,65 @@ export function HaflahWadaClient({
       };
     });
   }, [processedSantri, kelasMap]);
+
+  // Daftar Ditahan: semua yang ditahan, dalam urutan prosesi yang sama.
+  // Yang tidak lulus ikut tampil di sini dengan keterangan tidak mendapat syahadah.
+  const daftarDitahan = useMemo(
+    () => processedSantri.allSantriList.filter((s) => s.isDitahan),
+    [processedSantri]
+  );
+
+  const kandidatTahan = useMemo(
+    () => processedSantri.allSantriList.filter((s) => !s.isDitahan),
+    [processedSantri]
+  );
+
+  const kandidatTerpilih = kandidatTahan.find((s) => s.id === tahanTarget);
+
+  const handleTahan = async () => {
+    if (!dufahNama || !tahanTarget || savingTahan) return;
+    setSavingTahan(true);
+    try {
+      const res = await fetch("/api/admin/haflah-wada/ditahan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ santriId: tahanTarget, dufahNama, ditahan: true, catatan: tahanCatatan || null }),
+      });
+      if (!res.ok) throw new Error("Gagal menahan syahadah");
+      setHeldMap((prev) => new Map(prev).set(tahanTarget, tahanCatatan || null));
+      setTahanTarget("");
+      setTahanCatatan("");
+    } catch (e) {
+      console.error("Gagal menahan syahadah", e);
+      alert("Gagal menahan syahadah. Silakan coba lagi.");
+    } finally {
+      setSavingTahan(false);
+    }
+  };
+
+  const handleLepas = async () => {
+    if (!dufahNama || !lepasTarget || savingTahan) return;
+    setSavingTahan(true);
+    try {
+      const res = await fetch("/api/admin/haflah-wada/ditahan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ santriId: lepasTarget, dufahNama, ditahan: false }),
+      });
+      if (!res.ok) throw new Error("Gagal melepas tahanan");
+      setHeldMap((prev) => {
+        const next = new Map(prev);
+        next.delete(lepasTarget);
+        return next;
+      });
+      setLepasTarget("");
+    } catch (e) {
+      console.error("Gagal melepas tahanan", e);
+      alert("Gagal melepas tahanan. Silakan coba lagi.");
+    } finally {
+      setSavingTahan(false);
+    }
+  };
 
   const handleExportPDF = useCallback(async () => {
     if (!printRef.current || exporting) return;
@@ -401,7 +487,9 @@ export function HaflahWadaClient({
 
       const filename = activeTab === "denah"
         ? `Denah_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
-        : `Pemanggilan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+        : activeTab === "ditahan"
+          ? `Daftar_Ditahan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`
+          : `Pemanggilan_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
 
       pdf.save(filename);
     } catch (err) {
@@ -411,6 +499,76 @@ export function HaflahWadaClient({
       setExporting(false);
     }
   }, [activeTab, exporting, dufahLabel]);
+
+  // Export SATU slide denah sebagai JPG langsung (bukan dibungkus PDF).
+  // Tiap slide ditangkap sendiri (blok pendek ±520px) — bukan satu gambar
+  // panjang per gender, karena tangkapan tunggal yang terlalu tinggi
+  // itulah yang rusak sebelumnya. Nama file membawa nomor slide + total
+  // slide, jadi urutannya jelas.
+  //
+  // PENTING: setup tangkapan disamakan PERSIS dengan export PDF yang sudah
+  // terbukti jalan (windowWidth 1200 + onclone yang membuka overflow dan
+  // mematok lebar kartu) — bedanya hanya output: JPG langsung, bukan PDF.
+  // Unduhan pun lewat Blob (seperti jsPDF.save), bukan data-URL, karena
+  // data-URL pada gambar besar tidak andal di semua browser.
+  const handleExportDenahSlideJPG = useCallback(async (gender: "banin" | "banat", slideIdx: number, totalSlides: number) => {
+    const target = slideRefs.current.get(`${gender}-${slideIdx}`);
+    if (!target || exporting) return;
+    setExporting(true);
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(target, {
+        scale: 2, useCORS: true, logging: false, backgroundColor: "#ffffff",
+        windowWidth: 1200,
+        onclone: (clonedDoc: Document) => {
+          clonedDoc.querySelectorAll('link[rel="stylesheet"], style').forEach(el => el.remove());
+          const resetStyle = clonedDoc.createElement("style");
+          resetStyle.textContent = `* { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; box-sizing: border-box; }`;
+          clonedDoc.head.appendChild(resetStyle);
+          const cloneContainer = clonedDoc.querySelector('.neu-card-white');
+          if (cloneContainer) {
+            (cloneContainer as HTMLElement).style.overflow = 'visible';
+            (cloneContainer as HTMLElement).style.width = `1200px`;
+            (cloneContainer as HTMLElement).style.maxWidth = 'none';
+          }
+          // Patok lebar slide ke 800px (sama dengan minWidth tabel) agar
+          // hasil JPG berasio F4 landscape (330:215), bukan melebar
+          // mengikuti kartu.
+          const cloneTarget = clonedDoc.querySelector(`[data-denah-slide="${slideIdx}"][data-denah-gender="${gender}"]`);
+          if (cloneTarget) {
+            (cloneTarget as HTMLElement).style.overflow = "visible";
+            (cloneTarget as HTMLElement).style.maxWidth = "none";
+            (cloneTarget as HTMLElement).style.width = "800px";
+            (cloneTarget as HTMLElement).style.marginTop = "0";
+          }
+        },
+      });
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", 0.95)
+      );
+      if (!blob) throw new Error("Gagal membuat file JPG dari canvas");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Denah_${gender === "banin" ? "Banin" : "Banat"}_Slide${slideIdx + 1}_dari_${totalSlides}_Haflah_Wada_${dufahLabel.replace(/[^a-zA-Z0-9]/g, "_")}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Jangan cabut object URL terlalu cepat: Download Manager Chrome
+      // Android mengambil file secara asinkron dan bisa mulai lebih dari
+      // 1 detik setelah klik — kalau URL sudah dicabut, unduhan gagal
+      // dengan "Error download" padahal file sempat masuk daftar unduhan.
+      // 60 detik cukup untuk mulai mengunduh, tanpa membocorkan memori.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error("Export denah slide JPG failed:", err);
+      alert("Gagal export JPG. Silakan coba lagi.");
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, dufahLabel]);
 
   if (!mounted) return null;
 
@@ -444,6 +602,96 @@ export function HaflahWadaClient({
         )}
       </td>
     )
+  };
+
+  // Render denah satu gender sebagai slide-slide F4 (4 baris per slide).
+  // Tiap slide adalah layout baru (banner + tabelnya sendiri), BUKAN
+  // potongan dari satu tabel panjang. Nomor kursi lanjut antar slide karena
+  // diambil dari indeks global di daftar denah; nomor barisan juga lanjut
+  // (baris pertama slide ke-2 = barisan 5, bukan 1 lagi).
+  const renderGenderDenah = (gender: "banin" | "banat", denahList: any[], topMargin: number) => {
+    const label = gender === "banin" ? "BANIN" : "BANAT";
+    const labelTitle = gender === "banin" ? "Banin" : "Banat";
+    const bannerBg = gender === "banin" ? "#a3c2e6" : "#f4b084";
+    const banner = (
+      <div style={{ width: "100%", backgroundColor: bannerBg, color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
+        ★★★ {label} ★★★
+      </div>
+    );
+
+    const rowChunks = chunkArray(denahList, colCount);
+    if (rowChunks.length === 0) {
+      return (
+        <div style={{ marginTop: topMargin }}>
+          {banner}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
+              <tbody>
+                <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data {labelTitle}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    const slides = chunkArray(rowChunks, ROWS_PER_SLIDE);
+    return (
+      <div>
+        {slides.map((slideRows, slideIdx) => {
+          const startBaris = slideIdx * ROWS_PER_SLIDE + 1;
+          const endBaris = slideIdx * ROWS_PER_SLIDE + slideRows.length;
+          return (
+            <div key={slideIdx} style={{ marginTop: slideIdx === 0 ? topMargin : 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>
+                  Slide {slideIdx + 1} dari {slides.length} — {labelTitle} (Baris {startBaris}–{endBaris})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleExportDenahSlideJPG(gender, slideIdx, slides.length)}
+                  disabled={exporting}
+                  className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition"
+                >
+                  {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                  {exporting ? "Mengekspor..." : "Download JPG"}
+                </button>
+              </div>
+              <div
+                ref={(el) => { const k = `${gender}-${slideIdx}`; if (el) slideRefs.current.set(k, el); else slideRefs.current.delete(k); }}
+                data-denah-slide={slideIdx}
+                data-denah-gender={gender}
+              >
+                {banner}
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
+                    <tbody>
+                      {slideRows.map((chunk, rowIdx) => {
+                        const globalRowIdx = slideIdx * ROWS_PER_SLIDE + rowIdx;
+                        const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
+                        const paddedChunk = padAndDirection(chunk, colCount, startFrom);
+                        return (
+                          <tr key={rowIdx}>
+                            {/* Penanda nomor barisan — lanjut antar slide */}
+                            <td style={{ width: 36, minWidth: 36, backgroundColor: "#334155", color: "white", fontWeight: 900, textAlign: "center", fontSize: 13, border: "1.5px solid #000", verticalAlign: "middle" }}>
+                              {globalRowIdx + 1}
+                            </td>
+                            {paddedChunk.map((student, colIdx) => {
+                              const actualIdx = student ? denahList.indexOf(student) : -1;
+                              return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Render pemanggilan row — with column borders
@@ -488,6 +736,13 @@ export function HaflahWadaClient({
             <ListOrdered className="w-4 h-4" />
             Urutan Pemanggilan
           </button>
+          <button
+            onClick={() => setActiveTab("ditahan")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition ${activeTab === "ditahan" ? "bg-white text-[var(--color-text)] shadow-sm" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}
+          >
+            <PauseCircle className="w-4 h-4" />
+            Daftar Ditahan {daftarDitahan.length > 0 && `(${daftarDitahan.length})`}
+          </button>
         </div>
 
         {/* Settings Bar */}
@@ -526,7 +781,8 @@ export function HaflahWadaClient({
 
         <div className="flex items-center justify-between w-full md:w-auto gap-4">
           <div className="hidden lg:block text-sm font-semibold text-[var(--color-text-muted)]">
-            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.graduates.length}</span> |
+            Total Lulus: <span className="font-bold text-[var(--color-primary)]">{processedSantri.allSantriList.filter((s) => s.statusKelulusan !== "TIDAK_LULUS").length}</span> |
+            Ditahan: <span className="font-bold text-amber-600">{daftarDitahan.length}</span> |
             Total Denah: <span className="font-bold text-[var(--color-text)]">{denahBanin.length + denahBanat.length}</span>
           </div>
 
@@ -539,16 +795,92 @@ export function HaflahWadaClient({
             <span className="hidden md:inline">Urutan Kelas</span>
           </button>
 
-          <button
-            onClick={handleExportPDF}
-            disabled={exporting}
-            className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-            {exporting ? "Mengekspor..." : "Export PDF"}
-          </button>
+          {activeTab === "denah" ? (
+            <span className="text-xs font-semibold text-[var(--color-text-muted)]">JPG diunduh per slide (tombol di atas tiap slide)</span>
+          ) : (
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 text-white px-4 py-2 rounded-xl font-bold shadow-sm transition"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+              {exporting ? "Mengekspor..." : "Export PDF"}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Kelola Daftar Ditahan — di luar area cetak, hanya di tab Ditahan */}
+      {activeTab === "ditahan" && (
+        <div className="neu-card-white p-4 md:p-5 space-y-4">
+          <div>
+            <h3 className="font-black text-[var(--color-text)]">Kelola Daftar Ditahan</h3>
+            <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
+              Penanda ini hanya berpengaruh di prosesi Haflah Wada&apos; (denah &amp; pemanggilan).
+              Syahadah tetap bisa dicetak seperti biasa; yang ditahan hanya ditahan dulu untuk disidang, baru diberikan.
+            </p>
+          </div>
+          {!dufahNama ? (
+            <p className="text-sm font-bold text-red-600">Dufah aktif tidak terdeteksi — penanda tidak dapat disimpan.</p>
+          ) : (
+            <>
+              <div className="flex flex-col md:flex-row gap-2">
+                <select
+                  value={tahanTarget}
+                  onChange={(e) => setTahanTarget(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Pilih santri untuk ditahan...</option>
+                  {kandidatTahan.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} — {s.kelasNama}{s.statusKelulusan === "TIDAK_LULUS" ? " (Tidak lulus)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={tahanCatatan}
+                  onChange={(e) => setTahanCatatan(e.target.value)}
+                  placeholder="Catatan sidang (opsional)"
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={handleTahan}
+                  disabled={!tahanTarget || savingTahan}
+                  className="px-4 py-2 text-sm font-bold text-white bg-amber-600 rounded-xl hover:bg-amber-700 disabled:opacity-50"
+                >
+                  Tahan Syahadah
+                </button>
+              </div>
+              {kandidatTerpilih?.statusKelulusan === "TIDAK_LULUS" && (
+                <p className="text-sm font-semibold text-amber-700">
+                  Santri ini tidak lulus — dia akan tetap muncul di Daftar Ditahan dengan keterangan tidak mendapat syahadah.
+                </p>
+              )}
+              <div className="flex flex-col md:flex-row gap-2">
+                <select
+                  value={lepasTarget}
+                  onChange={(e) => setLepasTarget(e.target.value)}
+                  className="flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold outline-none focus:border-blue-500 bg-white"
+                >
+                  <option value="">Pilih santri untuk dilepas...</option>
+                  {daftarDitahan.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nama} — {s.kelasNama}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleLepas}
+                  disabled={!lepasTarget || savingTahan}
+                  className="px-4 py-2 text-sm font-bold text-slate-700 bg-slate-100 border border-slate-300 rounded-xl hover:bg-slate-200 disabled:opacity-50"
+                >
+                  Lepas Tahanan
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Content that gets captured for PDF */}
       <div ref={printRef} className="neu-card-white overflow-hidden bg-white">
@@ -582,61 +914,11 @@ export function HaflahWadaClient({
               </div>
             </div>
 
-            {/* BANIN */}
-            <div data-pdf-section style={{ marginTop: 16 }}>
-              <div style={{ width: "100%", backgroundColor: "#a3c2e6", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
-                ★★★ BANIN ★★★
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
-                  <tbody>
-                    {chunkArray(denahBanin, colCount).map((chunk, rowIdx) => {
-                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
-                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
-                      return (
-                        <tr key={rowIdx}>
-                          {paddedChunk.map((student, colIdx) => {
-                            const actualIdx = student ? denahBanin.indexOf(student) : -1;
-                            return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
-                          })}
-                        </tr>
-                      );
-                    })}
-                    {denahBanin.length === 0 && (
-                      <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banin</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* BANIN — slide-slide F4, 4 baris per slide */}
+            {renderGenderDenah("banin", denahBanin, 16)}
 
-            {/* BANAT */}
-            <div data-pdf-section style={{ marginTop: 32 }}>
-              <div style={{ width: "100%", backgroundColor: "#f4b084", color: "#1e293b", fontWeight: 900, textAlign: "center", padding: "10px 0", border: "2px solid black", borderBottom: "none", textTransform: "uppercase", letterSpacing: 4, fontSize: 14 }}>
-                ★★★ BANAT ★★★
-              </div>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", minWidth: 800, borderCollapse: "collapse", border: "2px solid black", tableLayout: "fixed" }}>
-                  <tbody>
-                    {chunkArray(denahBanat, colCount).map((chunk, rowIdx) => {
-                      const startFrom = (doorOption === 'masuk-kiri-keluar-kanan' || doorOption === 'kiri') ? 'left' : 'right';
-                      const paddedChunk = padAndDirection(chunk, colCount, startFrom);
-                      return (
-                        <tr key={rowIdx}>
-                          {paddedChunk.map((student, colIdx) => {
-                            const actualIdx = student ? denahBanat.indexOf(student) : -1;
-                            return renderDenahCell(student, colIdx, actualIdx >= 0 ? actualIdx + 1 : undefined);
-                          })}
-                        </tr>
-                      );
-                    })}
-                    {denahBanat.length === 0 && (
-                      <tr><td colSpan={colCount} style={{ textAlign: "center", padding: 24, color: "#94a3b8", border: "1px solid black" }}>Belum ada data Banat</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* BANAT — slide-slide F4, 4 baris per slide */}
+            {renderGenderDenah("banat", denahBanat, 32)}
 
             {/* PENGUMUMAN */}
             <div data-pdf-section style={{ marginTop: 48, border: "2px solid black", maxWidth: 800, marginLeft: "auto", marginRight: "auto" }}>
@@ -795,6 +1077,49 @@ export function HaflahWadaClient({
                   Belum ada data santri yang dapat dipanggil.
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab: DAFTAR DITAHAN */}
+        {activeTab === "ditahan" && (
+          <div style={{ padding: "24px 32px" }}>
+            <div data-pdf-section style={{ textAlign: "center", marginBottom: 32 }}>
+              <p style={{ fontSize: 14, textTransform: "uppercase", fontWeight: 700, color: "#64748b", letterSpacing: 2 }}>Daftar Syahadah Ditahan</p>
+              <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: "uppercase", letterSpacing: 4, color: "#0f172a", marginTop: 8 }}>
+                HAFLAH WADA&apos; {dufahLabel.toUpperCase()}
+              </h1>
+              <h2 style={{ fontSize: 20, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: "#475569", marginTop: 4 }}>
+                Markaz Arabiyah
+              </h2>
+            </div>
+            <div data-pdf-section>
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse", border: "2px solid black" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f1f5f9" }}>
+                    <th style={{ width: 28, textAlign: "center", border: "1px solid #000", padding: "6px 2px" }}>No</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Nama</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Kelas</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Program</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Status</th>
+                    <th style={{ textAlign: "left", border: "1px solid #000", padding: "6px 8px" }}>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daftarDitahan.length > 0 ? daftarDitahan.map((s, idx) => (
+                    <tr key={s.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <td style={{ width: 28, textAlign: "center", borderRight: "1px solid #cbd5e1", padding: "6px 2px", fontWeight: 700, color: "#94a3b8", fontSize: 11 }}>{idx + 1}</td>
+                      <td style={{ padding: "6px 8px", fontWeight: 500 }}>{s.nama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.kelasNama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.programNama}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.statusKelulusan === "TIDAK_LULUS" ? "Tidak Lulus" : s.statusKelulusan === "MUSYAROKAH" ? "Musyarokah" : "Lulus"}</td>
+                      <td style={{ padding: "6px 8px" }}>{s.statusKelulusan === "TIDAK_LULUS" ? "Tidak lulus — tidak mendapat syahadah" : (s.catatanDitahan || "Ditahan — menunggu sidang")}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan={6} style={{ padding: 16, textAlign: "center", color: "#cbd5e1", fontSize: 11 }}>Belum ada santri yang ditahan.</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

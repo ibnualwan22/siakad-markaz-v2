@@ -5,6 +5,7 @@ import { checkPermission } from "@/lib/permission";
 import CetakTemplateClient from "@/components/cetak/CetakTemplateClient";
 import { formatJuzTeks, formatPeriodeArab, defaultFieldPositions } from "@/lib/nadi-hufadz";
 import { defaultFieldPositionsOrganisasi, getTanggalSyahadahOrganisasi } from "@/lib/syahadah-organisasi";
+import { getAkbarnasMcPrintData } from "@/lib/akbarnas-mc-data";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,19 @@ export default async function CetakTemplatePage({
         fieldPositions: (template?.fieldPositions as any) || defaultFieldPositionsOrganisasi(),
       },
     };
+
+    return <CetakTemplateClient programKey={programKey} data={data} showPngButton />;
+  }
+
+  // --- Syahadah MC Akbarnas bulan 1 ---
+  // pesertaId = id RiwayatSantri. Gerbang + isi dari helper bersama
+  // (dipakai juga cetak bulk) — bukan gerbang kelulusan gabungan.
+  if (programKey === "akbarnas-mc") {
+    const hasPerm = await checkPermission("data_syahadah");
+    if (!hasPerm) redirect("/login");
+
+    const data = await getAkbarnasMcPrintData(pesertaId);
+    if (!data) notFound();
 
     return <CetakTemplateClient programKey={programKey} data={data} showPngButton />;
   }

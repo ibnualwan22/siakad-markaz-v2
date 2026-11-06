@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
+import { getSantriSession } from '@/lib/santri-auth';
 import prisma from '@/lib/prisma';
 import { getActiveDufahName } from '@/lib/absensi';
-import { getMasterSantriList } from '@/lib/santri-api';
 import { calcMapelNilaiAkhir, calcAkumulatif } from '@/lib/grade-calculator';
 
 export async function GET(request: Request) {
   try {
+    const session = await getSantriSession();
+    if (!session) {
+      return NextResponse.json(
+        { success: false, message: 'Silakan masuk ke SIAKAD Markaz Arabiyah.' },
+        { status: 401, headers: { 'Cache-Control': 'private, no-store' } }
+      );
+    }
+
     // Ambil data dufah yang sedang aktif
     const activeDufah = await getActiveDufahName();
 
@@ -16,13 +24,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const masterList = await getMasterSantriList();
-    const masterMap = new Map(masterList.map((m: any) => [m.id, m]));
-
     // Ambil data lengkap terkait RiwayatSantri pada Dufah aktif
     const dataRiwayatList = await prisma.riwayatSantri.findMany({
       where: {
-        dufahNama: activeDufah
+        dufahNama: activeDufah,
+        santriId: session.santriId,
       },
       include: {
         santri: true,
@@ -127,7 +133,7 @@ export async function GET(request: Request) {
         id_riwayat: dataRiwayat.id,
         id_santri: dataRiwayat.santri.id,
         nama: dataRiwayat.santri.nama,
-        gender: masterMap.get(dataRiwayat.santri.id)?.gender || '-',
+        gender: dataRiwayat.santri.gender || '-',
         tempat_lahir: dataRiwayat.santri.tempat_lahir,
         tanggal_lahir: dataRiwayat.santri.tanggal_lahir,
         akademik: {
@@ -156,11 +162,11 @@ export async function GET(request: Request) {
       data: sortedData
     };
 
-    // Tambahkan header CORS khusus agar Flutter Mobile App / web local tester tidak kena block
+    // Academic responses are private and must not be cached.
     return NextResponse.json(responseData, {
       status: 200,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'private, no-store',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
@@ -168,7 +174,7 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: 'Terjadi kesalahan sistem internal', error: error.message },
+      { success: false, message: 'Terjadi kesalahan sistem internal' },
       { status: 500 }
     );
   }
@@ -179,7 +185,7 @@ export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'private, no-store',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },

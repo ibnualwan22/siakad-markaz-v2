@@ -107,6 +107,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
+      attemptId: peserta.id,
       peserta: {
         nama: peserta.santri.nama,
         nis: peserta.santri.id,

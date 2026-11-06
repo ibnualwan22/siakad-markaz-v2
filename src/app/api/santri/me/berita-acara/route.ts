@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Data tidak lengkap' }, { status: 400 });
     }
 
+    if (!await prisma.absenPengajar.count({where:{id:absenPengajarId,kelasId:ketuaKelas.kelasId}})) return NextResponse.json({error:"Akses ditolak"},{status:403});
     const result = await prisma.$transaction(async (tx) => {
       // Upsert Berita Acara (Update jika sudah ada, Create jika belum)
       const ba = await tx.beritaAcara.upsert({

@@ -15,12 +15,14 @@ type TranskripItem = {
 };
 
 export function TranskripDocument({
+  staticPrint = false,
   santriName,
   programName,
   isAkbarnas,
   items,
   rataRataAkhir,
 }: {
+  staticPrint?: boolean;
   santriName: string;
   programName: string;
   isAkbarnas: boolean;
@@ -31,7 +33,7 @@ export function TranskripDocument({
 
   useEffect(() => { setMounted(true); }, []);
 
-  if (!mounted) return null;
+  if (!mounted && !staticPrint) return null;
 
   const computeAvg = (extractor: (item: TranskripItem) => number | null) => {
     let totalScore = 0;

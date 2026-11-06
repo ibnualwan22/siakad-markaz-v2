@@ -1,29 +1,25 @@
 import { NextResponse } from 'next/server';
+import { getSantriSession } from '@/lib/santri-auth';
 import prisma from '@/lib/prisma';
 import { getActiveDufahName } from '@/lib/absensi';
 import { calcMapelNilaiAkhir, calcAkumulatif } from '@/lib/grade-calculator';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const namaQuery = searchParams.get('nama');
-    const dufahNama = searchParams.get('dufahNama');
-
-    if (!namaQuery) {
+    const session = await getSantriSession();
+    if (!session) {
       return NextResponse.json(
-        { success: false, message: 'Nama santri diperlukan (Misal: ?nama=Ahmad)' },
-        { status: 400 }
+        { success: false, message: 'Silakan masuk ke SIAKAD Markaz Arabiyah.' },
+        { status: 401, headers: { 'Cache-Control': 'private, no-store' } }
       );
     }
 
-    // Build the query where clause
-    const whereClause: any = {
-      santri: {
-        nama: {
-          contains: namaQuery,
-          mode: 'insensitive'
-        }
-      }
+    const { searchParams } = new URL(request.url);
+    const dufahNama = searchParams.get('dufahNama');
+
+    // A query parameter must never select another santri's private report.
+    const whereClause: { santriId: string; dufahNama?: string } = {
+      santriId: session.santriId,
     };
 
     // Kalau param dufahNama dikirim, cari spesifik dufah itu
@@ -80,7 +76,7 @@ export async function GET(request: Request) {
 
     if (!dataRiwayatList || dataRiwayatList.length === 0) {
       return NextResponse.json(
-        { success: false, message: 'Data santri dengan nama tersebut tidak ditemukan.' },
+        { success: false, message: 'Laporan santri belum tersedia.' },
         { status: 404 }
       );
     }
@@ -173,11 +169,11 @@ export async function GET(request: Request) {
       }))
     };
 
-    // Tambahkan header CORS khusus agar Flutter Mobile App / web local tester tidak kena block
+    // Academic responses are private and must not be cached.
     return NextResponse.json(responseData, {
       status: 200,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': 'private, no-store',
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
@@ -185,7 +181,7 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: 'Terjadi kesalahan sistem internal', error: error.message },
+      { success: false, message: 'Terjadi kesalahan sistem internal' },
       { status: 500 }
     );
   }
@@ -196,7 +192,7 @@ export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'private, no-store',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     },

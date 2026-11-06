@@ -39,75 +39,29 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ## API Documentation
 
-### Laporan Santri (Mobile App)
+### Portal SIAKAD Markaz Arabiyah (aplikasi)
 
-Endpoint ini digunakan untuk memuat semua riwayat laporan (akademik, absensi, kegiatan, tes) milik santri berdasarkan nama. Endpoint ini mengembalikan sekumpulan data dalam bentuk `Array` yang berisi riwayat dari seluruh term/Dufah yang pernah diikuti santri, serta menyertakan keterangan Dufah yang sedang berlangsung saat ini.
+Aplikasi Flutter di `sample-aplikasi` memakai layar native dan akun website yang sama.
+Login NIS melalui `/api/santri/auth/login` membuat cookie `santri-session`;
+`/api/santri/me` memberi profil, riwayat, ujian aktif dan hak menu santri.
+Halaman umum tidak memerlukan login. Tombol Halaman umum mempertahankan sesi.
 
-- **URL:** `/api/mobile/laporan-santri`
-- **Metode:** `GET`
-- **Content-Type:** `application/json`
+`GET /api/mobile/dokumen/{transkrip|syahadah|nadi}/{id}` memeriksa kepemilikan
+dan kelayakan sebelum mengembalikan templat cetak statis untuk pratinjau PDF di HP.
+Endpoint dokumen tidak mengirim editor, skrip web, atau kredensial ke aplikasi.
 
-#### Query Parameters
+Endpoint akademik lama /api/mobile/laporan-santri dan /api/mobile/hasil-tes kini
+memerlukan cookie santri-session yang valid. Tanpa sesi, respons adalah 401.
+Keduanya hanya mengembalikan data santri pemilik sesi; parameter nama tidak lagi
+digunakan untuk memilih santri. Laporan masih mendukung filter dufahNama opsional.
+Hasil tes hanya menampilkan data pemilik sesi pada Dufah aktif.
+Respons akademik menggunakan Cache-Control: private, no-store.
 
-| Parameter     | Tipe     | Wajib | Deskripsi |
-| :---          | :---     | :---  | :---      |
-| `nama`        | `String` | **Ya**    | String nama santri yang ingin dicari. Mendukung pencarian sebagian nama dan *case-insensitive* (tidak peka huruf besar/kecil). Contoh: `?nama=ahmad` |
-| `dufahNama`   | `String` | Tidak | Opsi untuk mendefinisikan pencarian riwayat pada rentang waktu (Dufah) yang spesifik. Jika dibiarkan kosong, maka sistem akan mereturn **semua** riwayat sekaligus. |
+Agenda dan konten Instagram tetap tersedia untuk halaman umum.
+Perubahan backend ini perlu diterapkan sebelum menganggap API akademik terlindungi
+di produksi; perubahan aplikasi saja tidak mengubah server yang sudah berjalan.
 
-#### Struktur Respon (Berhasil - 200 OK)
-
-```json
-{
-  "success": true,
-  "active_dufah": "Dufah 7",
-  "data": [
-    {
-      "id_riwayat": "cuid...",
-      "dufah": "Dufah 7",
-      "santri": {
-        "id": "S...",
-        "nama": "Ahmad Fulan",
-        "tempat_lahir": "...",
-        "tanggal_lahir": "..."
-      },
-      "akademik": {
-        "program": "Program A",
-        "kelas": "Kelas A1",
-        "status_kelulusan": "LULUS"
-      },
-      "nilai_per_mapel": [...],
-      "rekap_absen_per_usbu": [...],
-      "histori_absen_terbaru": {
-        "kelas": [...],
-        "sakan": [...],
-        "kegiatan": [...]
-      }
-    },
-    {
-      "id_riwayat": "cuid...",
-      "dufah": "Dufah 6",
-      "santri": {...},
-      "akademik": {...},
-      // Data lama...
-    }
-  ]
-}
-```
-
-#### Struktur Respon (Error 400 - Bad Request)
-```json
-{
-  "success": false,
-  "message": "Nama santri diperlukan (Misal: ?nama=Ahmad)"
-}
-```
-
-#### Struktur Respon (Error 404 - Not Found)
-```json
-{
-  "success": false,
-}
-```
+Uji sesi dan kepemilikan dokumen: `node --import tsx --test tests/*.test.ts`
 
 ### Agenda Rutinan (Mobile App)
 

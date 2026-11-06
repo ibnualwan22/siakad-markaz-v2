@@ -6,6 +6,8 @@ export async function GET(request: Request) {
   const session = await getSantriSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  if (!await prisma.anggotaLajnah.count({ where: { santriId: session.santriId } })) return NextResponse.json({ error: "Khusus anggota Lajnah" }, { status: 403 });
+
   try {
     const records = await prisma.pelanggarMukholif.findMany({
       where: {
@@ -33,6 +35,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getSantriSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!await prisma.anggotaLajnah.count({ where: { santriId: session.santriId } })) return NextResponse.json({ error: "Khusus anggota Lajnah" }, { status: 403 });
 
   try {
     const { pelanggarId, iqobType } = await request.json(); 

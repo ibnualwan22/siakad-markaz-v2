@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     if (!sesiId) return NextResponse.json({ error: "sesiId diperlukan" }, { status: 400 });
 
     const sesi = await prisma.sesiUjianSantri.findUnique({
-      where: { id: sesiId },
+      where: { id: sesiId, riwayat: { santriId: session.santriId } },
       select: {
         status: true,
         tambahanMenit: true,

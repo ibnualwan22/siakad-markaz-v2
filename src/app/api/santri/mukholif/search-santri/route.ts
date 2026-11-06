@@ -1,3 +1,4 @@
+import { bolehLapor } from "@/lib/santri-menu";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSantriSession } from "@/lib/santri-auth";
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!await bolehLapor(session.santriId)) return NextResponse.json({error:"Khusus Jasus atau Lajnah"},{status:403});
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q") || "";

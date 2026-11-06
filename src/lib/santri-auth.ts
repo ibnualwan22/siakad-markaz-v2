@@ -1,32 +1,6 @@
-import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-
-import { getJwtKey } from './jwt-secret';
-
-export type SantriSessionPayload = {
-  santriId: string;
-  nama: string;
-  isAktif: boolean;
-};
-
-export async function encryptSantriSession(payload: SantriSessionPayload) {
-  return await new SignJWT(payload as any)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(getJwtKey());
-}
-
-export async function decryptSantriSession(input: string): Promise<SantriSessionPayload | null> {
-  try {
-    const { payload } = await jwtVerify(input, getJwtKey(), {
-      algorithms: ['HS256'],
-    });
-    return payload as unknown as SantriSessionPayload;
-  } catch {
-    return null;
-  }
-}
+import { decryptSantriSession, encryptSantriSession, type SantriSessionPayload } from './santri-token';
+export { decryptSantriSession, encryptSantriSession, type SantriSessionPayload } from './santri-token';
 
 export async function getSantriSession(): Promise<SantriSessionPayload | null> {
   const cookieStore = await cookies();

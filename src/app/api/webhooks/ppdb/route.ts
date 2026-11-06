@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { POST as runGlobalSync } from "@/app/api/admin/sync-santri/route";
+import { jalankanSyncSantri } from "@/lib/sync-santri";
 
 const WEBHOOK_SECRET = process.env.PPDB_WEBHOOK_SECRET;
 
@@ -31,8 +31,21 @@ export async function POST(req: NextRequest) {
 
     // 3. Mode pemicu sync massal
     if (action === "sync_all") {
-      // Panggil fungsi POST dari route sync-santri secara langsung
-      return await runGlobalSync();
+      // Jalankan sync santri langsung dari lib (in-process, bukan lewat
+      // HTTP) — jadi penguncian auth di route sync-santri tidak
+      // memengaruhi webhook. Fase 7: logika sync ada di @/lib/sync-santri.
+      const hasil = await jalankanSyncSantri();
+      if (!hasil.success) {
+        return NextResponse.json({ error: hasil.error }, { status: hasil.status });
+      }
+      return NextResponse.json({
+        success: true,
+        syncedCount: hasil.syncedCount,
+        newRiwayatCount: hasil.newRiwayatCount,
+        newDufahCount: hasil.newDufahCount,
+        deactivatedCount: hasil.deactivatedCount,
+        timestamp: hasil.timestamp,
+      });
     }
 
     // 4. Mode update satu santri (push)

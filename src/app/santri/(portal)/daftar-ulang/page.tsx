@@ -753,12 +753,20 @@ export default function SantriDaftarUlangPage() {
                       <span className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>{prog.tglProgramFormatted}</span>
                     </div>
 
-                    {/* Harga: disembunyikan saat mode klaim */}
+                    {/* Harga: disembunyikan saat mode klaim; tampilkan harga setelah potongan 100k bila tanpa atribut */}
                     {!klaimTersedia && (
                       <div>
                         <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
-                          {prog.hargaFormatted}
+                          {isBeliAtribut
+                            ? prog.hargaFormatted
+                            : `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, prog.harga - 100000))}`}
                         </p>
+                        {!isBeliAtribut && (
+                          <p className="text-[11px] font-semibold mt-1" style={{ color: "var(--color-text-muted)" }}>
+                            <span style={{ textDecoration: "line-through" }}>{prog.hargaFormatted}</span>
+                            {" "}− Rp 100.000 (tanpa atribut)
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -989,6 +997,18 @@ export default function SantriDaftarUlangPage() {
                   <p className="text-sm font-bold truncate" style={{ color: "var(--color-text)" }}>
                     {selectedProgramData?.nama || "-"}
                   </p>
+                  {!klaimTersedia && selectedProgramData && (
+                    <p className="text-sm font-black mt-0.5" style={{ color: "var(--color-primary)" }}>
+                      {isBeliAtribut
+                        ? selectedProgramData.hargaFormatted
+                        : `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, selectedProgramData.harga - 100000))}`}
+                      {!isBeliAtribut && (
+                        <span className="text-[10px] font-semibold ml-1" style={{ color: "var(--color-text-muted)" }}>
+                          (tanpa atribut −100k)
+                        </span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 {klaimTersedia ? (
                   <button

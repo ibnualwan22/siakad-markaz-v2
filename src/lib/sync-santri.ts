@@ -1,4 +1,5 @@
 import prisma from "@/lib/prisma";
+import { buildProgramMaps, resolveProgramSiakad } from "@/lib/program-resolve";
 
 const PPDB_URL = process.env.NEXT_PUBLIC_PPDB_URL || "https://ppdb.markazarabiyah.site";
 
@@ -319,16 +320,17 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
         }
       }
 
-      // Map untuk matching program berdasarkan nama string dari PPDB
-      const allPrograms = await prisma.program.findMany({ select: { id: true, nama_indo: true } });
-      const programMap = new Map<string, string>();
-      allPrograms.forEach(p => {
-        programMap.set(p.nama_indo.toLowerCase().trim(), p.id);
-      });
+      // Map untuk matching program berdasarkan nama string dari PPDB.
+      // Nama PPDB tidak selalu sama dengan nama Siakad (mis. PPDB
+      // "Markaz Huffadz" vs Siakad "Hufadz") — resolveProgramSiakad memakai
+      // kategoriProgram PPDB sebagai fallback bila nama tak cocok dan
+      // kategorinya unik di Siakad (lihat lib/program-resolve).
+      const allPrograms = await prisma.program.findMany({ select: { id: true, nama_indo: true, kategori: true } });
+      const programMaps = buildProgramMaps(allPrograms);
 
       // ===== Fetch programAktif dari PPDB per-santri status endpoint =====
       // API bulk PPDB hanya mengembalikan programId (UUID PPDB, bukan SIAKAD).
-      // Endpoint /api/integrasi/siakad/status?nis=xxx mengembalikan "programAktif" sebagai NAMA string.
+      // Endpoint /api/integrasi/siakad/status?nis=xxx mengembalikan "programAktif" sebagai NAMA string + "kategoriProgram".
       const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
       const PPDB_SIAKAD_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
 
@@ -359,11 +361,10 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
               if (res.ok) {
                 const data = await res.json();
                 const progName = data?.data?.programAktif;
-                if (progName && typeof progName === 'string') {
-                  const mappedId = programMap.get(progName.toLowerCase().trim());
-                  if (mappedId) {
-                    santriProgramMap.set(s.id, mappedId);
-                  }
+                const kategoriProgram = data?.data?.kategoriProgram;
+                const mappedId = resolveProgramSiakad(programMaps, progName, kategoriProgram);
+                if (mappedId) {
+                  santriProgramMap.set(s.id, mappedId);
                 }
               }
             } catch {

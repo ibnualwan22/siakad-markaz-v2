@@ -35,6 +35,7 @@ function database(options: { status?: string; deadline?: Date | null; votes?: Vo
     locks: 0,
     active: true,
     voterDufah: "Dufah",
+    voterKategori: "REGULER",
     beforeVote: undefined as (() => Promise<void>) | undefined,
     beforeTally: undefined as (() => Promise<void>) | undefined,
     voteError: undefined as object | undefined,
@@ -71,6 +72,12 @@ function database(options: { status?: string; deadline?: Date | null; votes?: Vo
           findUnique: async ({ where }: { where: { id: string } }) => {
             locked();
             return { id: where.id, isAktif: state.active, dufahNama: state.voterDufah };
+          },
+        },
+        riwayatSantri: {
+          findFirst: async () => {
+            locked();
+            return { program: { kategori: state.voterKategori } };
           },
         },
         paslonLajnah: {
@@ -230,4 +237,14 @@ test("existing active-santri and same-dufah eligibility is preserved", async () 
   state.voterDufah = "Other";
   assert.deepEqual(await catatSuaraPemilihan(db, vote()), { error: "Kamu tidak terdaftar sebagai pemilih pada sesi ini", status: 403 });
   assert.equal(state.votes.length, 0);
+});
+
+test("Lajnah votes reject Turats program santri", async () => {
+  const { db, state } = database();
+  state.voterKategori = "TURATS";
+  assert.deepEqual(await catatSuaraPemilihan(db, vote()), { error: "Pemilihan Lajnah hanya untuk santri Markaz Arabiyah dan Markaz Hufadz", status: 403 });
+  assert.equal(state.votes.length, 0);
+  state.voterKategori = "REGULER";
+  assert.deepEqual(await catatSuaraPemilihan(db, vote()), { success: true });
+  assert.equal(state.votes.length, 1);
 });

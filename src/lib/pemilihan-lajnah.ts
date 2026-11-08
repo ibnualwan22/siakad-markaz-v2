@@ -138,6 +138,16 @@ export async function catatSuaraPemilihan(db: PrismaClient, input: VoteInput): P
       if (santri.dufahNama !== sesi.dufahNama) {
         return { error: "Kamu tidak terdaftar sebagai pemilih pada sesi ini", status: 403 };
       }
+      // Lajnah hanya untuk santri Markaz Arabiyah/Hufadz: riwayat berjalan
+      // pemilih tidak boleh ber-program kategori TURATS (mereka memilih
+      // lewat Pemilihan OSIM). Cermin dari guard OSIM di lib/pemilihan-osim.
+      const riwayatPemilih = await tx.riwayatSantri.findFirst({
+        where: { santriId: input.santriId, dufahNama: sesi.dufahNama },
+        include: { program: { select: { kategori: true } } },
+      });
+      if (riwayatPemilih?.program?.kategori === "TURATS") {
+        return { error: "Pemilihan Lajnah hanya untuk santri Markaz Arabiyah dan Markaz Hufadz", status: 403 };
+      }
       const now = new Date();
       if (waktuPemilihanHabis(sesi, now)) {
         await tutupSesiTerkunci(tx, sesi, now);

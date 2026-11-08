@@ -21,16 +21,16 @@ export async function getSantriMenu(santriId: string) {
     select: {
       dufahNama: true,
       riwayatRecords: {
-        select: { dufahNama: true, program: { select: { nama_indo: true, kategori: true } } },
+        select: { dufahNama: true, program: { select: { kategori: true } } },
       },
     },
   });
   const riwayatAktif = santriAktif?.riwayatRecords.find(
     (r) => r.dufahNama === santriAktif.dufahNama
   );
-  const isHufadz = (riwayatAktif?.program?.nama_indo || "")
-    .toLowerCase()
-    .includes("hufadz");
+  // Santri Markaz Hufadz: riwayat berjalan ber-program kategori HUFADZ
+  // (bukan dari nama program — nama bisa berubah, kategori stabil).
+  const isHufadz = riwayatAktif?.program?.kategori === "HUFADZ";
   // Santri Markaz Turats: riwayat berjalan ber-program kategori TURATS.
   const isTurats = riwayatAktif?.program?.kategori === "TURATS";
 

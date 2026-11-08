@@ -15,14 +15,14 @@ export async function GET() {
     select: {
       dufahNama: true,
       riwayatRecords: {
-        select: { dufahNama: true, program: { select: { nama_indo: true } } },
+        select: { dufahNama: true, program: { select: { kategori: true } } },
       },
     },
   });
   if (!santri) return NextResponse.json({ error: "Santri tidak ditemukan" }, { status: 404 });
 
   const riwayatAktif = santri.riwayatRecords.find((r) => r.dufahNama === santri.dufahNama);
-  const isHufadz = (riwayatAktif?.program?.nama_indo || "").toLowerCase().includes("hufadz");
+  const isHufadz = riwayatAktif?.program?.kategori === "HUFADZ";
   if (!isHufadz) {
     return NextResponse.json({ isHufadz: false, total: 0, terakhir: null, items: [] });
   }

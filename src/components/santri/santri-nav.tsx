@@ -23,12 +23,14 @@ import {
   MessageCircle,
   Images,
   Vote,
-  BookOpen
+  BookOpen,
+  Bell
 } from "lucide-react";
 import { useState } from "react";
 
 const baseNavItems = [
   { href: "/santri/dashboard", label: "Beranda", icon: LayoutDashboard },
+  { href: "/santri/pengumuman", label: "Pengumuman", icon: Bell },
   { href: "/santri/nilai", label: "Nilai", icon: FileText },
   { href: "/santri/ujian", label: "Ujian", icon: ClipboardCheck },
   { href: "/santri/qr-saya", label: "QR Saya", icon: QrCode },

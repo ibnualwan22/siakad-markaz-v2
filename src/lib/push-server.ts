@@ -83,6 +83,57 @@ export async function sendPushToStaff(
   return { sent, pruned };
 }
 
+// Kirim Web Push ke perangkat santri (portal web) — cerminan
+// sendPushToStaff, tapi membaca LanggananWebPushSantri (santri tidak punya
+// akun User). Dipakai pengumuman ke santri. Langganan mati (410/404)
+// dihapus dari tabel.
+export async function sendPushToSantriDevices(
+  payload: PushPayload,
+  santriIds: string[]
+): Promise<{ sent: number; failed: number; pruned: number }> {
+  if (!ensureVapid()) return { sent: 0, failed: 0, pruned: 0 };
+  if (santriIds.length === 0) return { sent: 0, failed: 0, pruned: 0 };
+  const subs = await prisma.langgananWebPushSantri.findMany({
+    where: { santriId: { in: santriIds } },
+  });
+  if (subs.length === 0) return { sent: 0, failed: 0, pruned: 0 };
+
+  const results = await Promise.allSettled(
+    subs.map(async (s) => {
+      try {
+        await webPush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          JSON.stringify(payload)
+        );
+        return "sent" as const;
+      } catch (e: unknown) {
+        const statusCode = (e as { statusCode?: number })?.statusCode;
+        if (statusCode === 410 || statusCode === 404) {
+          await prisma.langgananWebPushSantri
+            .delete({ where: { id: s.id } })
+            .catch(() => {});
+          return "pruned" as const;
+        }
+        console.warn(
+          "Push santri gagal:",
+          statusCode ?? (e as Error)?.message ?? "unknown"
+        );
+        return "failed" as const;
+      }
+    })
+  );
+
+  let sent = 0;
+  let failed = 0;
+  let pruned = 0;
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value === "sent") sent++;
+    if (r.status === "fulfilled" && r.value === "failed") failed++;
+    if (r.status === "fulfilled" && r.value === "pruned") pruned++;
+  }
+  return { sent, failed, pruned };
+}
+
 // Susun payload laporan absen sakan untuk sakan-sakan yang disubmit pada
 // aksi simpan ini, ditambah daftar sakan yang BELUM absen (keadaan setelah
 // simpan). Satu push per aksi simpan (bukan per sakan). Tanpa tag: tiap

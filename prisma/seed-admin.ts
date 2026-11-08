@@ -39,7 +39,8 @@ async function main() {
     'dashboard', 'absen_sakan', 'absen_kelas', 'absen_kegiatan', 
     'absen_pengajar', 'input_nilai', 'rekap_sakan', 'rekap_kelas', 
     'rekap_kegiatan', 'rekap_pengajar', 'manajemen_kelas', 
-    'manajemen_dufah', 'manajemen_user', 'syahadah', 'manajemen_konten'
+    'manajemen_dufah', 'manajemen_user', 'syahadah', 'manajemen_konten',
+    'notifikasi_kelola'
   ];
 
   for (const permission of defaultAdminPermissions) {

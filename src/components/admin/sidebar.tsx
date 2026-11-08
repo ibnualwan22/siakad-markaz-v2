@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe } from "lucide-react";
+import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe, Bell } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const navigationGroups = [
@@ -109,6 +109,7 @@ const navigationGroups = [
       { href: "/admin/denah-lokasi", label: "Denah Lokasi Sakan", icon: MapPin, permissionId: "pengaturan_kegiatan" },
       { href: "/admin/manajemen-konten/agenda", label: "Agenda Rutinan", icon: CalendarDays, permissionId: "agenda_rutinan" },
       { href: "/admin/manajemen-konten/instagram", label: "Konten Instagram", icon: Instagram, permissionId: "konten_instagram" },
+      { href: "/admin/notifikasi", label: "Notifikasi Pengumuman", icon: Bell, permissionId: "notifikasi_kelola" },
       { href: "/admin/arsip-galeri", label: "Arsip Galeri", icon: Images, permissionId: "arsip_galeri" },
       { href: "/admin/galeri", label: "Lihat Galeri", icon: Images },
     ]

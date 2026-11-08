@@ -115,6 +115,9 @@ model SantriInternal {
   nadiHufadzPesertaList NadiHufadzPeserta[]
   huffadzTasmiList      HuffadzTasmi[]
   munaqosahHufadzList   MunaqosahHufadz[]
+  perangkatSantriList       PerangkatSantri[]
+  langgananWebPushSantriList LanggananWebPushSantri[]
+  pengumumanDibacaList      PengumumanDibaca[]
 }
 
 // OTP verifikasi nomor WhatsApp santri (untuk Bot WA Siakad)
@@ -471,6 +474,149 @@ model RolePermission {
   permission String
 
   @@unique([role, permission])
+}
+
+// === Notifikasi Pengumuman (fitur 8 Nov 2026) ===
+// Pusat kendali pengumuman ke santri: template pengirim + jadwal kirim +
+// arsip pengumuman (inbox) + token FCM perangkat + langganan web-push.
+// Pengiriman ke LUAR aplikasi (push sistem) adalah jalur utama:
+// FCM untuk aplikasi Flutter, Web Push VAPID untuk portal web (iOS: PWA).
+// Inbox hanya arsip bila notifikasi terlewat.
+
+enum JenisJadwalNotifikasi {
+  HARIAN
+  MINGGUAN
+  TANGGAL
+}
+
+// Template pengirim: label bebas yang tampil sebagai pengirim pengumuman.
+// Admin memilih template dari dropdown saat membuat jadwal.
+model NotifikasiTemplate {
+  id        String   @id @default(cuid())
+  label     String
+  deskripsi String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  jadwalList NotifikasiJadwal[]
+}
+
+// Jadwal pengiriman pengumuman.
+// targetLembaga: JSON array LembagaId (["ARABIYAH","HUFADZ",...]); null = GLOBAL.
+// hari: 0=Ahad .. 6=Sabtu (konvensi JS getDay), hanya untuk MINGGUAN.
+// tanggal: hanya untuk TANGGAL (satu kali kirim, lalu nonaktif otomatis).
+// waktu: "HH:mm" WIB.
+model NotifikasiJadwal {
+  id            String                @id @default(cuid())
+  templateId    String
+  judul         String
+  isi           String
+  tautan        String?
+  targetLembaga Json?
+  jenisJadwal   JenisJadwalNotifikasi
+  hari          Int?
+  tanggal       DateTime?             @db.Date
+  waktu         String
+  isActive      Boolean               @default(true)
+  lastSentAt    DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  template      NotifikasiTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  pengumumanList Pengumuman[]
+  logList       NotifikasiLog[]
+
+  @@index([templateId])
+  @@index([isActive])
+}
+
+// Arsip pengumuman = isi inbox santri (portal web + aplikasi).
+// lembaga: JSON array LembagaId; null = global (semua lembaga).
+model Pengumuman {
+  id           String   @id @default(cuid())
+  judul        String
+  isi          String
+  tautan       String?
+  pengirimLabel String
+  lembaga      Json?
+  jadwalId     String?
+  dibuatAt     DateTime @default(now())
+
+  jadwal    NotifikasiJadwal? @relation(fields: [jadwalId], references: [id], onDelete: SetNull)
+  dibacaList PengumumanDibaca[]
+  logList   NotifikasiLog[]
+
+  @@index([dibuatAt])
+  @@index([jadwalId])
+}
+
+model PengumumanDibaca {
+  id           String   @id @default(cuid())
+  pengumumanId String
+  santriId     String
+  dibacaAt     DateTime @default(now())
+
+  pengumuman Pengumuman      @relation(fields: [pengumumanId], references: [id], onDelete: Cascade)
+  santri     SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@unique([pengumumanId, santriId])
+  @@index([santriId])
+}
+
+// Token FCM per perangkat santri (aplikasi Flutter). Satu perangkat = satu
+// baris; login ulang di perangkat yang sama = baris diperbarui (upsert token).
+// Token yang ditolak FCM (NotRegistered) dihapus saat pengiriman.
+model PerangkatSantri {
+  id         String   @id @default(cuid())
+  santriId   String
+  token      String   @unique
+  platform   String   @default("android")
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  santri SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@index([santriId])
+}
+
+// Langganan Web Push (VAPID) per santri — cerminan PushSubscription staf,
+// tapi terikat SantriInternal (santri tidak punya akun User). Dipakai untuk
+// push portal web (termasuk iOS bila portal dipasang sebagai PWA).
+model LanggananWebPushSantri {
+  id        String   @id @default(cuid())
+  santriId  String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  santri SantriInternal @relation(fields: [santriId], references: [id], onDelete: Cascade)
+
+  @@index([santriId])
+}
+
+// Satu baris per pengiriman (cron maupun kirim-sekarang).
+model NotifikasiLog {
+  id              String   @id @default(cuid())
+  jadwalId        String?
+  pengumumanId    String
+  targetLembaga   Json?
+  totalTarget     Int      @default(0)
+  suksesFCM       Int      @default(0)
+  gagalFCM        Int      @default(0)
+  suksesWebPush   Int      @default(0)
+  gagalWebPush    Int      @default(0)
+  fcmEnabled      Boolean  @default(false)
+  error           String?
+  sentAt          DateTime @default(now())
+
+  jadwal     NotifikasiJadwal? @relation(fields: [jadwalId], references: [id], onDelete: SetNull)
+  pengumuman Pengumuman        @relation(fields: [pengumumanId], references: [id], onDelete: Cascade)
+
+  @@index([jadwalId])
+  @@index([sentAt])
 }
 
 model PengajarSesi {

@@ -54,13 +54,20 @@ export function isFcmEnabled(): boolean {
 export type FcmSendResult = { sent: number; failed: number; pruned: number };
 
 // Kirim ke token-token perangkat (maks 500 per panggilan FCM).
+// Pesan DATA-ONLY (tanpa payload notification): aplikasi yang membangun
+// notifikasi sendiri (flutter_local_notifications, channel "pengumuman"
+// importance HIGH) supaya tampil sebagai heads-up di layar, judul
+// notifikasi = pengirim, dan judul pengumuman tampil tebal di tampilan
+// besar. Bila aplikasi belum diperbarui, pesan data tetap sampai ke
+// background handler tanpa tampil — santri tetap melihatnya di inbox.
 // Token yang ditolak FCM sebagai tidak terdaftar / tidak valid dihapus
 // dari PerangkatSantri supaya tidak terus dicoba.
 export async function sendFcmToTokens(
   tokens: { id: string; token: string }[],
   payload: {
-    title: string;
-    body: string;
+    pengirimLabel: string;
+    judul: string;
+    isi: string;
     url?: string;
     pengumumanId?: string;
   }
@@ -80,8 +87,10 @@ export async function sendFcmToTokens(
     try {
       const res = await messaging.sendEachForMulticast({
         tokens: chunk.map((t) => t.token),
-        notification: { title: payload.title, body: payload.body },
         data: {
+          pengirim: payload.pengirimLabel,
+          judul: payload.judul,
+          isi: payload.isi,
           url: payload.url ?? "/santri/pengumuman",
           pengumumanId: payload.pengumumanId ?? "",
         },

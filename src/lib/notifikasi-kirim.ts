@@ -129,8 +129,9 @@ export async function kirimPengumuman(input: {
         select: { id: true, token: true },
       });
       const r = await sendFcmToTokens(tokens, {
-        title: input.judul,
-        body: input.isi,
+        pengirimLabel: input.templateLabel,
+        judul: input.judul,
+        isi: input.isi,
         url,
         pengumumanId: pengumuman.id,
       });

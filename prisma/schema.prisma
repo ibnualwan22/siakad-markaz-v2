@@ -113,6 +113,7 @@ model SantriInternal {
   wifiEnabled           Boolean             @default(true) // Toggle akses WiFi per santri
   waOtpList             WaOtp[]
   nadiHufadzPesertaList NadiHufadzPeserta[]
+  tadribFununPesertaList TadribFununPeserta[]
   huffadzTasmiList      HuffadzTasmi[]
   munaqosahHufadzList   MunaqosahHufadz[]
   perangkatSantriList       PerangkatSantri[]
@@ -447,6 +448,8 @@ model User {
   wifiAccount             WifiAccount?
   nadiHufadzSetoranDisimak NadiHufadzSetoran[]
   nadiHufadzTasmiDiuji     NadiHufadzTasmi[]
+  tadribFununHadirDicatat  TadribFununHadir[]
+  tadribFununSyahadahDiterbitkan TadribFununPeserta[]
   huffadzTasmiDinilai      HuffadzTasmi[]
   munaqosahHufadzDiuji     MunaqosahHufadz[]
   pushSubscriptions         PushSubscription[]
@@ -1649,6 +1652,79 @@ model NadiHufadzAngket {
   updatedAt DateTime @updatedAt
 
   @@unique([santriId, dufahNama])
+  @@index([dufahNama])
+}
+
+// ===== TADRIB FUNUN =====
+// Ekstrakurikuler: admin membuat jenis (nama bebas), santri mendaftar
+// (satu jenis per dufah), admin mencatat absen; bila kehadiran >=
+// minHadir jenis itu, admin menerbitkan syahadah. Template syahadah
+// per jenis via TemplateCetak, programKey "tadrib-funun-<jenisId>".
+model TadribFununJenis {
+  id        String   @id @default(cuid())
+  nama      String   @unique
+  deskripsi String?
+  isActive  Boolean  @default(true)
+  // Batas minimal kehadiran (angka) untuk syahadah; default 5.
+  minHadir  Int      @default(5)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  peserta TadribFununPeserta[]
+
+  @@index([isActive])
+}
+
+// Peserta per dufah. Unique [santriId, dufahNama] membuat satu santri
+// hanya bisa ikut satu jenis per dufah; dufah baru otomatis bersih
+// tanpa reset manual.
+model TadribFununPeserta {
+  id        String   @id @default(cuid())
+  santriId  String
+  jenisId   String
+  dufahNama String
+  tanggalDaftar DateTime @default(now())
+  // Penerbitan syahadah oleh admin (bukan otomatis): null = belum diterbitkan.
+  syahadahDiterbitkanAt   DateTime?
+  syahadahDiterbitkanOleh String?
+  createdAt DateTime @default(now())
+
+  santri   SantriInternal   @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  jenis    TadribFununJenis @relation(fields: [jenisId], references: [id], onDelete: Restrict)
+  penerbit User?            @relation(fields: [syahadahDiterbitkanOleh], references: [id], onDelete: SetNull)
+  hadir    TadribFununHadir[]
+
+  @@unique([santriId, dufahNama])
+  @@index([dufahNama])
+  @@index([jenisId])
+}
+
+// Catatan absen. Satu record = satu kehadiran (maks 10 pertemuan).
+// pencatatId diisi otomatis dari admin yang submit.
+model TadribFununHadir {
+  id          String   @id @default(cuid())
+  pesertaId   String
+  pertemuanKe Int
+  tanggal     DateTime @db.Date
+  pencatatId  String?
+  createdAt   DateTime @default(now())
+
+  peserta  TadribFununPeserta @relation(fields: [pesertaId], references: [id], onDelete: Cascade)
+  pencatat User?              @relation(fields: [pencatatId], references: [id], onDelete: SetNull)
+
+  @@unique([pesertaId, pertemuanKe])
+  @@index([pesertaId])
+}
+
+// Status buka/tutup pendaftaran Tadrib Funun per dufah.
+// Satu baris per dufah untuk SEMUA jenis; tanpa baris = tertutup.
+model TadribFununPeriode {
+  id        String   @id @default(cuid())
+  dufahNama String   @unique
+  dibuka    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([dufahNama])
 }
 

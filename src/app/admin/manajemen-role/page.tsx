@@ -104,6 +104,8 @@ const AVAILABLE_PERMISSIONS = [
   { id: "pengaturan_syahadah_edit", label: "Pengaturan Syahadah (Aksi)", desc: "Akses mengubah pengaturan syahadah (Kop, TTD, Bobot Mapel)", category: "Divisi Syahadah", type: "aksi" },
   { id: "nadi_hufadz", label: "Nadi Hufadz (Lihat)", desc: "Akses melihat data Nadi Hufadz", category: "Divisi Syahadah", type: "lihat" },
   { id: "nadi_hufadz_edit", label: "Nadi Hufadz (Aksi)", desc: "Akses mengelola peserta, setoran, tasmi', template & cetak Nadi Hufadz", category: "Divisi Syahadah", type: "aksi" },
+  { id: "tadrib_funun", label: "Tadrib Funun (Lihat)", desc: "Akses melihat data Tadrib Funun", category: "Divisi Syahadah", type: "lihat" },
+  { id: "tadrib_funun_edit", label: "Tadrib Funun (Aksi)", desc: "Akses mengelola jenis, peserta, absen, penerbitan syahadah, template & cetak Tadrib Funun", category: "Divisi Syahadah", type: "aksi" },
   { id: "huffadz", label: "Tasmi' Huffadz (Lihat)", desc: "Akses melihat penilaian tasmi' Markaz Huffadz", category: "Divisi Syahadah", type: "lihat" },
   { id: "huffadz_edit", label: "Tasmi' Huffadz (Aksi)", desc: "Akses input, edit & hapus penilaian tasmi' Markaz Huffadz", category: "Divisi Syahadah", type: "aksi" },
   { id: "input_tasmi", label: "Input Tasmi' (Lihat)", desc: "Akses melihat status tasmi' santri dan input nilai kolom tasmi'", category: "Divisi Syahadah", type: "lihat" },

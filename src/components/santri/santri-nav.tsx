@@ -47,6 +47,7 @@ const baseNavItems = [
   { href: "/santri/arsip-galeri", label: "Galeri", icon: Images },
   { href: "/santri/pemilihan-lajnah", label: "Pemilihan", icon: Vote },
   { href: "/santri/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen },
+  { href: "/santri/tadrib-funun", label: "Tadrib Funun", icon: BookOpen },
   { href: "/santri/checkout", label: "Check Out", icon: DoorOpen },
 ];
 

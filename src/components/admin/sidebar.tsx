@@ -86,6 +86,7 @@ const navigationGroups = [
       { href: "/admin/haflah-wada", label: "Haflah Wada'", icon: Armchair, permissionId: "haflah_wada" },
       { href: "/admin/input-tasmi", label: "Input Tasmi'", icon: BookOpen, permissionId: "input_tasmi" },
       { href: "/admin/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen, permissionId: "nadi_hufadz" },
+      { href: "/admin/tadrib-funun", label: "Tadrib Funun", icon: Palette, permissionId: "tadrib_funun" },
       { href: "/admin/munaqosah-hufadz", label: "Munaqosah Hufadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/huffadz/tasmi", label: "Tasmi' Huffadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/input-nilai-kelas", label: "Input Nilai", icon: BookOpen, permissionId: "input_nilai" },

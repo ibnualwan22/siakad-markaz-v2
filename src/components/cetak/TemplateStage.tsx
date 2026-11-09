@@ -100,10 +100,10 @@ export function TemplateStage({
   );
   const keys = fieldKeys || Object.keys(FIELD_LABEL);
 
-  // Nadi, MC Akbarnas, & Munaqosah memakai teks Arab (rtl); syahadah
-  // organisasi memakai teks Latin (ltr).
+  // Nadi, MC Akbarnas, Munaqosah, & Tadrib Funun memakai teks Arab (rtl);
+  // syahadah organisasi memakai teks Latin (ltr).
   const fieldDirection =
-    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz"
+    programKey === "nadi-hufadz" || programKey === "akbarnas-mc" || programKey === "munaqosah-hufadz" || programKey.startsWith("tadrib-funun-")
       ? "rtl"
       : "ltr";
 

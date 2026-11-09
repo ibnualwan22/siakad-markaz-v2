@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
 import CetakTemplateClient from "@/components/cetak/CetakTemplateClient";
 import { formatJuzTeks, formatPeriodeArab, defaultFieldPositions } from "@/lib/nadi-hufadz";
+import { defaultFieldPositions as defaultFieldPositionsTadrib, resolveTadribFununMinHadir, templateProgramKey } from "@/lib/tadrib-funun";
 import { defaultFieldPositionsOrganisasi, getTanggalSyahadahOrganisasi } from "@/lib/syahadah-organisasi";
 import { getAkbarnasMcPrintData } from "@/lib/akbarnas-mc-data";
 
@@ -72,6 +73,48 @@ export default async function CetakTemplatePage({
     if (!data) notFound();
 
     return <CetakTemplateClient programKey={programKey} data={data} showPngButton />;
+  }
+
+  // --- Tadrib Funun ---
+  // programKey = "tadrib-funun-<jenisId>"; pesertaId = id TadribFununPeserta.
+  // Syarat cetak: kehadiran >= minHadir jenisnya DAN syahadah sudah
+  // diterbitkan admin. Isi: nama + tanggal periode saja.
+  if (programKey.startsWith("tadrib-funun-")) {
+    const hasPerm = await checkPermission("tadrib_funun");
+    if (!hasPerm) redirect("/login");
+
+    const peserta = await prisma.tadribFununPeserta.findUnique({
+      where: { id: pesertaId },
+      include: {
+        santri: { select: { nama: true } },
+        jenis: { select: { id: true, nama: true, minHadir: true } },
+        hadir: { orderBy: { pertemuanKe: "asc" }, select: { tanggal: true } },
+      },
+    });
+    if (!peserta) notFound();
+    if (templateProgramKey(peserta.jenis.id) !== programKey) notFound();
+    if (peserta.hadir.length < resolveTadribFununMinHadir(peserta.jenis.minHadir)) notFound();
+    if (!peserta.syahadahDiterbitkanAt) notFound();
+
+    const template = await prisma.templateCetak.findUnique({ where: { programKey } });
+
+    const tglDari = peserta.hadir.length
+      ? peserta.hadir[0].tanggal.toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+    const tglSampai = peserta.hadir.length
+      ? peserta.hadir[peserta.hadir.length - 1].tanggal.toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
+    const data = {
+      nama: peserta.santri.nama || "-",
+      periode: formatPeriodeArab(tglDari, tglSampai),
+      template: {
+        backgroundUrl: template?.backgroundUrl || null,
+        fieldPositions: (template?.fieldPositions as any) || defaultFieldPositionsTadrib(),
+      },
+    };
+
+    return <CetakTemplateClient programKey={programKey} data={data} />;
   }
 
   // --- Nadi Hufadz (tidak diubah) ---

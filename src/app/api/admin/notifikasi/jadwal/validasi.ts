@@ -6,12 +6,7 @@ import type { LembagaId } from "@/lib/lembaga";
 // targetLembaga = array LembagaId atau null (global); field hari/tanggal
 // yang tidak relevan dengan jenisJadwal dikosongkan (null).
 
-export type JadwalData = {
-  templateId: string;
-  judul: string;
-  isi: string;
-  tautan: string | null;
-  targetLembaga: LembagaId[] | null;
+export type JadwalData = IsiPengumumanData & {
   jenisJadwal: "HARIAN" | "MINGGUAN" | "TANGGAL";
   hari: number | null;
   tanggal: Date | null;
@@ -22,9 +17,19 @@ export type JadwalData = {
 const LEMBAGA_VALID = ["ARABIYAH", "TURATS", "HUFADZ"];
 const WAKTU_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-export function validasiJadwal(
+// Validasi isi pengumuman (dipakai jadwal DAN kirim-sekali): template
+// pengirim, judul, isi, tautan, target. Tanpa unsur jadwal.
+export type IsiPengumumanData = {
+  templateId: string;
+  judul: string;
+  isi: string;
+  tautan: string | null;
+  targetLembaga: LembagaId[] | null;
+};
+
+export function validasiIsiPengumuman(
   body: any
-): { ok: true; data: JadwalData } | { ok: false; error: string } {
+): { ok: true; data: IsiPengumumanData } | { ok: false; error: string } {
   const templateId =
     typeof body?.templateId === "string" ? body.templateId.trim() : "";
   if (!templateId) return { ok: false, error: "Template pengirim wajib dipilih" };
@@ -52,6 +57,16 @@ export function validasiJadwal(
     }
   }
   const targetLembaga = normalisasiTargetLembaga(targetRaw);
+
+  return { ok: true, data: { templateId, judul, isi, tautan, targetLembaga } };
+}
+
+export function validasiJadwal(
+  body: any
+): { ok: true; data: JadwalData } | { ok: false; error: string } {
+  const isi = validasiIsiPengumuman(body);
+  if (!isi.ok) return isi;
+  const data = isi.data;
 
   const jenisJadwal = body?.jenisJadwal;
   if (!["HARIAN", "MINGGUAN", "TANGGAL"].includes(jenisJadwal)) {
@@ -89,11 +104,7 @@ export function validasiJadwal(
   return {
     ok: true,
     data: {
-      templateId,
-      judul,
-      isi,
-      tautan,
-      targetLembaga,
+      ...data,
       jenisJadwal,
       hari,
       tanggal,

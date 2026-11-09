@@ -45,6 +45,17 @@ type LogItem = {
   pengumuman: { id: string; judul: string; pengirimLabel: string };
 };
 
+// Pengumuman sekali-kirim (tanpa jadwal). `lembaga` = target (null = global).
+type SekaliItem = {
+  id: string;
+  judul: string;
+  isi: string;
+  tautan: string | null;
+  pengirimLabel: string;
+  lembaga: string[] | null;
+  dibuatAt: string;
+};
+
 const HARI_LABEL = ["Ahad", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const LEMBAGA_OPSI = [
   { id: "ARABIYAH", label: "Markaz Arabiyah" },
@@ -80,7 +91,7 @@ const inputCls =
 const labelCls = "block space-y-1.5 text-sm font-semibold text-[var(--color-text)]";
 
 export function NotifikasiClient() {
-  const [tab, setTab] = useState<"jadwal" | "template" | "riwayat">("jadwal");
+  const [tab, setTab] = useState<"jadwal" | "sekali" | "template" | "riwayat">("jadwal");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [jadwalList, setJadwalList] = useState<Jadwal[]>([]);
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -104,6 +115,16 @@ export function NotifikasiClient() {
   const [fAktif, setFAktif] = useState(true);
   const [kirimId, setKirimId] = useState<string | null>(null);
 
+  // --- Kirim sekali ---
+  const [sekaliList, setSekaliList] = useState<SekaliItem[]>([]);
+  const [sTemplateId, setSTemplateId] = useState("");
+  const [sJudul, setSJudul] = useState("");
+  const [sIsi, setSIsi] = useState("");
+  const [sTautan, setSTautan] = useState("");
+  const [sGlobal, setSGlobal] = useState(true);
+  const [sTarget, setSTarget] = useState<string[]>([]);
+  const [kirimUlangId, setKirimUlangId] = useState<string | null>(null);
+
   // --- Modal template ---
   const [templateModal, setTemplateModal] = useState(false);
   const [editTemplateId, setEditTemplateId] = useState<string | null>(null);
@@ -126,6 +147,11 @@ export function NotifikasiClient() {
     if (res.ok) setLogs(await res.json());
   };
 
+  const muatSekali = async () => {
+    const res = await fetch("/api/admin/notifikasi/sekali");
+    if (res.ok) setSekaliList(await res.json());
+  };
+
   useEffect(() => {
     (async () => {
       setMemuat(true);
@@ -136,8 +162,18 @@ export function NotifikasiClient() {
 
   useEffect(() => {
     if (tab === "riwayat") void muatLog();
+    if (tab === "sekali") void muatSekali();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, logLimit]);
+
+  // Pilih template aktif pertama sebagai pengirim default form sekali-kirim.
+  useEffect(() => {
+    if (!sTemplateId) {
+      const pertama = templates.find((t) => t.isActive);
+      if (pertama) setSTemplateId(pertama.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templates]);
 
   // ---------- Jadwal ----------
   const bukaModalJadwal = (j?: Jadwal) => {
@@ -265,6 +301,80 @@ export function NotifikasiClient() {
     }
   };
 
+  // ---------- Kirim sekali ----------
+  const kirimSekali = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (
+      !confirm(
+        `Kirim pengumuman "${sJudul}" sekarang ke ${sGlobal ? "Global (semua lembaga)" : labelTarget(sTarget)}?`
+      )
+    )
+      return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/notifikasi/kirim-sekali", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateId: sTemplateId,
+          judul: sJudul,
+          isi: sIsi,
+          tautan: sTautan || null,
+          targetLembaga: sGlobal ? null : sTarget,
+        }),
+      });
+      if (res.ok) {
+        const hasil = await res.json();
+        alert(
+          `Terkirim ke ${hasil.totalTarget} santri.\nFCM: ${hasil.suksesFCM} sukses / ${hasil.gagalFCM} gagal${hasil.fcmEnabled ? "" : " (FCM belum aktif)"}.\nWeb push: ${hasil.suksesWebPush} sukses / ${hasil.gagalWebPush} gagal.${hasil.error ? `\nCatatan: ${hasil.error}` : ""}`
+        );
+        setSJudul("");
+        setSIsi("");
+        setSTautan("");
+        await muatSekali();
+      } else {
+        alert(await bacaError(res, "Gagal mengirim pengumuman."));
+      }
+    } catch {
+      alert("Terjadi kesalahan.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const kirimUlang = async (item: SekaliItem) => {
+    if (
+      !confirm(
+        `Kirim ulang pengumuman "${item.judul}" ke ${labelTarget(item.lembaga)}? Isi yang sama akan terkirim sebagai pengumuman baru.`
+      )
+    )
+      return;
+    setKirimUlangId(item.id);
+    try {
+      const res = await fetch(`/api/admin/notifikasi/sekali/${item.id}/kirim-ulang`, { method: "POST" });
+      if (res.ok) {
+        const hasil = await res.json();
+        alert(
+          `Terkirim ke ${hasil.totalTarget} santri.\nFCM: ${hasil.suksesFCM} sukses / ${hasil.gagalFCM} gagal${hasil.fcmEnabled ? "" : " (FCM belum aktif)"}.\nWeb push: ${hasil.suksesWebPush} sukses / ${hasil.gagalWebPush} gagal.${hasil.error ? `\nCatatan: ${hasil.error}` : ""}`
+        );
+        await muatSekali();
+      } else {
+        alert(await bacaError(res, "Gagal mengirim ulang pengumuman."));
+      }
+    } catch {
+      alert("Terjadi kesalahan.");
+    } finally {
+      setKirimUlangId(null);
+    }
+  };
+
+  const toggleTargetSekali = (lembagaId: string) => {
+    setSGlobal(false);
+    setSTarget((prev) =>
+      prev.includes(lembagaId) ? prev.filter((t) => t !== lembagaId) : [...prev, lembagaId]
+    );
+  };
+
   const toggleTarget = (lembagaId: string) => {
     setFGlobal(false);
     setFTarget((prev) =>
@@ -332,6 +442,7 @@ export function NotifikasiClient() {
 
   const tabs = [
     { id: "jadwal" as const, label: "Jadwal", icon: CalendarDays },
+    { id: "sekali" as const, label: "Kirim Sekali", icon: Send },
     { id: "template" as const, label: "Template Pengirim", icon: LayoutList },
     { id: "riwayat" as const, label: "Riwayat", icon: History },
   ];
@@ -458,6 +569,130 @@ export function NotifikasiClient() {
                   {jadwalList.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-8 text-center text-[var(--color-text-muted)]">Belum ada jadwal pengumuman.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============ TAB KIRIM SEKALI ============ */}
+      {tab === "sekali" && !memuat && (
+        <div className="space-y-6">
+          <div className="neu-card-white p-6">
+            <form onSubmit={kirimSekali} className="space-y-5">
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Pengumuman sekali kirim — langsung terkirim saat tombol ditekan, tanpa jadwal. Riwayatnya tersimpan di bawah dan bisa dikirim ulang kapan saja.
+              </p>
+              <label className={labelCls}>
+                <span>Template Pengirim</span>
+                <select value={sTemplateId} onChange={(e) => setSTemplateId(e.target.value)} required className={inputCls}>
+                  <option value="" disabled>Pilih pengirim...</option>
+                  {templates.filter((t) => t.isActive).map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className={labelCls}>
+                <span>Judul Pengumuman</span>
+                <input type="text" required value={sJudul} onChange={(e) => setSJudul(e.target.value)} className={inputCls} />
+              </label>
+
+              <label className={labelCls}>
+                <span>Isi Pengumuman</span>
+                <textarea rows={4} required value={sIsi} onChange={(e) => setSIsi(e.target.value)} className={`${inputCls} resize-none`} />
+              </label>
+
+              <label className={labelCls}>
+                <span>Tautan (opsional)</span>
+                <input type="text" value={sTautan} onChange={(e) => setSTautan(e.target.value)} placeholder="/santri/pengumuman atau https://..." className={inputCls} />
+              </label>
+
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-[var(--color-text)]">Target Lembaga</p>
+                <label className="flex items-center gap-3 text-sm font-bold cursor-pointer">
+                  <input type="checkbox" checked={sGlobal} onChange={(e) => { setSGlobal(e.target.checked); if (e.target.checked) setSTarget([]); }} className="h-5 w-5 rounded text-[var(--color-primary)]" />
+                  Global (semua lembaga)
+                </label>
+                <div className="flex flex-wrap gap-4 pl-8">
+                  {LEMBAGA_OPSI.map((o) => (
+                    <label key={o.id} className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input type="checkbox" checked={!sGlobal && sTarget.includes(o.id)} onChange={() => toggleTargetSekali(o.id)} className="h-5 w-5 rounded text-[var(--color-primary)]" />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-[var(--color-text-subtle)]">Memilih ketiga lembaga sama dengan Global. Bila tidak ada yang dicentang, target dianggap Global.</p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading || templates.filter((t) => t.isActive).length === 0}
+                  className="flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 py-2.5 text-sm font-bold text-white transition hover:bg-[var(--color-primary-dark)] shadow-sm disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" /> {loading ? "Mengirim..." : "Kirim Sekarang"}
+                </button>
+              </div>
+            </form>
+          </div>
+          {templates.filter((t) => t.isActive).length === 0 && (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Belum ada template pengirim yang aktif — buat dulu di tab &quot;Template Pengirim&quot;.
+            </p>
+          )}
+
+          <div className="overflow-hidden neu-card-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-[var(--color-surface-dark)] text-left text-sm">
+                <thead className="bg-[var(--color-secondary)] font-bold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                  <tr>
+                    <th className="px-6 py-4">Pengumuman</th>
+                    <th className="px-6 py-4">Pengirim / Target</th>
+                    <th className="px-6 py-4">Terkirim</th>
+                    <th className="px-6 py-4 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-surface)] text-[var(--color-text)]">
+                  {sekaliList.map((item) => (
+                    <tr key={item.id} className="hover:bg-[var(--color-secondary)]/80 align-top">
+                      <td className="px-6 py-4">
+                        <p className="font-bold text-[var(--color-text)]">{item.judul}</p>
+                        <p className="mt-1 text-xs text-[var(--color-text-muted)] line-clamp-2">{item.isi}</p>
+                        {item.tautan && (
+                          <p className="mt-1 text-xs text-[var(--color-primary)] truncate max-w-xs">{item.tautan}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="font-medium flex items-center gap-1.5">
+                          <Bell className="w-3.5 h-3.5 text-[var(--color-text-subtle)]" />
+                          {item.pengirimLabel}
+                        </p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">{labelTarget(item.lembaga)}</p>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-[var(--color-text-muted)] whitespace-nowrap">
+                        {format(new Date(item.dibuatAt), "dd MMM yyyy HH:mm", { locale: idLocale })}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => kirimUlang(item)}
+                            disabled={kirimUlangId === item.id}
+                            title="Kirim ulang isi yang sama"
+                            className="flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-2 text-xs font-bold text-white hover:bg-[var(--color-primary-dark)] disabled:opacity-50"
+                          >
+                            {kirimUlangId === item.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Kirim lagi
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {sekaliList.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-[var(--color-text-muted)]">Belum ada pengumuman sekali-kirim.</td>
                     </tr>
                   )}
                 </tbody>

@@ -19,6 +19,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Data tidak lengkap" }, { status: 400 });
     }
 
+    // Izin Harian dan Ta'birot hanya dibuat admin (halaman admin),
+    // bukan dari portal santri — pengajuan santri hanya Keluar Pare
+    // dan Berhari-hari.
+    if (tipeIzin === "HARIAN" || tipeIzin === "TABIROT") {
+      return NextResponse.json(
+        { error: "Izin Harian dan Ta'birot hanya dapat dibuat oleh admin" },
+        { status: 403 }
+      );
+    }
+
     const tglMulai = parseWibDateString(tanggalMulai);
     const tglSelesai = tanggalSelesai ? parseWibDateString(tanggalSelesai) : null;
 

@@ -22,6 +22,22 @@ function hitungRekap(records: { status: string }[]) {
   };
 }
 
+// Ubudiyah punya status sendiri (bukan HADIR/IZIN/SAKIT/ALPHA):
+// tepat waktu = TEPAT_WAKTU (salat) + HADIR (halaqoh),
+// masbuq = MASBUQ_1..4, ghoib = GHOIB + TIDAK_HADIR (halaqoh).
+function hitungRekapUbudiyah(records: { status: string }[]) {
+  return {
+    tepatWaktu: records.filter(
+      (r) => r.status === 'TEPAT_WAKTU' || r.status === 'HADIR'
+    ).length,
+    masbuq: records.filter((r) => r.status.startsWith('MASBUQ_')).length,
+    ghoib: records.filter(
+      (r) => r.status === 'GHOIB' || r.status === 'TIDAK_HADIR'
+    ).length,
+    total: records.length,
+  };
+}
+
 export async function getSantriOverview(santriId:string) {
   try {
     const santri = await prisma.santriInternal.findUnique({
@@ -53,6 +69,23 @@ export async function getSantriOverview(santriId:string) {
 
     if (!santri) {
       return NextResponse.json({ error: 'Data santri tidak ditemukan' }, { status: 404 });
+    }
+
+    // UbudiyahHadir tidak punya relasi di schema (tanpa back-relation),
+    // jadi diambil terpisah lalu dikelompokkan per riwayatId.
+    const riwayatIds = santri.riwayatRecords.map((r) => r.id);
+    const ubudiyahRows =
+      riwayatIds.length > 0
+        ? await prisma.ubudiyahHadir.findMany({
+            where: { riwayatId: { in: riwayatIds } },
+            orderBy: { tanggal: 'desc' },
+          })
+        : [];
+    const ubudiyahByRiwayat = new Map<string, typeof ubudiyahRows>();
+    for (const row of ubudiyahRows) {
+      const list = ubudiyahByRiwayat.get(row.riwayatId) ?? [];
+      list.push(row);
+      ubudiyahByRiwayat.set(row.riwayatId, list);
     }
 
     // Fix lexicographical sort issues (e.g. "Dufah 91" vs "Duf'ah 92") by sorting numerically
@@ -238,6 +271,9 @@ export async function getSantriOverview(santriId:string) {
         rekapAbsenSakan: hitungRekap(riwayat.absenSakanList),
         rekapAbsenKegiatan: hitungRekap(riwayat.absenKegiatanList),
         rekapAbsenTabirot: hitungRekap(santri.absenTabirotList),
+        rekapAbsenUbudiyah: hitungRekapUbudiyah(
+          ubudiyahByRiwayat.get(riwayat.id) ?? []
+        ),
 
         // Detail absensi
         absenKelas: riwayat.absenKelasList.map((a) => ({
@@ -261,6 +297,12 @@ export async function getSantriOverview(santriId:string) {
           tanggal: a.tanggal,
           status: a.status,
           namaKelompok: `${a.kelompok.tempat} (Bulan ke-${a.kelompok.bulanKe})`,
+          keterangan: a.keterangan,
+        })),
+        absenUbudiyah: (ubudiyahByRiwayat.get(riwayat.id) ?? []).map((a) => ({
+          tanggal: a.tanggal,
+          kegiatan: a.kegiatan,
+          status: a.status,
           keterangan: a.keterangan,
         })),
 

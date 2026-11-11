@@ -8,6 +8,7 @@ import {
   UBUDIYAH_STATUS_LABEL,
   UBUDIYAH_STATUS_OPTIONS,
   isUbudiyahKeteranganRequired,
+  isUbudiyahMasbuq,
 } from "@/lib/ubudiyah";
 
 type SantriRow = {
@@ -62,6 +63,8 @@ export default function UbudiyahSantriPage() {
   const [simpanLoading, setSimpanLoading] = useState(false);
   const [simpanError, setSimpanError] = useState("");
   const [simpanSukses, setSimpanSukses] = useState("");
+  // Kegiatan yang nilainya sudah diubah tapi belum disimpan.
+  const [dirty, setDirty] = useState<Set<UbudiyahKegiatan>>(new Set());
 
   const load = async (initial = false) => {
     if (initial) setLoading(true);
@@ -116,6 +119,7 @@ export default function UbudiyahSantriPage() {
             : prev[`${kegiatan}:${riwayatId}`]?.keterangan ?? "",
       },
     }));
+    setDirty((prev) => new Set(prev).add(kegiatan));
     setSimpanError("");
     setSimpanSukses("");
   };
@@ -128,6 +132,31 @@ export default function UbudiyahSantriPage() {
         keterangan,
       },
     }));
+    setDirty((prev) => new Set(prev).add(kegiatan));
+  };
+
+  // Isi semua santri sekaligus dengan status default kegiatan ini
+  // (Tepat waktu untuk shalat, Hadir untuk Halaqoh) — Qism tinggal
+  // mengubah yang masbuq / ghoib / tidak hadir saja.
+  const isiSemua = () => {
+    if (!info) return;
+    const statusMassal =
+      kegiatan === UbudiyahKegiatan.HALAQOH
+        ? UbudiyahStatus.HADIR
+        : UbudiyahStatus.TEPAT_WAKTU;
+    setNilai((prev) => {
+      const next = { ...prev };
+      for (const s of info.santriList) {
+        next[`${kegiatan}:${s.riwayatId}`] = {
+          status: statusMassal,
+          keterangan: "",
+        };
+      }
+      return next;
+    });
+    setDirty((prev) => new Set(prev).add(kegiatan));
+    setSimpanError("");
+    setSimpanSukses("");
   };
 
   const simpan = async () => {
@@ -193,7 +222,12 @@ export default function UbudiyahSantriPage() {
       setSimpanSukses(
         `Absen ${UBUDIYAH_KEGIATAN_LABEL[kegiatan]} tersimpan (${absenList.length} santri).`
       );
-      load();
+      await load();
+      setDirty((prev) => {
+        const next = new Set(prev);
+        next.delete(kegiatan);
+        return next;
+      });
     } catch (e: any) {
       setSimpanError(e.message || "Gagal menyimpan absen");
     } finally {
@@ -237,6 +271,33 @@ export default function UbudiyahSantriPage() {
   const terisi = info.santriList.filter(
     (s) => nilai[`${kegiatan}:${s.riwayatId}`]?.status
   ).length;
+  const jmlTepat = info.santriList.filter((s) => {
+    const st = nilai[`${kegiatan}:${s.riwayatId}`]?.status;
+    return st === UbudiyahStatus.TEPAT_WAKTU || st === UbudiyahStatus.HADIR;
+  }).length;
+  const jmlMasbuq = info.santriList.filter((s) => {
+    const st = nilai[`${kegiatan}:${s.riwayatId}`]?.status;
+    return st !== "" && st !== undefined && isUbudiyahMasbuq(st);
+  }).length;
+  const jmlGhoib = info.santriList.filter((s) => {
+    const st = nilai[`${kegiatan}:${s.riwayatId}`]?.status;
+    return st === UbudiyahStatus.GHOIB || st === UbudiyahStatus.TIDAK_HADIR;
+  }).length;
+  const ringkasan =
+    kegiatan === UbudiyahKegiatan.HALAQOH
+      ? [
+          jmlTepat > 0 ? `${jmlTepat} hadir` : "",
+          jmlGhoib > 0 ? `${jmlGhoib} tidak hadir` : "",
+        ]
+          .filter(Boolean)
+          .join(" • ")
+      : [
+          jmlTepat > 0 ? `${jmlTepat} tepat waktu` : "",
+          jmlMasbuq > 0 ? `${jmlMasbuq} masbuq` : "",
+          jmlGhoib > 0 ? `${jmlGhoib} ghoib` : "",
+        ]
+          .filter(Boolean)
+          .join(" • ");
 
   return (
     <div className="space-y-6 p-4 max-w-4xl mx-auto">
@@ -254,23 +315,31 @@ export default function UbudiyahSantriPage() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {UBUDIYAH_KEGIATAN_ORDER.map((k) => (
-          <button
-            key={k}
-            onClick={() => {
-              setKegiatan(k);
-              setSimpanError("");
-              setSimpanSukses("");
-            }}
-            className={`px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors ${
-              kegiatan === k
-                ? "bg-emerald-600 text-white border-emerald-600"
-                : "bg-white text-slate-600 hover:border-emerald-600"
-            }`}
-          >
-            {UBUDIYAH_KEGIATAN_LABEL[k]}
-          </button>
-        ))}
+        {UBUDIYAH_KEGIATAN_ORDER.map((k) => {
+          const tersimpan = Object.keys(info.absenHariIni[k] || {}).length;
+          const sudahSimpan =
+            info.santriList.length > 0 &&
+            tersimpan >= info.santriList.length;
+          const adaPerubahan = dirty.has(k);
+          return (
+            <button
+              key={k}
+              onClick={() => {
+                setKegiatan(k);
+                setSimpanError("");
+                setSimpanSukses("");
+              }}
+              className={`px-4 py-2.5 text-sm font-bold rounded-xl border transition-colors ${
+                kegiatan === k
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-white text-slate-600 hover:border-emerald-600"
+              }`}
+            >
+              {UBUDIYAH_KEGIATAN_LABEL[k]}
+              {sudahSimpan && !adaPerubahan ? " ✓" : adaPerubahan ? " •" : ""}
+            </button>
+          );
+        })}
       </div>
 
       {info.santriList.length === 0 ? (
@@ -279,68 +348,102 @@ export default function UbudiyahSantriPage() {
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-500">
-            {UBUDIYAH_KEGIATAN_LABEL[kegiatan]} — {terisi}/
-            {info.santriList.length} santri sudah terisi
-          </p>
-          <div className="space-y-3">
-            {info.santriList.map((s) => {
-              const n = nilai[`${kegiatan}:${s.riwayatId}`] ?? {
-                status: "" as const,
-                keterangan: "",
-              };
-              const perluKeterangan =
-                n.status !== "" && isUbudiyahKeteranganRequired(n.status);
-              return (
-                <div
-                  key={s.riwayatId}
-                  className="bg-white rounded-2xl border p-4 space-y-3"
-                >
-                  <p className="font-bold">
-                    {s.nama}{" "}
-                    {s.kategori === "KSU" && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                        KSU
-                      </span>
-                    )}
-                  </p>
-                  <select
-                    value={n.status}
-                    onChange={(e) =>
-                      setStatus(
-                        s.riwayatId,
-                        e.target.value as UbudiyahStatus | ""
-                      )
-                    }
-                    className="w-full px-3 py-2.5 border rounded-xl text-sm bg-white"
-                  >
-                    <option value="">Pilih status...</option>
-                    {UBUDIYAH_STATUS_OPTIONS[kegiatan].map((st) => (
-                      <option key={st} value={st}>
-                        {UBUDIYAH_STATUS_LABEL[st]}
-                      </option>
-                    ))}
-                  </select>
-                  {perluKeterangan && (
-                    <div>
-                      <input
-                        type="text"
-                        value={n.keterangan}
-                        onChange={(e) =>
-                          setKeterangan(s.riwayatId, e.target.value)
-                        }
-                        placeholder="Keterangan (wajib diisi)"
-                        className="w-full px-3 py-2.5 border rounded-xl text-sm bg-white"
-                      />
-                      <p className="text-xs text-slate-500 mt-1">
-                        Keterangan wajib diisi bila status bukan tepat waktu /
-                        hadir.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-slate-500">
+                {UBUDIYAH_KEGIATAN_LABEL[kegiatan]} — {terisi}/
+                {info.santriList.length} santri sudah terisi
+                {ringkasan ? ` • ${ringkasan}` : ""}
+              </p>
+              <button
+                type="button"
+                onClick={isiSemua}
+                className="px-3 py-1.5 rounded-lg bg-white border text-xs font-bold text-emerald-700 hover:border-emerald-600"
+              >
+                {kegiatan === UbudiyahKegiatan.HALAQOH
+                  ? "Semua hadir"
+                  : "Semua tepat waktu"}
+              </button>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-emerald-600 transition-all"
+                style={{
+                  width: `${
+                    info.santriList.length
+                      ? Math.round((terisi / info.santriList.length) * 100)
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl border overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="bg-slate-50 text-left">
+                <tr>
+                  <th className="p-3 font-bold">Nama</th>
+                  <th className="p-3 font-bold w-44">Status</th>
+                  <th className="p-3 font-bold">Keterangan</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {info.santriList.map((s) => {
+                  const n = nilai[`${kegiatan}:${s.riwayatId}`] ?? {
+                    status: "" as const,
+                    keterangan: "",
+                  };
+                  const perluKeterangan =
+                    n.status !== "" && isUbudiyahKeteranganRequired(n.status);
+                  return (
+                    <tr key={s.riwayatId}>
+                      <td className="p-3 font-semibold">
+                        {s.nama}{" "}
+                        {s.kategori === "KSU" && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            KSU
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <select
+                          value={n.status}
+                          onChange={(e) =>
+                            setStatus(
+                              s.riwayatId,
+                              e.target.value as UbudiyahStatus | ""
+                            )
+                          }
+                          className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[150px]"
+                        >
+                          <option value="">Pilih status...</option>
+                          {UBUDIYAH_STATUS_OPTIONS[kegiatan].map((st) => (
+                            <option key={st} value={st}>
+                              {UBUDIYAH_STATUS_LABEL[st]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        {perluKeterangan ? (
+                          <input
+                            type="text"
+                            value={n.keterangan}
+                            onChange={(e) =>
+                              setKeterangan(s.riwayatId, e.target.value)
+                            }
+                            placeholder="Keterangan (wajib diisi)"
+                            className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[160px]"
+                          />
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           {simpanError && (
@@ -353,15 +456,22 @@ export default function UbudiyahSantriPage() {
               {simpanSukses}
             </p>
           )}
-          <button
-            onClick={simpan}
-            disabled={simpanLoading || info.santriList.length === 0}
-            className="w-full px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {simpanLoading
-              ? "Menyimpan..."
-              : `Simpan Absen ${UBUDIYAH_KEGIATAN_LABEL[kegiatan]}`}
+          <div className="sticky bottom-24 lg:bottom-6 z-30 bg-white rounded-2xl border shadow-lg px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-500 min-w-0">
+              {UBUDIYAH_KEGIATAN_LABEL[kegiatan]} — {terisi}/
+              {info.santriList.length} terisi
+              {dirty.has(kegiatan) ? " • belum disimpan" : ""}
+            </p>
+            <button
+              onClick={simpan}
+              disabled={simpanLoading || info.santriList.length === 0}
+              className="shrink-0 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {simpanLoading
+                ? "Menyimpan..."
+                : `Simpan ${UBUDIYAH_KEGIATAN_LABEL[kegiatan]}`}
           </button>
+          </div>
         </>
       )}
     </div>

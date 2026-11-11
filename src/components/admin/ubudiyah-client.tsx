@@ -7,6 +7,7 @@ import {
   UBUDIYAH_KEGIATAN_LABEL,
   UBUDIYAH_KEGIATAN_ORDER,
   UBUDIYAH_STATUS_LABEL,
+  isUbudiyahMasbuq,
 } from "@/lib/ubudiyah";
 
 type QismRow = {
@@ -56,6 +57,20 @@ function formatTanggalId(dateStr: string): string {
   return `${Number(m[3])} ${bulan} ${m[1]}`;
 }
 
+/** Warna badge status rekap: hijau = tepat waktu/hadir, kuning = masbuq, merah = ghoib/tidak hadir. */
+function statusBadgeClass(status: UbudiyahStatus): string {
+  switch (status) {
+    case UbudiyahStatus.TEPAT_WAKTU:
+    case UbudiyahStatus.HADIR:
+      return "bg-emerald-100 text-emerald-800";
+    case UbudiyahStatus.GHOIB:
+    case UbudiyahStatus.TIDAK_HADIR:
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-amber-100 text-amber-800";
+  }
+}
+
 export default function UbudiyahClient({
   dufahAktif,
   santriAktif,
@@ -75,6 +90,10 @@ export default function UbudiyahClient({
   const [pilihSantri, setPilihSantri] = useState<Set<string>>(new Set());
   const [tambahLoading, setTambahLoading] = useState(false);
   const [nonaktifLoading, setNonaktifLoading] = useState<string | null>(null);
+  // Semua Qism dufah aktif — untuk kartu ringkasan per sakan di layar awal.
+  const [semuaQism, setSemuaQism] = useState<QismRow[]>([]);
+  // Kata kunci pencarian nama di daftar calon Qism.
+  const [cariCalon, setCariCalon] = useState("");
 
   // ---- Tab Rekap ----
   const [tanggal, setTanggal] = useState(todayStr());
@@ -94,6 +113,28 @@ export default function UbudiyahClient({
       .catch(() => setSakanList([]));
   }, []);
 
+  const fetchSemuaQism = async () => {
+    if (!dufahAktif) {
+      setSemuaQism([]);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/admin/ubudiyah/qism?dufahNama=${encodeURIComponent(dufahAktif)}`
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal memuat Qism");
+      setSemuaQism((json.data || []).filter((q: QismRow) => q.isActive));
+    } catch {
+      setSemuaQism([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchSemuaQism();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dufahAktif]);
+
   const fetchQism = async (sakanNama: string) => {
     if (!sakanNama) {
       setQismList([]);
@@ -106,7 +147,7 @@ export default function UbudiyahClient({
       const res = await fetch(`/api/admin/ubudiyah/qism?${q.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal memuat Qism");
-      setQismList(json.data || []);
+      setQismList((json.data || []).filter((q: QismRow) => q.isActive));
     } catch (e: any) {
       toast.error(e.message || "Gagal memuat Qism");
     } finally {
@@ -117,6 +158,7 @@ export default function UbudiyahClient({
   useEffect(() => {
     fetchQism(sakan);
     setPilihSantri(new Set());
+    setCariCalon("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sakan, dufahAktif]);
 
@@ -156,8 +198,27 @@ export default function UbudiyahClient({
     : [];
   const sudahQism = new Set(qismList.map((q) => q.santriId));
   const kandidatBaru = santriDiSakan.filter((s) => !sudahQism.has(s.id));
+  const calonTampil = santriDiSakan.filter((s) =>
+    s.nama.toLowerCase().includes(cariCalon.trim().toLowerCase())
+  );
+
+  // Ringkasan rekap yang sedang tampil, per kelompok status.
+  const jmlRekapTepat = rekapRows.filter(
+    (r) =>
+      r.status === UbudiyahStatus.TEPAT_WAKTU ||
+      r.status === UbudiyahStatus.HADIR
+  ).length;
+  const jmlRekapMasbuq = rekapRows.filter((r) =>
+    isUbudiyahMasbuq(r.status)
+  ).length;
+  const jmlRekapGhoib = rekapRows.filter(
+    (r) =>
+      r.status === UbudiyahStatus.GHOIB ||
+      r.status === UbudiyahStatus.TIDAK_HADIR
+  ).length;
 
   const togglePilih = (id: string) => {
+    if (sudahQism.has(id)) return;
     setPilihSantri((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -188,6 +249,7 @@ export default function UbudiyahClient({
       );
       setPilihSantri(new Set());
       fetchQism(sakan);
+      fetchSemuaQism();
     } catch (e: any) {
       toast.error(e.message || "Gagal menambah Qism");
     } finally {
@@ -196,6 +258,12 @@ export default function UbudiyahClient({
   };
 
   const nonaktifkan = async (row: QismRow) => {
+    if (
+      !confirm(
+        `Nonaktifkan ${row.nama} sebagai Qism Ubudiyah di sakan ${row.sakan}?`
+      )
+    )
+      return;
     setNonaktifLoading(row.id);
     try {
       const res = await fetch(
@@ -206,6 +274,7 @@ export default function UbudiyahClient({
       if (!res.ok) throw new Error(json.error || "Gagal menonaktifkan");
       toast.success(`${row.nama} bukan lagi Qism Ubudiyah`);
       fetchQism(sakan);
+      fetchSemuaQism();
     } catch (e: any) {
       toast.error(e.message || "Gagal menonaktifkan");
     } finally {
@@ -256,11 +325,51 @@ export default function UbudiyahClient({
           </div>
 
           {!sakan ? (
-            <p className="text-sm text-[var(--color-text-muted)]">
-              Pilih sakan untuk melihat Qism Ubudiyah dan menunjuk Qism baru.
-            </p>
+            <>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Pilih sakan untuk melihat Qism Ubudiyah dan menunjuk Qism
+                baru.
+              </p>
+              {sakanList.length > 0 && (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                  {sakanList.map((nama) => {
+                    const jmlSantri = santriAktif.filter(
+                      (s) => s.sakan === nama
+                    ).length;
+                    const jmlQism = semuaQism.filter(
+                      (q) => q.sakan === nama
+                    ).length;
+                    return (
+                      <button
+                        key={nama}
+                        type="button"
+                        onClick={() => setSakan(nama)}
+                        className="text-left bg-white rounded-2xl border p-4 hover:border-[var(--color-primary)]"
+                      >
+                        <p className="font-bold text-sm">{nama}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                          {jmlQism} Qism • {jmlSantri} santri
+                        </p>
+                        {jmlQism === 0 && (
+                          <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                            Belum ada Qism
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           ) : (
             <>
+              <button
+                type="button"
+                onClick={() => setSakan("")}
+                className="text-sm font-bold text-[var(--color-primary)]"
+              >
+                ← Semua sakan
+              </button>
               {canEdit && (
                 <div className="bg-white rounded-2xl border p-5 space-y-3">
                   <h3 className="font-bold">Tunjuk Qism Baru</h3>
@@ -268,28 +377,58 @@ export default function UbudiyahClient({
                     Pilih santri dari sakan {sakan}. Satu sakan boleh punya
                     lebih dari satu Qism.
                   </p>
-                  {kandidatBaru.length === 0 ? (
+                  {santriDiSakan.length === 0 ? (
+                    <p className="text-sm text-[var(--color-text-muted)]">
+                      Tidak ada santri aktif di sakan ini.
+                    </p>
+                  ) : kandidatBaru.length === 0 ? (
                     <p className="text-sm text-[var(--color-text-muted)]">
                       Semua santri aktif di sakan ini sudah menjadi Qism.
                     </p>
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
-                        {kandidatBaru.map((s) => (
-                          <label
-                            key={s.id}
-                            className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer hover:border-[var(--color-primary)]"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={pilihSantri.has(s.id)}
-                              onChange={() => togglePilih(s.id)}
-                              className="h-4 w-4 accent-emerald-600"
-                            />
-                            <span className="font-semibold">{s.nama}</span>
-                          </label>
-                        ))}
-                      </div>
+                      <input
+                        type="text"
+                        value={cariCalon}
+                        onChange={(e) => setCariCalon(e.target.value)}
+                        placeholder="Cari nama santri..."
+                        className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
+                      />
+                      {calonTampil.length === 0 ? (
+                        <p className="text-sm text-[var(--color-text-muted)]">
+                          Tidak ada santri yang cocok dengan pencarian ini.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+                          {calonTampil.map((s) => {
+                            const sudah = sudahQism.has(s.id);
+                            return (
+                              <label
+                                key={s.id}
+                                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                                  sudah
+                                    ? "bg-slate-50 text-slate-400"
+                                    : "cursor-pointer hover:border-[var(--color-primary)]"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={pilihSantri.has(s.id)}
+                                  disabled={sudah}
+                                  onChange={() => togglePilih(s.id)}
+                                  className="h-4 w-4 accent-emerald-600"
+                                />
+                                <span className="font-semibold">{s.nama}</span>
+                                {sudah && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                    Qism
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                       <button
                         onClick={tambahQism}
                         disabled={tambahLoading || pilihSantri.size === 0}
@@ -297,7 +436,7 @@ export default function UbudiyahClient({
                       >
                         {tambahLoading
                           ? "Menyimpan..."
-                          : `Tunjuk sebagai Qism (${pilihSantri.size})`}
+                          : `Tunjuk ${pilihSantri.size} santri sebagai Qism`}
                       </button>
                     </>
                   )}
@@ -320,8 +459,12 @@ export default function UbudiyahClient({
                       <thead className="bg-slate-50 text-left">
                         <tr>
                           <th className="p-3 font-bold">Nama</th>
-                          <th className="p-3 font-bold">Sakan</th>
-                          <th className="p-3 font-bold">Dufah</th>
+                          <th className="p-3 font-bold hidden md:table-cell">
+                            Sakan
+                          </th>
+                          <th className="p-3 font-bold hidden md:table-cell">
+                            Dufah
+                          </th>
                           <th className="p-3 font-bold">Aksi</th>
                         </tr>
                       </thead>
@@ -329,8 +472,12 @@ export default function UbudiyahClient({
                         {qismList.map((q) => (
                           <tr key={q.id}>
                             <td className="p-3 font-semibold">{q.nama}</td>
-                            <td className="p-3">{q.sakan}</td>
-                            <td className="p-3">{q.dufahNama}</td>
+                            <td className="p-3 hidden md:table-cell">
+                              {q.sakan}
+                            </td>
+                            <td className="p-3 hidden md:table-cell">
+                              {q.dufahNama}
+                            </td>
                             <td className="p-3">
                               {canEdit && (
                                 <button
@@ -409,6 +556,35 @@ export default function UbudiyahClient({
             </span>
           </div>
 
+          {!rekapLoading && rekapRows.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white rounded-2xl border p-3 text-center">
+                <p className="text-lg font-black text-emerald-700">
+                  {jmlRekapTepat}
+                </p>
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  Tepat waktu / Hadir
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl border p-3 text-center">
+                <p className="text-lg font-black text-amber-700">
+                  {jmlRekapMasbuq}
+                </p>
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  Masbuq
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl border p-3 text-center">
+                <p className="text-lg font-black text-red-700">
+                  {jmlRekapGhoib}
+                </p>
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  Ghoib / Tidak hadir
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border overflow-hidden">
             {rekapLoading ? (
               <p className="p-5 text-sm text-[var(--color-text-muted)]">
@@ -424,19 +600,23 @@ export default function UbudiyahClient({
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left">
                     <tr>
-                      <th className="p-3 font-bold">Tanggal</th>
+                      <th className="p-3 font-bold hidden md:table-cell">
+                        Tanggal
+                      </th>
                       <th className="p-3 font-bold">Nama</th>
                       <th className="p-3 font-bold">Sakan</th>
                       <th className="p-3 font-bold">Kegiatan</th>
                       <th className="p-3 font-bold">Status</th>
                       <th className="p-3 font-bold">Keterangan</th>
-                      <th className="p-3 font-bold">Pencatat</th>
+                      <th className="p-3 font-bold hidden lg:table-cell">
+                        Pencatat
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {rekapRows.map((r) => (
                       <tr key={`${r.riwayatId}-${r.kegiatan}`}>
-                        <td className="p-3 whitespace-nowrap">
+                        <td className="p-3 whitespace-nowrap hidden md:table-cell">
                           {formatTanggalId(rekapTanggal)}
                         </td>
                         <td className="p-3 font-semibold">
@@ -452,10 +632,16 @@ export default function UbudiyahClient({
                           {UBUDIYAH_KEGIATAN_LABEL[r.kegiatan]}
                         </td>
                         <td className="p-3">
-                          {UBUDIYAH_STATUS_LABEL[r.status]}
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusBadgeClass(r.status)}`}
+                          >
+                            {UBUDIYAH_STATUS_LABEL[r.status]}
+                          </span>
                         </td>
                         <td className="p-3">{r.keterangan || "-"}</td>
-                        <td className="p-3">{r.pencatatNama || "-"}</td>
+                        <td className="p-3 hidden lg:table-cell">
+                          {r.pencatatNama || "-"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

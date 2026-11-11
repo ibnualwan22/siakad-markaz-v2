@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe, Bell } from "lucide-react";
+import { LayoutDashboard, Users, DoorOpen, GraduationCap, History, Settings, Menu, X, CalendarCheck, Bed, BookOpen, Activity, BarChart3, Printer, CalendarDays, Instagram, Palette, UserCog, LogOut, ShieldCheck, Calendar, Medal, Armchair, ChevronDown, AlertTriangle, FileText, ClipboardList, Trophy, ClipboardEdit, Database, ListChecks, QrCode, ScanLine, Shield, ClipboardCheck, Eye, MapPin, Wifi, Images, Vote, Wallet, Globe, Bell, Moon } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const navigationGroups = [
@@ -87,6 +87,7 @@ const navigationGroups = [
       { href: "/admin/input-tasmi", label: "Input Tasmi'", icon: BookOpen, permissionId: "input_tasmi" },
       { href: "/admin/nadi-hufadz", label: "Nadi Hufadz", icon: BookOpen, permissionId: "nadi_hufadz" },
       { href: "/admin/tadrib-funun", label: "Tadrib Funun", icon: Palette, permissionId: "tadrib_funun" },
+      { href: "/admin/ubudiyah", label: "Ubudiyah", icon: Moon, permissionId: "ubudiyah" },
       { href: "/admin/munaqosah-hufadz", label: "Munaqosah Hufadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/huffadz/tasmi", label: "Tasmi' Huffadz", icon: BookOpen, permissionId: "huffadz" },
       { href: "/admin/input-nilai-kelas", label: "Input Nilai", icon: BookOpen, permissionId: "input_nilai" },

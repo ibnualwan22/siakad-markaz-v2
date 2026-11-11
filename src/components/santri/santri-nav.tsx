@@ -24,7 +24,8 @@ import {
   Images,
   Vote,
   BookOpen,
-  Bell
+  Bell,
+  Moon
 } from "lucide-react";
 import { useState } from "react";
 
@@ -58,7 +59,9 @@ export function SantriSidebar({
   isLajnah,
   isJasus,
   isHufadz,
-  isTurats
+  isTurats,
+  isQismUbudiyah,
+  qismUbudiyahSakan
 }: {
   nama: string;
   isAktif: boolean;
@@ -67,6 +70,8 @@ export function SantriSidebar({
   isJasus?: boolean;
   isHufadz?: boolean;
   isTurats?: boolean;
+  isQismUbudiyah?: boolean;
+  qismUbudiyahSakan?: string | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -99,6 +104,12 @@ export function SantriSidebar({
 
   if (isHufadz) {
     navItems = [...navItems, { href: "/santri/tasmi", label: "Tasmi'", icon: BookOpen }];
+  }
+
+  // Qism Ubudiyah hanya melihat menu ini bila ditunjuk admin untuk
+  // sakan + dufah yang sedang berjalan (flag dari getSantriMenu).
+  if (isQismUbudiyah) {
+    navItems = [...navItems, { href: "/santri/ubudiyah", label: "Qism Ubudiyah", icon: Moon }];
   }
 
   const handleLogout = async () => {

@@ -1728,6 +1728,60 @@ model TadribFununPeriode {
   @@index([dufahNama])
 }
 
+// ===== UBUDIYAH =====
+// Absensi kegiatan wajib berjamaah (Subuh/Maghrib/Isya/Halaqoh) per
+// sakan; admin menunjuk Qism Ubudiyah (santri dari sakan itu sendiri)
+// yang mengisi absen lewat portal santri. Laporan harian masbuq +
+// ghoib dikirim WA tiap 06:00 ke penanggung jawab Ubudiyah.
+enum UbudiyahKegiatan {
+  SUBUH
+  MAGHRIB
+  ISYA
+  HALAQOH
+}
+
+enum UbudiyahStatus {
+  TEPAT_WAKTU
+  MASBUQ_1
+  MASBUQ_2
+  MASBUQ_3
+  MASBUQ_4
+  GHOIB
+  HADIR
+  TIDAK_HADIR
+}
+
+// Santri yang ditunjuk admin sebagai pencatat absen Ubudiyah untuk
+// satu sakan pada satu dufah. Unique [santriId, dufahNama]: satu
+// santri hanya jadi qism di satu sakan per dufah.
+model UbudiyahQism {
+  id           String   @id @default(cuid())
+  santriId     String
+  sakan        String
+  dufahNama    String
+  isActive     Boolean  @default(true)
+  ditunjukOleh String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([santriId, dufahNama])
+}
+
+// Satu baris absen = satu santri (riwayatId) pada satu tanggal dan
+// satu kegiatan. Unique [riwayatId, tanggal, kegiatan]; hanya absen
+// hari ini yang bisa diubah.
+model UbudiyahHadir {
+  id         String           @id @default(cuid())
+  riwayatId  String
+  tanggal    DateTime         @db.Date
+  kegiatan   UbudiyahKegiatan
+  status     UbudiyahStatus
+  keterangan String?
+  pencatatId String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  @@unique([riwayatId, tanggal, kegiatan])
+}
+
 // Template cetak generik (Nadi Hufadz & program lain ke depan).
 // backgroundUrl = Cloudinary; fieldPositions = JSON koordinat per field:
 // { nama: {x, y, fontSize, align, maxWidth}, juz: {...}, predikat: {...}, periode: {...} }

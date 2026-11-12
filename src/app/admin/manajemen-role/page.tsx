@@ -142,6 +142,7 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 export default function ManajemenRolePage() {
+  const [mode, setMode] = useState<"role" | "user">("role");
   const [roles, setRoles] = useState<string[]>([]);
   const [permissionsMap, setPermissionsMap] = useState<Record<string, Set<string>>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -258,10 +259,30 @@ export default function ManajemenRolePage() {
           </h1>
           <p className="text-[var(--color-text-muted)] text-sm mt-1">
             Atur modul apa saja yang bisa diakses oleh masing-masing Role pengguna (Dinamis).
+            Tab &ldquo;Per User&rdquo; memberi atau mencabut izin untuk satu user tertentu, tanpa mengubah role-nya.
           </p>
+        </div>
+        {/* Saklar Per Role / Per User */}
+        <div className="flex rounded-xl border border-[var(--color-surface-dark)] bg-white p-1 shrink-0">
+          {(["role", "user"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                mode === m
+                  ? "bg-[var(--color-primary)] text-white"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              }`}
+            >
+              {m === "role" ? "Per Role" : "Per User"}
+            </button>
+          ))}
         </div>
       </div>
 
+      {mode === "user" ? (
+        <UserPermissionsSection />
+      ) : (
       <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-surface-dark)] overflow-hidden flex flex-col md:flex-row min-h-[500px]">
         {/* Sidebar Roles */}
         <div className="w-full md:w-64 bg-[var(--color-secondary)] border-r border-[var(--color-surface-dark)] p-4 flex flex-col">
@@ -400,6 +421,253 @@ export default function ManajemenRolePage() {
           )}
         </div>
       </div>
+      )}
+    </div>
+  );
+}
+
+// ================= IZIN KHUSUS PER USER =================
+// Memberi (GRANT) atau mencabut (DENY) izin untuk satu user tertentu,
+// tanpa mengubah role-nya. Tanpa override, user mengikuti izin role-nya.
+// DENY mengalahkan izin role; GRANT menambah izin di luar role.
+type UserCari = { id: string; nama: string; username: string; role: string };
+type UserDetail = {
+  user: UserCari;
+  rolePermissions: string[];
+  overrides: { permission: string; jenis: "GRANT" | "DENY"; diberikanOleh: string | null; createdAt: string }[];
+};
+
+function UserPermissionsSection() {
+  const [q, setQ] = useState("");
+  const [hasil, setHasil] = useState<UserCari[]>([]);
+  const [mencari, setMencari] = useState(false);
+  const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, "GRANT" | "DENY">>({});
+  const [memuat, setMemuat] = useState(false);
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  const cari = async (nilai: string) => {
+    setQ(nilai);
+    if (nilai.trim().length < 2) {
+      setHasil([]);
+      return;
+    }
+    setMencari(true);
+    try {
+      const res = await fetch(`/api/admin/user-permissions?search=${encodeURIComponent(nilai.trim())}`);
+      const json = await res.json();
+      setHasil(json.users || []);
+    } catch {
+      setHasil([]);
+    } finally {
+      setMencari(false);
+    }
+  };
+
+  const pilih = async (u: UserCari) => {
+    setMemuat(true);
+    try {
+      const res = await fetch(`/api/admin/user-permissions?userId=${encodeURIComponent(u.id)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal memuat izin user");
+      setDetail(json);
+      const map: Record<string, "GRANT" | "DENY"> = {};
+      (json.overrides || []).forEach((o: { permission: string; jenis: "GRANT" | "DENY" }) => {
+        map[o.permission] = o.jenis;
+      });
+      setOverrides(map);
+    } catch (e: any) {
+      toast.error(e.message || "Gagal memuat izin user");
+    } finally {
+      setMemuat(false);
+    }
+  };
+
+  const setOverride = (permId: string, jenis: "GRANT" | "DENY" | null) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      if (jenis === null) delete next[permId];
+      else next[permId] = jenis;
+      return next;
+    });
+  };
+
+  const simpan = async () => {
+    if (!detail) return;
+    setMenyimpan(true);
+    try {
+      const res = await fetch("/api/admin/user-permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: detail.user.id,
+          overrides: Object.entries(overrides).map(([permission, jenis]) => ({ permission, jenis })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan");
+      toast.success(`Izin khusus ${detail.user.nama} berhasil disimpan`);
+    } catch (e: any) {
+      toast.error(e.message || "Gagal menyimpan perubahan");
+    } finally {
+      setMenyimpan(false);
+    }
+  };
+
+  const roleSet = new Set(detail?.rolePermissions || []);
+  const efektif = (permId: string) => {
+    if (overrides[permId] === "GRANT") return true;
+    if (overrides[permId] === "DENY") return false;
+    return roleSet.has(permId);
+  };
+  const jumlahOverride = Object.keys(overrides).length;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-surface-dark)] overflow-hidden p-6 space-y-6">
+      <div>
+        <h2 className="text-lg font-bold text-[var(--color-text)]">Izin Khusus Per User</h2>
+        <p className="text-sm text-[var(--color-text-muted)] mt-1">
+          Cari user berdasarkan nama atau username, lalu atur izin khususnya.{" "}
+          <strong>Diberi</strong> menambah izin di luar role-nya, <strong>Dicabut</strong> mencabut izin yang
+          dimiliki role-nya, <strong>Sesuai role</strong> menghapus override dan kembali ke aturan role.
+          Perubahan berlaku langsung setelah disimpan (tanpa login ulang).
+        </p>
+      </div>
+
+      <div>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => cari(e.target.value)}
+          placeholder="Ketik minimal 2 huruf nama atau username..."
+          className="w-full md:w-96 px-3 py-2.5 border border-slate-300 rounded-xl text-sm"
+        />
+        {mencari && <p className="text-xs text-[var(--color-text-muted)] mt-2">Mencari...</p>}
+        {hasil.length > 0 && (
+          <div className="mt-2 w-full md:w-96 rounded-xl border border-[var(--color-surface-dark)] divide-y overflow-hidden">
+            {hasil.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => pilih(u)}
+                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 ${
+                  detail?.user.id === u.id ? "bg-[var(--color-primary-50)] font-bold" : ""
+                }`}
+              >
+                {u.nama} <span className="text-[var(--color-text-muted)]">(@{u.username} • {u.role.replace("_", " ")})</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {memuat && (
+        <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+          <Loader2 className="h-5 w-5 animate-spin text-emerald-500" /> Memuat izin user...
+        </div>
+      )}
+
+      {detail && !memuat && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--color-surface)]">
+            <div>
+              <h3 className="text-lg font-bold text-[var(--color-text)]">
+                {detail.user.nama} <span className="text-sm font-normal text-[var(--color-text-muted)]">@{detail.user.username}</span>
+              </h3>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                Role: <strong>{detail.user.role.replace("_", " ")}</strong>
+                {jumlahOverride > 0 && (
+                  <> • <span className="text-amber-700 font-bold">{jumlahOverride} override khusus</span></>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={simpan}
+              disabled={menyimpan}
+              className="flex items-center gap-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+            >
+              {menyimpan ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save size={18} />}
+              Simpan Izin User
+            </button>
+          </div>
+
+          <div className="space-y-8">
+            {Object.entries(
+              AVAILABLE_PERMISSIONS.reduce((acc, perm) => {
+                if (!acc[perm.category]) acc[perm.category] = [];
+                acc[perm.category].push(perm);
+                return acc;
+              }, {} as Record<string, typeof AVAILABLE_PERMISSIONS>)
+            ).map(([category, perms]) => (
+              <div key={category} className="space-y-4">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--color-primary)] border-b border-slate-100 pb-2">
+                  {category}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {perms.map((perm) => {
+                    const dariRole = roleSet.has(perm.id);
+                    const ov = overrides[perm.id] || null;
+                    const ya = efektif(perm.id);
+                    return (
+                      <div
+                        key={perm.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          ov
+                            ? "bg-amber-50 border-amber-300 shadow-sm"
+                            : ya
+                              ? "bg-[var(--color-primary-50)] border-[var(--color-primary-100)]"
+                              : "bg-white border-[var(--color-surface-dark)]"
+                        }`}
+                      >
+                        <p className="text-sm font-bold text-[var(--color-text)]">{perm.label}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] mt-1 leading-relaxed">{perm.desc}</p>
+                        <p className="text-xs mt-2">
+                          <span className="text-[var(--color-text-muted)]">Dari role: </span>
+                          <strong className={dariRole ? "text-emerald-700" : "text-slate-500"}>
+                            {dariRole ? "YA" : "TIDAK"}
+                          </strong>
+                          {" • "}
+                          <span className="text-[var(--color-text-muted)]">Efektif: </span>
+                          <strong className={ya ? "text-emerald-700" : "text-red-600"}>
+                            {ya ? "YA" : "TIDAK"}
+                          </strong>
+                          {ov && (
+                            <span className="ml-2 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                              {ov === "GRANT" ? "DIBERI KHUSUS" : "DICABUT KHUSUS"}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex gap-1.5 mt-3">
+                          {([
+                            [null, "Sesuai role"],
+                            ["GRANT", "Diberi"],
+                            ["DENY", "Dicabut"],
+                          ] as const).map(([nilai, label]) => (
+                            <button
+                              key={label}
+                              onClick={() => setOverride(perm.id, nilai)}
+                              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                ov === nilai || (nilai === null && !ov)
+                                  ? nilai === "DENY"
+                                    ? "bg-red-600 text-white"
+                                    : nilai === "GRANT"
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-slate-700 text-white"
+                                  : "bg-white border border-slate-300 text-[var(--color-text-muted)] hover:border-slate-400"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

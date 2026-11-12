@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { parseWibDateString, getActiveRiwayatListForAbsen, getTodayWibString } from "@/lib/absensi";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import { notifyEmaliyahAbsenChanged } from "@/lib/emaliyah-webhook";
 import { resolveSesiWindowServer, menitWibSekarang, formatMenit } from "@/lib/sesi-window";
 
@@ -113,14 +114,11 @@ export async function POST(request: Request) {
     let simpanSusulan = false;
     // Izin koreksi khusus (absen_kelas_koreksi): pemegangnya boleh menyimpan
     // susulan/koreksi di luar hari ini & di luar jendela sesi, seperti ADMIN.
-    // Dibaca segar dari RolePermission tiap request — tanpa login ulang.
-    let punyaIzinKoreksi = false;
-    if (userSession.role !== "ADMIN") {
-      const row = await prisma.rolePermission.findUnique({
-        where: { role_permission: { role: userSession.role as any, permission: "absen_kelas_koreksi" } },
-      });
-      punyaIzinKoreksi = !!row;
-    }
+    // Dibaca segar tiap request — tanpa login ulang — lewat helper bersama
+    // (izin role + override per-user GRANT/DENY).
+    const punyaIzinKoreksi =
+      userSession.role === "ADMIN" ||
+      (await checkPermission("absen_kelas_koreksi"));
     if (userSession.role !== "ADMIN" && !punyaIzinKoreksi) {
       // ADMIN & pemegang absen_kelas_koreksi dikecualikan: susulan & koreksi
       // manual adalah alur resmi.

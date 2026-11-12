@@ -63,12 +63,18 @@ export async function GET() {
     dufahAktif,
     pendaftaranDibuka: periode?.dibuka ?? false,
     sudahDaftar: dufahAktif ? data.some((r) => r.dufahNama === dufahAktif) : false,
+    // Jenis yang sudah diikuti santri pada dufah aktif — dipakai portal
+    // untuk menyembunyikan jenis tersebut dari pilihan daftar.
+    jenisTerdaftarIds: dufahAktif
+      ? data.filter((r) => r.dufahNama === dufahAktif).map((r) => r.jenis.id)
+      : [],
     jenisList,
   });
 }
 
 // POST { jenisId } — daftar mandiri ke satu jenis Tadrib Funun dufah aktif.
-// Satu santri hanya boleh satu jenis per dufah; menutup hanya menghalangi
+// Satu santri boleh mengikuti lebih dari satu jenis per dufah; yang
+// ditolak hanya duplikat jenis yang sama. Menutup hanya menghalangi
 // pendaftar baru (peserta lama tidak terpengaruh).
 export async function POST(request: Request) {
   const session = await getSantriSession();
@@ -101,12 +107,12 @@ export async function POST(request: Request) {
   }
 
   const sudah = await prisma.tadribFununPeserta.findUnique({
-    where: { santriId_dufahNama: { santriId: session.santriId, dufahNama: dufahAktif } },
+    where: { santriId_dufahNama_jenisId: { santriId: session.santriId, dufahNama: dufahAktif, jenisId } },
     include: { jenis: { select: { nama: true } } },
   });
   if (sudah) {
     return NextResponse.json(
-      { error: `Anda sudah terdaftar di ${sudah.jenis.nama} pada ${dufahAktif}. Satu santri hanya boleh mengikuti satu jenis per dufah.` },
+      { error: `Anda sudah terdaftar di ${sudah.jenis.nama} pada ${dufahAktif}.` },
       { status: 409 }
     );
   }

@@ -1,7 +1,7 @@
 import { Sidebar } from "@/components/admin/sidebar";
 import { Toaster } from "react-hot-toast";
 import { getSession } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { getEffectivePermissions } from "@/lib/permission";
 import { PushPermissionPrompt } from "@/components/admin/push-permission-prompt";
 
 export default async function AdminLayout({
@@ -11,18 +11,11 @@ export default async function AdminLayout({
 }) {
   const session = await getSession();
 
-  // Ambil permission sesuai role
+  // Izin efektif untuk sidebar: izin role + override per-user
+  // (GRANT menambah, DENY mencabut). ADMIN mendapat ["*"].
   let permissions: string[] = [];
   if (session) {
-    if (session.role === "ADMIN") {
-      permissions = ["*"]; // Admin bisa semua
-    } else {
-      const rolePerms = await prisma.rolePermission.findMany({
-        where: { role: session.role as any },
-        select: { permission: true }
-      });
-      permissions = rolePerms.map(p => p.permission);
-    }
+    permissions = await getEffectivePermissions(session.userId, session.role);
   }
 
   return (

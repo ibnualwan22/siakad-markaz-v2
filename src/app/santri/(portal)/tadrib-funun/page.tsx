@@ -34,6 +34,7 @@ type Info = {
   dufahAktif: string;
   pendaftaranDibuka: boolean;
   sudahDaftar: boolean;
+  jenisTerdaftarIds: string[];
   jenisList: Jenis[];
 };
 
@@ -66,6 +67,7 @@ export default function TadribFununSantriPage() {
           dufahAktif: j.dufahAktif || "",
           pendaftaranDibuka: !!j.pendaftaranDibuka,
           sudahDaftar: !!j.sudahDaftar,
+          jenisTerdaftarIds: j.jenisTerdaftarIds || [],
           jenisList: j.jenisList || [],
         })
       )
@@ -86,6 +88,7 @@ export default function TadribFununSantriPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal mendaftar");
+      setJenisId("");
       load();
     } catch (e: any) {
       setDaftarError(e.message || "Gagal mendaftar");
@@ -97,7 +100,12 @@ export default function TadribFununSantriPage() {
   if (loading) return <p className="p-6 text-sm">Memuat...</p>;
   if (!info) return <p className="p-6 text-sm">Gagal memuat data.</p>;
 
-  const { riwayat, dufahAktif, pendaftaranDibuka, sudahDaftar, jenisList } = info;
+  const { riwayat, dufahAktif, pendaftaranDibuka, sudahDaftar, jenisTerdaftarIds, jenisList } = info;
+
+  // Jenis yang masih bisa diikuti pada dufah aktif (belum terdaftar).
+  // Satu santri boleh mengikuti lebih dari satu jenis per dufah.
+  const jenisTerdaftar = new Set(jenisTerdaftarIds);
+  const jenisBisaDiikuti = jenisList.filter((j) => !jenisTerdaftar.has(j.id));
 
   return (
     <div className="space-y-6 p-4 max-w-4xl mx-auto">
@@ -108,12 +116,22 @@ export default function TadribFununSantriPage() {
         </p>
       </div>
 
-      {!sudahDaftar && dufahAktif !== "" && (
+      {sudahDaftar && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+          <p className="text-sm font-bold text-emerald-700">
+            Anda terdaftar di {jenisTerdaftarIds.length} jenis pada {dufahAktif}
+            {jenisBisaDiikuti.length > 0 ? " — Anda masih bisa menambah jenis lain di bawah ini." : "."}
+          </p>
+        </div>
+      )}
+
+      {dufahAktif !== "" && (
         pendaftaranDibuka ? (
+          jenisBisaDiikuti.length > 0 ? (
           <div className="bg-white rounded-2xl border p-5">
             <p className="font-bold">Pendaftaran Tadrib Funun {dufahAktif} dibuka</p>
             <p className="text-sm text-slate-500 mt-1">
-              Pilih satu jenis ekstrakurikuler. Satu santri hanya boleh mengikuti satu jenis per dufah.
+              Pilih jenis ekstrakurikuler yang ingin Anda ikuti. Anda bisa mengikuti lebih dari satu jenis.
             </p>
             {jenisList.length === 0 ? (
               <p className="text-sm text-slate-500 mt-3">Belum ada jenis yang dibuka.</p>
@@ -125,7 +143,7 @@ export default function TadribFununSantriPage() {
                   className="w-full mt-4 px-3 py-2.5 border rounded-xl text-sm bg-white"
                 >
                   <option value="">Pilih jenis...</option>
-                  {jenisList.map((j) => (
+                  {jenisBisaDiikuti.map((j) => (
                     <option key={j.id} value={j.id}>
                       {j.nama} — min. hadir {j.minHadir}x{ j.deskripsi ? ` (${j.deskripsi})` : "" }
                     </option>
@@ -142,13 +160,21 @@ export default function TadribFununSantriPage() {
               </>
             )}
           </div>
-        ) : (
+          ) : (
+            <div className="bg-white rounded-2xl border p-5">
+              <p className="font-bold">Anda sudah terdaftar di semua jenis Tadrib Funun {dufahAktif}</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Tidak ada lagi jenis yang bisa diikuti pada dufah ini.
+              </p>
+            </div>
+          )
+        ) : jenisTerdaftarIds.length === 0 ? (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
             <p className="text-sm font-bold text-red-700">
               Pendaftaran Tadrib Funun {dufahAktif} sudah ditutup. Silahkan tunggu pendaftaran di duf&apos;ah berikutnya.
             </p>
           </div>
-        )
+        ) : null
       )}
 
       {riwayat.length === 0 && (

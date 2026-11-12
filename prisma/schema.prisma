@@ -453,6 +453,7 @@ model User {
   huffadzTasmiDinilai      HuffadzTasmi[]
   munaqosahHufadzDiuji     MunaqosahHufadz[]
   pushSubscriptions         PushSubscription[]
+  userPermissions           UserPermission[]
 }
 
 // Langganan Web Push per akun staf (santri tidak punya akun User, jadi
@@ -477,6 +478,26 @@ model RolePermission {
   permission String
 
   @@unique([role, permission])
+}
+
+// Izin khusus per user, di luar izin role (halaman Manajemen Role, tab
+// "Per User"). Satu baris per (user, permission): jenis GRANT memberi
+// izin yang tidak dimiliki role-nya, DENY mencabut izin yang dimiliki
+// role-nya. Keduanya tidak bisa hidup berdampingan untuk pasangan yang
+// sama karena kunci uniknya. ADMIN selalu lolos semua (tidak perlu baris).
+model UserPermission {
+  id            String   @id @default(cuid())
+  userId        String
+  permission    String
+  jenis         String // "GRANT" | "DENY"
+  diberikanOleh String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+  @@index([userId])
 }
 
 // === Notifikasi Pengumuman (fitur 8 Nov 2026) ===
@@ -1694,7 +1715,7 @@ model TadribFununPeserta {
   penerbit User?            @relation(fields: [syahadahDiterbitkanOleh], references: [id], onDelete: SetNull)
   hadir    TadribFununHadir[]
 
-  @@unique([santriId, dufahNama])
+  @@unique([santriId, dufahNama, jenisId])
   @@index([dufahNama])
   @@index([jenisId])
 }

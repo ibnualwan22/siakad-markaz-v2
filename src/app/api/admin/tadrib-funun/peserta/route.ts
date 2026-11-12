@@ -51,7 +51,8 @@ export async function GET(request: Request) {
 }
 
 // POST { santriId, jenisId, dufahNama? } — tambah peserta manual (admin)
-// Satu santri hanya boleh satu jenis per dufah.
+// Satu santri boleh mengikuti lebih dari satu jenis per dufah; yang
+// ditolak hanya duplikat jenis yang sama pada dufah yang sama.
 export async function POST(request: Request) {
   const session = await getSession();
   const hasPerm = await checkPermission("tadrib_funun_edit");
@@ -73,7 +74,7 @@ export async function POST(request: Request) {
   }
 
   const sudah = await prisma.tadribFununPeserta.findUnique({
-    where: { santriId_dufahNama: { santriId, dufahNama } },
+    where: { santriId_dufahNama_jenisId: { santriId, dufahNama, jenisId } },
     include: { jenis: { select: { nama: true } } },
   });
   if (sudah) {

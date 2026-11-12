@@ -155,6 +155,21 @@ export default function TadribFununClient({
         </div>
       )}
 
+      {/* Ringkasan dufah aktif — mengikuti filter jenis bila sedang dipakai */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Jenis aktif", nilai: jenisList.filter((j) => j.isActive).length },
+          { label: `Peserta — ${dufahAktif || "-"}`, nilai: pesertaList.length },
+          { label: "Layak syahadah", nilai: pesertaList.filter((p) => p.eligible && !p.diterbitkan).length },
+          { label: "Syahadah terbit", nilai: pesertaList.filter((p) => p.diterbitkan).length },
+        ].map((c) => (
+          <div key={c.label} className="bg-white rounded-2xl border px-4 py-3">
+            <p className="text-2xl font-black">{c.nilai}</p>
+            <p className="text-xs text-[var(--color-text-muted)] font-bold">{c.label}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="flex gap-2 flex-wrap border-b border-[var(--color-surface-dark)]">
         {TABS.map((t) => (
           <button
@@ -187,7 +202,14 @@ export default function TadribFununClient({
         />
       )}
       {tab === "hadir" && (
-        <HadirTab pesertaList={pesertaList} canEdit={canEdit} onRefresh={fetchPeserta} />
+        <HadirTab
+          pesertaList={pesertaList}
+          jenisList={jenisList}
+          filterJenis={filterJenis}
+          setFilterJenis={setFilterJenis}
+          canEdit={canEdit}
+          onRefresh={fetchPeserta}
+        />
       )}
       {tab === "template" && <TemplateTab jenisList={jenisList} canEdit={canEdit} />}
       {tab === "cetak" && <CetakTab pesertaList={pesertaList} loading={loading} />}
@@ -630,10 +652,16 @@ function PesertaTab({
 /* ================= TAB ABSEN ================= */
 function HadirTab({
   pesertaList,
+  jenisList,
+  filterJenis,
+  setFilterJenis,
   canEdit,
   onRefresh,
 }: {
   pesertaList: Peserta[];
+  jenisList: Jenis[];
+  filterJenis: string;
+  setFilterJenis: (v: string) => void;
   canEdit: boolean;
   onRefresh: () => void;
 }) {
@@ -644,6 +672,14 @@ function HadirTab({
   const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [hapusId, setHapusId] = useState<string | null>(null);
+
+  // Ganti filter jenis = peserta yang sedang dipilih ikut direset, supaya
+  // tidak menampilkan absen peserta dari jenis lain.
+  useEffect(() => {
+    setPesertaId("");
+    setHadirList([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterJenis]);
 
   const fetchHadir = async (id: string) => {
     if (!id) return setHadirList([]);
@@ -706,6 +742,23 @@ function HadirTab({
 
   return (
     <div className="space-y-4">
+      {/* Filter per jenis — tersinkron dengan tab Peserta, agar daftar
+          peserta absen tidak lagi global (semua jenis tercampur). */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm font-bold">Filter jenis:</label>
+        <select
+          value={filterJenis}
+          onChange={(e) => setFilterJenis(e.target.value)}
+          className="rounded-xl border px-3 py-2 text-sm bg-white"
+        >
+          <option value="">Semua jenis</option>
+          {jenisList.map((j) => (
+            <option key={j.id} value={j.id}>{j.nama}</option>
+          ))}
+        </select>
+        <span className="text-sm text-[var(--color-text-muted)]">{pesertaList.length} peserta</span>
+      </div>
+
       <div className="bg-white rounded-2xl border p-5 space-y-3">
         <label className="text-sm font-bold block">Pilih peserta</label>
         <select

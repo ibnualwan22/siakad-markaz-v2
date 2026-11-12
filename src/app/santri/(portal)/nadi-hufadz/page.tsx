@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Swal from "sweetalert2";
 
 type Setoran = {
   pertemuanKe: number;
@@ -70,6 +71,11 @@ export default function NadiHufadzSantriPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal mendaftar");
       load();
+      Swal.fire({
+        title: "Berhasil!",
+        text: `Anda terdaftar di Nadi Hufadz ${info?.dufahAktif || ""}. Selamat mengikuti setoran harian.`,
+        icon: "success",
+      });
     } catch (e: any) {
       setDaftarError(e.message || "Gagal mendaftar");
     } finally {

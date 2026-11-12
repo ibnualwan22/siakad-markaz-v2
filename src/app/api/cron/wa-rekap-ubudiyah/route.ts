@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
 
     let terkirim = false;
     if (!dryRun) {
-      const result = await sendWhatsAppMessage("62823838545762", message);
+      const result = await sendWhatsAppMessage("6282338545762", message);
       terkirim = result.success;
       if (!terkirim) {
         console.error("Cron wa-rekap-ubudiyah gagal kirim WA:", result.detail);

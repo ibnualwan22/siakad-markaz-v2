@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { checkPermission } from "@/lib/permission";
 import ElectionDisplay from "@/components/pemilihan/election-display-osim";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,7 @@ export default async function ElectionDisplayPage({
   if (!session) redirect("/login");
 
   if (session.role !== "ADMIN") {
-    const permission = await prisma.rolePermission.findUnique({
-      where: { role_permission: { role: session.role, permission: "osim_manage" } },
-    });
+    const permission = await checkPermission("osim_manage");
     if (!permission) {
       return (
         <main className="min-h-screen flex items-center justify-center p-8">

@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/permission";
+import { requirePermission, checkPermission } from "@/lib/permission";
 import { InputNilaiForm } from "@/components/admin/input-nilai-form";
 import { getSantriFormData } from "@/lib/app-data";
 import Link from "next/link";
@@ -43,13 +43,7 @@ export default async function InputNilaiPage({
       }
     } else {
       // Periksa role kustom / lainnya: jika punya permission 'input_nilai', berikan akses
-      const perm = await prisma.rolePermission.findFirst({
-        where: {
-          role: session.role as any,
-          permission: "input_nilai"
-        }
-      });
-      hasAccess = !!perm;
+      hasAccess = await checkPermission("input_nilai");
     }
   }
 

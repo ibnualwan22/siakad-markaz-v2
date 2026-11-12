@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -10,14 +11,7 @@ export async function GET(request: Request) {
   }
 
   // Check permission manually or handle it on layout? Let's check manually here too for security
-  if (session.role !== "ADMIN") {
-    const rolePerms = await prisma.rolePermission.findMany({
-      where: { role: session.role as any, permission: "mukholif_lughoh" }
-    });
-    if (rolePerms.length === 0) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  }
+  if (!(await checkPermission("mukholif_lughoh"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const statusFilter = searchParams.get("status") || "MENUNGGU"; // MENUNGGU | SELESAI | ALL
@@ -85,14 +79,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (session.role !== "ADMIN") {
-    const rolePerms = await prisma.rolePermission.findMany({
-      where: { role: session.role as any, permission: "mukholif_lughoh" }
-    });
-    if (rolePerms.length === 0) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  }
+  if (!(await checkPermission("mukholif_lughoh"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const data = await request.json();

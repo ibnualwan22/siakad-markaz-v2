@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { hasAnyPermission } from "@/lib/permission";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,7 @@ export async function GET(req: Request) {
   // Periksa izin akses CBT ujian_usbu untuk bypass filter
   let hasCbtAccess = session?.role === "ADMIN";
   if (!hasCbtAccess && session && bypassFilter) {
-    const p = await prisma.rolePermission.findFirst({
-      where: { 
-        role: session.role, 
-        permission: {
-          in: ["ujian_usbu", "tauzi_hasil", "tauzi_nilai", "tauzi"]
-        } 
-      }
-    });
-    if (p) hasCbtAccess = true;
+    hasCbtAccess = await hasAnyPermission("ujian_usbu", "tauzi_hasil", "tauzi_nilai", "tauzi");
   }
 
   // Jika dia bukan super admin (dan tidak punya izin bypass), filter program berdasarkan kewenangan mengajarnya

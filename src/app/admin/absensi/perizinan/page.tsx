@@ -1,7 +1,6 @@
 import { Metadata } from "next";
-import { requirePermission } from "@/lib/permission";
+import { requirePermission, getEffectivePermissions } from "@/lib/permission";
 import { getMasterSantriList } from "@/lib/santri-api";
-import prisma from "@/lib/prisma";
 import PerizinanClient from "@/components/admin/perizinan-client";
 import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
 import { getSession } from "@/lib/auth";
@@ -16,12 +15,9 @@ export default async function PerizinanPage() {
   const session = await getSession();
   
   // Ambil permission user, pastikan dia punya setidaknya 1 permission untuk tipe izin
-  const rolePerm = session?.role === "ADMIN" ? [{ permission: "*" }] : await prisma.rolePermission.findMany({
-    where: { role: session?.role as any },
-    select: { permission: true }
-  });
-
-  const permissions = rolePerm.map(p => p.permission);
+  const permissions = session
+    ? await getEffectivePermissions(session.userId, session.role)
+    : [];
 
   const santriList = await getActiveRiwayatListForAbsen();
   

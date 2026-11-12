@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import prisma from "@/lib/prisma";
+import { getEffectivePermissions } from "@/lib/permission";
 import PerizinanDataClient from "@/components/admin/perizinan-data-client";
 import { getSession } from "@/lib/auth";
 
@@ -12,12 +12,9 @@ export const metadata: Metadata = {
 export default async function DataPerizinanPage() {
   const session = await getSession();
   
-  const rolePerm = session?.role === "ADMIN" ? [{ permission: "*" }] : await prisma.rolePermission.findMany({
-    where: { role: session?.role as any },
-    select: { permission: true }
-  });
-
-  const permissions = rolePerm.map(p => p.permission);
+  const permissions = session
+    ? await getEffectivePermissions(session.userId, session.role)
+    : [];
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import { getMasterSantriList } from "@/lib/santri-api";
 import {
   filterPerhatian,
@@ -18,14 +19,7 @@ export async function GET() {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (session.role !== "ADMIN") {
-    const rp = await prisma.rolePermission.findMany({
-      where: { role: session.role as any, permission: "rekap_sakan" },
-    });
-    if (rp.length === 0) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-  }
+  if (!(await checkPermission("rekap_sakan"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
     const now = new Date();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import prisma from "@/lib/prisma";
 import { gradeEssayWithAI } from "@/lib/ai-grader";
 import { recalculateSesiNilai } from "@/lib/recalculate-sesi-nilai";
@@ -139,12 +140,7 @@ export async function POST(req: Request) {
   try {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (session.role !== "ADMIN") {
-      const p = await prisma.rolePermission.findUnique({
-        where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
-      });
-      if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    if (!(await checkPermission("ujian_usbu"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
     const paketId = body.paketId || undefined; // Opsional! Jika kosong = GLOBAL

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import prisma from "@/lib/prisma";
 import { kunciSesiPemilihan, parseRencanaTutup, PemilihanOsimError } from "@/lib/pemilihan-osim";
 import { jadwalkanBroadcast } from "@/lib/pemilihan-osim-hub";
@@ -9,12 +10,7 @@ const PERMISSION = "osim_manage";
 async function authorize() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (session.role !== "ADMIN") {
-    const p = await prisma.rolePermission.findUnique({
-      where: { role_permission: { role: session.role, permission: PERMISSION } },
-    });
-    if (!p) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!(await checkPermission(PERMISSION))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   return null;
 }
 

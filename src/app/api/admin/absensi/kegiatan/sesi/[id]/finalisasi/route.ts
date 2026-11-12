@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
 
 async function checkAkses() {
   const session = await getSession();
   if (!session) return null;
-  if (session.role === "ADMIN") return session;
-  const rp = await prisma.rolePermission.findMany({
-    where: { role: session.role as any, permission: "pengaturan_kegiatan" },
-  });
-  return rp.length > 0 ? session : null;
+  if (await checkPermission("pengaturan_kegiatan")) return session;
+  return null;
 }
 
 async function getSesiOrError(id: string) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { hasAnyPermission } from "@/lib/permission";
 import { verifySantriQr } from "@/lib/qr-signing";
 import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
 import { triggerScanBerhasil } from "@/lib/pusher-server";
@@ -8,11 +9,8 @@ import { triggerScanBerhasil } from "@/lib/pusher-server";
 async function checkAkses() {
   const session = await getSession();
   if (!session) return null;
-  if (session.role === "ADMIN") return session;
-  const rp = await prisma.rolePermission.findMany({
-    where: { role: session.role as any, permission: { in: ["pengaturan_kegiatan", "scan_absen_kegiatan"] } },
-  });
-  return rp.length > 0 ? session : null;
+  if (await hasAnyPermission("pengaturan_kegiatan", "scan_absen_kegiatan")) return session;
+  return null;
 }
 
 export type HasilScan = "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK";

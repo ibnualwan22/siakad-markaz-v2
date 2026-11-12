@@ -65,6 +65,21 @@ export async function checkPermission(permissionId: string): Promise<boolean> {
 }
 
 /**
+ * True bila user saat ini memiliki SALAH SATU dari permission yang diminta.
+ * Dipakai untuk gerbang "salah satu cukup" (mis. baca scan vs pengaturan
+ * di absensi kegiatan, atau bypass filter program CBT).
+ */
+export async function hasAnyPermission(...permissionIds: string[]): Promise<boolean> {
+  const session = await getSession();
+
+  if (!session) return false;
+  if (session.role === "ADMIN") return true; // Admin punya akses penuh
+
+  const efektif = await getEffectivePermissions(session.userId, session.role);
+  return permissionIds.some((p) => efektif.includes(p));
+}
+
+/**
  * Memaksa halaman untuk mengecek permission. Jika gagal, redirect ke dashboard.
  * Panggil ini di bagian atas Server Component (page.tsx).
  *

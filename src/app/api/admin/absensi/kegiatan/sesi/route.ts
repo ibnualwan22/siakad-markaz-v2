@@ -1,30 +1,22 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { checkPermission, hasAnyPermission } from "@/lib/permission";
 
 /** Sesi scan petugas: buka sesi hanya untuk role ADMIN atau yang punya permission pengaturan_kegiatan. */
 async function checkAkses() {
   const session = await getSession();
   if (!session) return null;
-  if (session.role === "ADMIN") return session;
-  const rp = await prisma.rolePermission.findMany({
-    where: { role: session.role as any, permission: "pengaturan_kegiatan" },
-  });
-  return rp.length > 0 ? session : null;
+  if (await checkPermission("pengaturan_kegiatan")) return session;
+  return null;
 }
 
 /** Baca daftar sesi terbuka: boleh juga untuk pemilik permission scan_absen_kegiatan. */
 async function checkAksesBaca() {
   const session = await getSession();
   if (!session) return null;
-  if (session.role === "ADMIN") return session;
-  const rp = await prisma.rolePermission.findMany({
-    where: {
-      role: session.role as any,
-      permission: { in: ["scan_absen_kegiatan", "pengaturan_kegiatan"] },
-    },
-  });
-  return rp.length > 0 ? session : null;
+  if (await hasAnyPermission("scan_absen_kegiatan", "pengaturan_kegiatan")) return session;
+  return null;
 }
 
 /** Daftar sesi SCAN_PETUGAS yang masih terbuka (untuk gabung antar-jalur). */

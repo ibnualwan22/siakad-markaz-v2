@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { checkPermission } from "@/lib/permission";
 import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -7,12 +8,7 @@ export const dynamic = "force-dynamic";
 async function checkAuth() {
   const session = await getSession();
   if (!session) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  if (session.role !== "ADMIN") {
-    const p = await prisma.rolePermission.findUnique({
-      where: { role_permission: { role: session.role, permission: "ujian_usbu" } }
-    });
-    if (!p) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
+  if (!(await checkPermission("ujian_usbu"))) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return { session };
 }
 

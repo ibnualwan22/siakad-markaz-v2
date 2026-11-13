@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, Keyboard, CheckCircle2, AlertTriangle, XCircle, LogOut, Play, Maximize, Minimize } from "lucide-react";
+import { createPortal } from "react-dom";
+import type { Html5Qrcode } from "html5-qrcode";
+import { Camera, Keyboard, CheckCircle2, AlertTriangle, XCircle, LogOut, Play, Maximize, Minimize, Loader2 } from "lucide-react";
+import { consumeScannerInput, isCompleteSantriQr, ScanDeduplicator } from "@/lib/scan-input";
 
 type Kategori = { id: string; nama: string };
 type Sesi = {
@@ -12,7 +15,7 @@ type Sesi = {
   ditutupPada: string;
   hadirCount?: number;
 };
-type Hasil = { tipe: "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK"; nama?: string; sakan?: string; kelasNama?: string | null; alasan?: string };
+type Hasil = { tipe: "TERCATAT" | "SUDAH_TERCATAT" | "DITOLAK" | "BELUM_PASTI"; nama?: string; sakan?: string; kelasNama?: string | null; alasan?: string };
 type Preview = {
   hadir: number;
   totalAktif: number;
@@ -21,7 +24,8 @@ type Preview = {
 
 function beep(freq: number, ms = 160) {
   try {
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const Ctx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
     const ctx = new Ctx();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -34,6 +38,7 @@ function beep(freq: number, ms = 160) {
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + ms / 1000);
     o.start();
     o.stop(ctx.currentTime + ms / 1000 + 0.05);
+    o.onended = () => { void ctx.close(); };
   } catch {
     /* abaikan */
   }
@@ -42,7 +47,8 @@ function beep(freq: number, ms = 160) {
 // Bunyi sukses ala scanner kasir: nyaring, pendek, nembus suara ramai
 function beepKasir() {
   try {
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    const Ctx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
     const ctx = new Ctx();
     const o = ctx.createOscillator();
     const g = ctx.createGain();
@@ -57,15 +63,11 @@ function beepKasir() {
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
     o.start(t);
     o.stop(t + 0.16);
+    o.onended = () => { void ctx.close(); };
   } catch {
     /* abaikan */
   }
 }
-
-// Pola QR santri: SKA.<santriId>.<tanda-tangan-hex-32> — dipakai untuk auto-submit tanpa Enter
-// Sengaja TANPA jangkar ^...$: isi kolom bisa menempel dua pola bila scanner memicu
-// dua kali (SKA...SKA...); yang diekstrak dan dikirim hanya pola PERTAMA yang lengkap.
-const POLA_QR_SANTRI = /SKA\.[^.\s]+\.[0-9a-f]{32}/i;
 
 export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategoriList: Kategori[]; bisaBuatSesi?: boolean }) {
   const [kategoriId, setKategoriId] = useState("");
@@ -73,7 +75,6 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   const [sesiList, setSesiList] = useState<Sesi[]>([]);
   const [sesiAktif, setSesiAktif] = useState<Sesi | null>(null);
   const [mode, setMode] = useState<"scanner" | "kamera">("scanner");
-  const [scanValue, setScanValue] = useState("");
   const [hasil, setHasil] = useState<Hasil | null>(null);
   // Penghitung hasil: kunci remount kartu/notif supaya animasi terulang tiap hasil baru
   const [hasilKey, setHasilKey] = useState(0);
@@ -89,20 +90,30 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [showExcluded, setShowExcluded] = useState(false);
-  const [notif, setNotif] = useState<{ tipe: "TERCATAT" | "SUDAH_TERCATAT"; nama: string; sakan?: string; kelasNama?: string | null } | null>(null);
+  const [notif, setNotif] = useState<Hasil | null>(null);
   const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tampilkanNotif = useCallback((n: { tipe: "TERCATAT" | "SUDAH_TERCATAT"; nama: string; sakan?: string; kelasNama?: string | null }) => {
+  const tampilkanNotif = useCallback((n: Hasil) => {
+    setHasil(n);
+    setHasilKey((k) => k + 1);
     setNotif(n);
     if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
-    notifTimerRef.current = setTimeout(() => setNotif(null), 5000);
+    if (n.tipe === "TERCATAT" || n.tipe === "SUDAH_TERCATAT") {
+      notifTimerRef.current = setTimeout(() => setNotif(null), 3000);
+    }
   }, []);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const qrRef = useRef<any>(null);
-  const lastScanRef = useRef<{ payload: string; at: number }>({ payload: "", at: 0 });
+  const qrRef = useRef<Html5Qrcode | null>(null);
+  const dedupeRef = useRef(new ScanDeduplicator());
+  const [jumlahAntrean, setJumlahAntrean] = useState(0);
+  const scanSessionRef = useRef<string | null>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  const partialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Antrean FIFO: scan beruntun diproses berurutan, tidak ada yang dibuang diam-diam
-  const antreanRef = useRef<string[]>([]);
+  const antreanRef = useRef<{ payload: string; sesiId: string }[]>([]);
   const memprosesRef = useRef(false);
 
   // Fullscreen khusus mode kamera (tombol disembunyikan bila browser tidak mendukung)
@@ -139,33 +150,42 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   }, [loadSesi]);
 
   const fokusInput = useCallback(() => {
-    if (mode === "scanner") setTimeout(() => inputRef.current?.focus(), 80);
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    if (mode === "scanner") {
+      focusTimerRef.current = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
+    }
   }, [mode]);
 
   useEffect(() => {
+    scanSessionRef.current = sesiAktif && !preview && !selesai ? sesiAktif.id : null;
     fokusInput();
-  }, [fokusInput, sesiAktif]);
+  }, [fokusInput, sesiAktif, preview, selesai]);
 
   // Jaga fokus input saat petugas kembali ke halaman (mis. setelah pindah aplikasi).
   // Penting untuk scanner Bluetooth: hasil scan hanya masuk jika input sedang fokus.
   useEffect(() => {
     const onWindowFocus = () => fokusInput();
+    const onVisible = () => { if (!document.hidden) fokusInput(); };
     window.addEventListener("focus", onWindowFocus);
-    return () => window.removeEventListener("focus", onWindowFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onWindowFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fokusInput]);
 
   // Layar tetap hidup selama sesi scan aktif (Wake Lock API): diminta saat sesi
   // dibuka, diminta ulang saat petugas kembali ke halaman (kunci lepas begitu tab
   // disembunyikan), dilepas saat sesi berakhir. Browser yang tak mendukung atau
   // menolak diam-diam dibiarkan — halaman tetap jalan normal tanpa kunci.
-  const wakeLockRef = useRef<any>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const [layarHidup, setLayarHidup] = useState(false);
   const mintaWakeLock = useCallback(async () => {
     try {
       if (!("wakeLock" in navigator)) return;
       if (document.visibilityState !== "visible") return;
       if (wakeLockRef.current) return;
-      wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
+      wakeLockRef.current = await navigator.wakeLock.request("screen");
       setLayarHidup(true);
       wakeLockRef.current.addEventListener("release", () => {
         wakeLockRef.current = null;
@@ -207,9 +227,16 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      scanSessionRef.current = null;
+      antreanRef.current = [];
+      requestRef.current?.abort();
       stopCamera();
       if (notifTimerRef.current) clearTimeout(notifTimerRef.current);
+      if (partialTimerRef.current) clearTimeout(partialTimerRef.current);
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     };
   }, [stopCamera]);
 
@@ -228,98 +255,141 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
         () => {}
       );
       setCameraOn(true);
-    } catch (e) {
-      setHasil({ tipe: "DITOLAK", alasan: "Kamera tidak bisa diakses. Ketuk ikon gembok di address bar lalu izinkan kamera, dan pastikan situs dibuka via HTTPS." });
+    } catch {
+      tampilkanNotif({ tipe: "DITOLAK", alasan: "Kamera tidak bisa diakses. Ketuk ikon gembok di address bar lalu izinkan kamera, dan pastikan situs dibuka via HTTPS." });
     } finally {
       setCameraLoading(false);
     }
   };
 
-  // Kirim satu payload scan ke server. Dipanggil berurutan oleh antrean.
-  const kirimScan = useCallback(
-    async (p: string) => {
-      if (!sesiAktif) return;
-      // Setiap hasil scan menaikkan hasilKey: kartu & banner di-remount sehingga
-      // animasinya terulang untuk tiap santri, bukan hanya scan pertama.
-      const tunjukkan = (x: Hasil) => {
-        setHasil(x);
-        setHasilKey((k) => k + 1);
+  // A successful hardware decode is not attendance confirmation. Each request
+  // gets a timeout so one broken connection cannot hold the whole queue forever.
+  const kirimScan = useCallback(async (p: string, sesiId: string): Promise<boolean> => {
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const res = await fetch("/api/admin/absensi/kegiatan/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sesiId, payload: p }),
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => null);
+      if (!mountedRef.current) return false;
+      if (res.status === 401 || res.status === 403) {
+        tampilkanNotif({ tipe: "DITOLAK", alasan: res.status === 401
+          ? "Sesi login berakhir. Masuk kembali sebelum melanjutkan scan."
+          : "Akun ini tidak memiliki izin melakukan scan absensi." });
+        beep(220, 300);
+        return false;
+      }
+      if (!res.ok || !data || !["TERCATAT", "SUDAH_TERCATAT", "DITOLAK"].includes(data.hasil)) {
+        tampilkanNotif({ tipe: "BELUM_PASTI", alasan: "Server belum memberikan konfirmasi. Scan ulang QR yang sama untuk memastikan; absensi tidak akan dicatat ganda." });
+        beep(220, 300);
+        return false;
+      }
+      const h: Hasil = {
+        tipe: data.hasil, nama: data.namaSantri, sakan: data.sakan,
+        kelasNama: data.kelasNama,
+        alasan: data.alasan || (data.hasil === "DITOLAK" ? "QR ditolak. Pastikan memakai QR Absensi santri dan sesi masih terbuka." : undefined),
       };
-      try {
-        const res = await fetch("/api/admin/absensi/kegiatan/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sesiId: sesiAktif.id, payload: p }),
-        });
-        const data = await res.json();
-        if (!data.hasil) {
-          tunjukkan({ tipe: "DITOLAK", alasan: "Sesi login berakhir / tidak punya akses" });
-          beep(220, 300);
-          return;
-        }
-        const h: Hasil = { tipe: data.hasil, nama: data.namaSantri, sakan: data.sakan, kelasNama: data.kelasNama, alasan: data.alasan };
-        tunjukkan(h);
-        if (h.tipe === "TERCATAT") {
-          beepKasir();
-          if (h.nama) {
-            tampilkanNotif({ tipe: "TERCATAT", nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
-          }
-          setCount((c) => c + 1);
-          if (h.nama) {
-            setRiwayat((r) => [{ id: Date.now(), nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
-          }
-        } else if (h.tipe === "SUDAH_TERCATAT") {
-          beep(440);
-          if (h.nama) {
-            tampilkanNotif({ tipe: "SUDAH_TERCATAT", nama: h.nama, sakan: h.sakan, kelasNama: h.kelasNama });
-            try { navigator.vibrate?.([120, 60, 120]); } catch { /* abaikan */ }
-          }
-        } else {
-          beep(220, 300);
-          setNotif(null);
-        }
-      } catch {
-        tunjukkan({ tipe: "DITOLAK", alasan: "Gangguan jaringan" });
+      tampilkanNotif(h);
+      if (h.tipe === "TERCATAT") {
+        beepKasir();
+        setCount((c) => c + 1);
+        if (h.nama) setRiwayat((r) => [{ id: Date.now(), nama: h.nama!, tipe: h.tipe, waktu: new Date().toLocaleTimeString("id-ID") }, ...r].slice(0, 30));
+      } else if (h.tipe === "SUDAH_TERCATAT") {
+        beep(440);
+        try { navigator.vibrate?.([120, 60, 120]); } catch { /* abaikan */ }
+      } else {
         beep(220, 300);
       }
-    },
-    [sesiAktif, tampilkanNotif]
-  );
+      return h.tipe !== "DITOLAK";
+    } catch {
+      if (mountedRef.current) {
+        tampilkanNotif({ tipe: "BELUM_PASTI", alasan: controller.signal.aborted
+          ? "Respons melebihi 15 detik. Status absensi belum pasti; scan ulang QR yang sama setelah koneksi membaik."
+          : "Koneksi terputus. Status absensi belum pasti; scan ulang QR yang sama untuk memastikan." });
+        beep(220, 300);
+      }
+      return false;
+    } finally {
+      clearTimeout(timeout);
+      requestRef.current = null;
+    }
+  }, [tampilkanNotif]);
 
-  // Proses antrean satu per satu sampai habis
   const prosesAntrean = useCallback(async () => {
     if (memprosesRef.current) return;
     memprosesRef.current = true;
     try {
-      while (antreanRef.current.length > 0) {
-        const p = antreanRef.current.shift() as string;
-        await kirimScan(p);
+      while (antreanRef.current.length > 0 && mountedRef.current) {
+        const item = antreanRef.current.shift()!;
+        const confirmed = await kirimScan(item.payload, item.sesiId);
+        dedupeRef.current.finish(item.sesiId, item.payload, confirmed);
+        if (mountedRef.current) setJumlahAntrean(dedupeRef.current.pendingCount);
       }
     } finally {
       memprosesRef.current = false;
-      fokusInput();
     }
-  }, [kirimScan, fokusInput]);
+  }, [kirimScan]);
 
-  // Titik masuk semua scan (scanner BT maupun kamera): validasi ringan, lalu antre
-  const submitScan = useCallback(
-    (payload: string) => {
-      const p = payload.trim();
-      if (!p || !sesiAktif) return;
-      // Abaikan scan ganda (mis. kamera membaca QR yang sama berkali-kali) dalam 3 detik
-      const now = Date.now();
-      if (lastScanRef.current.payload === p && now - lastScanRef.current.at < 3000) return;
-      lastScanRef.current = { payload: p, at: now };
-      antreanRef.current.push(p);
-      // Kosongkan kolom SECARA SINKRON (DOM + state): mengandalkan state React saja
-      // tidak cukup — burst kedua scanner bisa mulai mengetik sebelum render
-      // pengosongan berjalan, sehingga isi lama menempel dengan isi baru.
-      if (inputRef.current) inputRef.current.value = "";
-      setScanValue("");
-      void prosesAntrean();
-    },
-    [sesiAktif, prosesAntrean]
-  );
+  // The camera and scanner share validation and queuing, never an input buffer.
+  const submitScan = useCallback((payload: string) => {
+    const p = payload.trim();
+    const sesiId = scanSessionRef.current;
+    if (!p || !sesiId) return;
+    if (!isCompleteSantriQr(p)) {
+      tampilkanNotif({ tipe: "DITOLAK", alasan: "QR tidak lengkap atau formatnya tidak sesuai. Arahkan alat ke QR Absensi santri lalu scan ulang." });
+      return;
+    }
+    if (!dedupeRef.current.accept(sesiId, p)) return;
+    antreanRef.current.push({ payload: p, sesiId });
+    setJumlahAntrean(dedupeRef.current.pendingCount);
+    void prosesAntrean();
+  }, [prosesAntrean, tampilkanNotif]);
+
+  const bacaInputScanner = useCallback((value: string, terminated = false) => {
+    if (partialTimerRef.current) clearTimeout(partialTimerRef.current);
+    const parsed = consumeScannerInput(value, terminated);
+    // Consume synchronously BEFORE duplicate suppression, including pasted batches.
+    if (inputRef.current) inputRef.current.value = parsed.remainder;
+    parsed.payloads.forEach(submitScan);
+    if (parsed.incomplete) {
+      tampilkanNotif({ tipe: "DITOLAK", alasan: "Kode scanner belum lengkap. Scan ulang QR santri; jangan berpindah aplikasi saat membaca QR." });
+    } else if (parsed.remainder) {
+      partialTimerRef.current = setTimeout(() => {
+        if (!inputRef.current?.value) return;
+        inputRef.current.value = "";
+        tampilkanNotif({ tipe: "DITOLAK", alasan: "Pembacaan scanner terputus sebelum kode lengkap. Scan ulang QR santri." });
+      }, 2_000);
+    }
+  }, [submitScan, tampilkanNotif]);
+
+  // Catch hardware keystrokes while focus is on a button or the page, without
+  // stealing typing from an actual editable field or processing input twice.
+  useEffect(() => {
+    if (mode !== "scanner" || !sesiAktif || preview || selesai) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.target === inputRef.current || event.ctrlKey || event.altKey || event.metaKey || event.isComposing) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest("input, textarea, select, [contenteditable='true']")) return;
+      const input = inputRef.current;
+      if (!input || !scanSessionRef.current) return;
+      if (event.key === " " && !input.value) return;
+      if (event.key.length === 1) {
+        event.preventDefault();
+        input.focus({ preventScroll: true });
+        bacaInputScanner(input.value + event.key);
+      } else if ((event.key === "Enter" || event.key === "Tab") && input.value) {
+        event.preventDefault();
+        bacaInputScanner(input.value, true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mode, sesiAktif, preview, selesai, bacaInputScanner]);
 
   const bukaSesi = async () => {
     if (!kategoriId) return;
@@ -352,15 +422,21 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
     setCount(s.hadirCount ?? 0);
     setRiwayat([]);
     setHasil(null);
+    setNotif(null);
     setPreview(null);
     setSelesai(null);
   };
 
   const tutupSesi = async () => {
     if (!sesiAktif) return;
-    if (mode === "kamera") await stopCamera();
+    if (dedupeRef.current.pendingCount > 0) {
+      tampilkanNotif({ tipe: "BELUM_PASTI", alasan: "Tunggu antrean scan selesai sebelum menutup sesi." });
+      return;
+    }
+    scanSessionRef.current = null;
     setBusy(true);
     try {
+      if (mode === "kamera") await stopCamera();
       const res = await fetch(`/api/admin/absensi/kegiatan/sesi/${sesiAktif.id}`, { method: "PATCH" });
       const data = await res.json();
       if (data.success) {
@@ -375,7 +451,12 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
           setShowExcluded(false);
         }
         loadSesi();
+      } else {
+        scanSessionRef.current = sesiAktif.id;
+        tampilkanNotif({ tipe: "DITOLAK", alasan: data.error || "Sesi belum bisa ditutup." });
       }
+    } catch {
+      tampilkanNotif({ tipe: "BELUM_PASTI", alasan: "Penutupan sesi belum terkonfirmasi. Periksa koneksi lalu coba tutup kembali." });
     } finally {
       setBusy(false);
     }
@@ -457,15 +538,10 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   const gantiMode = async (m: "scanner" | "kamera") => {
     if (m === mode) return;
     if (mode === "kamera") await stopCamera();
+    if (partialTimerRef.current) clearTimeout(partialTimerRef.current);
+    if (inputRef.current) inputRef.current.value = "";
     setMode(m);
   };
-
-  const hasilWarna =
-    hasil?.tipe === "TERCATAT"
-      ? "border-green-500 bg-green-50"
-      : hasil?.tipe === "SUDAH_TERCATAT"
-        ? "border-yellow-500 bg-yellow-50"
-        : "border-red-500 bg-red-50";
 
   // ---- Tampilan: belum ada sesi aktif ----
   if (!sesiAktif && !preview && !selesai) {
@@ -708,6 +784,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
   }
 
   // ---- Tampilan: sesi aktif, mode scan ----
+  if (!sesiAktif) return null;
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       {/* Animasi umpan balik scan: pop singkat kartu/banner, sorot hijau memudar di baris terbaru */}
@@ -716,6 +793,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
         .animasi-scan-pop { animation: scan-pop 0.3s ease-out; }
         @keyframes scan-sorot { 0% { background: #dcfce7; } 100% { background: #f9fafb; } }
         .animasi-scan-sorot { animation: scan-sorot 1.2s ease-out; }
+        @media (prefers-reduced-motion: reduce) { .animasi-scan-pop, .animasi-scan-sorot { animation: none; } }
       `}</style>
       <div className="flex items-center justify-between rounded-2xl border bg-white p-4">
         <div>
@@ -734,7 +812,7 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
         {bisaBuatSesi && (
         <button
           onClick={tutupSesi}
-          disabled={busy}
+          disabled={busy || jumlahAntrean > 0}
           className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
         >
           <LogOut size={16} /> Tutup Sesi
@@ -757,29 +835,28 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
         </button>
       </div>
 
-      {notif && (
-        <div key={hasilKey} className={`animasi-scan-pop flex items-center gap-2 rounded-xl border px-3 py-2 ${notif.tipe === "TERCATAT" ? "border-green-500 bg-green-100" : "border-amber-400 bg-amber-100"}`}>
-          {notif.tipe === "TERCATAT"
-            ? <CheckCircle2 size={20} className="shrink-0 text-green-600" />
-            : <AlertTriangle size={20} className="shrink-0 text-amber-600" />}
-          <div className="min-w-0 flex-1">
-            <p className={`text-sm font-black ${notif.tipe === "TERCATAT" ? "text-green-900" : "text-amber-900"}`}>
-              {notif.tipe === "TERCATAT" ? "TERCATAT" : "SUDAH DIABSEN"} — {notif.nama}
-            </p>
-            {(notif.sakan || notif.kelasNama) && (
-              <p className={`text-xs ${notif.tipe === "TERCATAT" ? "text-green-700" : "text-amber-700"}`}>
-                {[notif.sakan, notif.kelasNama].filter(Boolean).join(" • ")}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => setNotif(null)}
-            className={`shrink-0 px-1 text-lg font-bold leading-none ${notif.tipe === "TERCATAT" ? "text-green-700" : "text-amber-700"}`}
-            aria-label="Tutup notifikasi"
-          >
-            ×
-          </button>
+      <div className="flex h-14 items-center gap-2 rounded-xl border bg-white px-4 text-sm" role="status" aria-live="polite" aria-label="Status antrean scan">
+        {jumlahAntrean > 0 ? <Loader2 size={18} className="shrink-0 animate-spin text-blue-600" /> : <CheckCircle2 size={18} className="shrink-0 text-gray-400" />}
+        <div className="min-w-0">
+          <p className="font-semibold">{jumlahAntrean > 0 ? "QR diterima · Sedang mencatat" : "Siap menerima scan"}</p>
+          <p className="text-xs text-gray-500">{jumlahAntrean > 0 ? `${jumlahAntrean} scan menunggu konfirmasi` : "Hasil pencatatan muncul setelah server mengonfirmasi."}</p>
         </div>
+      </div>
+
+      {notif && createPortal(
+        <div className="pointer-events-none fixed inset-x-4 bottom-4 z-[100] flex justify-center sm:justify-end" style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}>
+          <div key={hasilKey} role={notif.tipe === "DITOLAK" || notif.tipe === "BELUM_PASTI" ? "alert" : "status"} aria-atomic="true" data-scan-notification={notif.tipe}
+            className={`pointer-events-auto animasi-scan-pop flex w-full max-w-sm items-start gap-3 rounded-xl border p-3 shadow-lg ${notif.tipe === "TERCATAT" ? "border-green-300 bg-green-50 text-green-950" : notif.tipe === "DITOLAK" ? "border-red-300 bg-red-50 text-red-950" : "border-amber-300 bg-amber-50 text-amber-950"}`}>
+            {notif.tipe === "TERCATAT" ? <CheckCircle2 size={22} className="shrink-0 text-green-600" /> : notif.tipe === "DITOLAK" ? <XCircle size={22} className="shrink-0 text-red-600" /> : <AlertTriangle size={22} className="shrink-0 text-amber-600" />}
+            <div className="min-w-0 flex-1 break-words">
+              <p className="text-sm font-bold">{notif.tipe === "TERCATAT" ? "Absensi berhasil" : notif.tipe === "SUDAH_TERCATAT" ? "Sudah tercatat hadir" : notif.tipe === "BELUM_PASTI" ? "Belum terkonfirmasi" : "Scan ditolak"}</p>
+              {notif.nama && <p className="mt-0.5 text-sm font-semibold">{notif.nama}</p>}
+              {(notif.sakan || notif.kelasNama) && <p className="mt-0.5 text-xs opacity-80">{[notif.sakan, notif.kelasNama].filter(Boolean).join(" • ")}</p>}
+              {notif.alasan && notif.tipe !== "SUDAH_TERCATAT" && <p className="mt-1 text-xs leading-relaxed">{notif.alasan}</p>}
+            </div>
+            <button type="button" onClick={() => setNotif(null)} className="shrink-0 px-1 text-lg leading-none" aria-label="Tutup notifikasi">×</button>
+          </div>
+        </div>, document.body
       )}
 
       {mode === "scanner" ? (
@@ -789,17 +866,17 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
           {/* Input disembunyikan demi tampilan minimalis, tapi tetap fokus & menerima ketikan scanner */}
           <input
             ref={inputRef}
-            value={scanValue}
-            onChange={(e) => {
-              const v = e.target.value;
-              setScanValue(v);
-              // Auto-submit begitu SATU pola QR lengkap ditemukan — tidak tergantung
-              // tombol Enter dari scanner, dan tidak menunggu isi kolom persis sama
-              // dengan pola (isi ganda yang menempel tetap menghasilkan satu submit).
-              const cocok = v.match(POLA_QR_SANTRI);
-              if (cocok) submitScan(cocok[0]);
+            onChange={(e) => bacaInputScanner(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                bacaInputScanner(e.currentTarget.value, true);
+              }
             }}
-            onKeyDown={(e) => { if (e.key === "Enter") submitScan((e.target as HTMLInputElement).value); }}
+            inputMode="none"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             onBlur={fokusInput}
             autoComplete="off"
             aria-hidden={true}
@@ -840,16 +917,6 @@ export function ScanAbsenClient({ kategoriList, bisaBuatSesi = true }: { kategor
               Saat diminta browser, pilih Izinkan/Allow akses kamera. Arahkan kamera ke QR santri — otomatis tercatat.
             </p>
           )}
-        </div>
-      )}
-
-      {hasil && hasil.tipe !== "SUDAH_TERCATAT" && (
-        <div key={hasilKey} className={`animasi-scan-pop rounded-2xl border-2 p-6 text-center ${hasilWarna}`}>
-          {hasil.tipe === "TERCATAT" && <CheckCircle2 size={40} className="mx-auto text-green-600" />}
-          {hasil.tipe === "SUDAH_TERCATAT" && <AlertTriangle size={40} className="mx-auto text-yellow-600" />}
-          {hasil.tipe === "DITOLAK" && <XCircle size={40} className="mx-auto text-red-600" />}
-          <p className="mt-2 text-2xl font-black">{hasil.nama || hasil.tipe.replace(/_/g, " ")}</p>
-          {hasil.alasan && <p className="mt-1 text-sm opacity-80">{hasil.alasan}</p>}
         </div>
       )}
 

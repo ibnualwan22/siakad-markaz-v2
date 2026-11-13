@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import QRCode from "react-qr-code";
+import { QRCodeSVG } from "qrcode.react";
 import { ScanLine, X, Sun, CheckCircle2 } from "lucide-react";
+import type Pusher from "pusher-js";
+
+type Kehadiran = { kategoriId: string; kategoriNama: string };
 
 export function QrSayaClient({
   nama,
@@ -15,7 +18,6 @@ export function QrSayaClient({
 }) {
   const [scanMode, setScanMode] = useState(false);
   const [berhasil, setBerhasil] = useState<{ kategoriNama: string; waktu: string } | null>(null);
-  const wakeLockRef = useRef<any>(null);
   // Polling status scan: snapshot saat masuk Mode Scan = baseline; hanya rekaman
   // BARU (kategoriId yang belum ada di baseline) yang memicu modal berhasil.
   const baselineRef = useRef<Set<string> | null>(null);
@@ -24,8 +26,8 @@ export function QrSayaClient({
   useEffect(() => {
     if (!scanMode) return;
     let berhenti = false;
-    let pusher: any = null;
-    let channel: any = null;
+    let pusher: Pusher | null = null;
+    let channel: ReturnType<Pusher["subscribe"]> | null = null;
     // Hentikan kedua jalur (Pusher + polling) begitu berhasil / keluar Mode Scan
     const hentikan = () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -60,10 +62,10 @@ export function QrSayaClient({
         if (!data.success || berhenti) return;
         if (baselineRef.current === null) {
           // Pengambilan pertama = baseline (rekaman lama tidak memicu modal)
-          baselineRef.current = new Set<string>(data.hadir.map((h: any) => h.kategoriId));
+          baselineRef.current = new Set<string>(data.hadir.map((h: Kehadiran) => h.kategoriId));
           return;
         }
-        const baru = data.hadir.find((h: any) => !baselineRef.current!.has(h.kategoriId));
+        const baru = data.hadir.find((h: Kehadiran) => !baselineRef.current!.has(h.kategoriId));
         if (baru) {
           tampilkanBerhasil(
             baru.kategoriNama,
@@ -89,7 +91,7 @@ export function QrSayaClient({
           authEndpoint: "/api/santri/qr-saya/pusher-auth",
         });
         channel = pusher.subscribe(cfg.channel);
-        channel.bind("scan-berhasil", (data: any) => {
+        channel.bind("scan-berhasil", (data: { kategoriNama: string; waktu: string }) => {
           if (berhenti) return;
           tampilkanBerhasil(data.kategoriNama, data.waktu);
         });
@@ -108,23 +110,37 @@ export function QrSayaClient({
     };
   }, [scanMode]);
 
-  // Wake Lock: jaga layar tetap menyala saat Mode Scan
-  const requestWakeLock = async () => {
-    try {
-      if ("wakeLock" in navigator) {
-        wakeLockRef.current = await (navigator as any).wakeLock.request("screen");
-      }
-    } catch { /* abaikan jika tidak didukung */ }
-  };
-  const releaseWakeLock = () => {
-    wakeLockRef.current?.release?.().catch(() => {});
-    wakeLockRef.current = null;
-  };
+  // A screen lock is released when hidden. Acquire it again on return, and
+  // release late permission results if Mode Scan has already been closed.
+  useEffect(() => {
+    if (!scanMode) return;
+    let disposed = false;
+    let pending = false;
+    let lock: WakeLockSentinel | null = null;
+    const acquire = async () => {
+      if (disposed || pending || lock || document.hidden || !("wakeLock" in navigator)) return;
+      pending = true;
+      try {
+        const granted = await navigator.wakeLock.request("screen");
+        if (disposed || document.hidden) { await granted.release(); return; }
+        lock = granted;
+        granted.addEventListener("release", () => { if (lock === granted) lock = null; });
+      } catch { /* The QR remains usable when screen lock is unavailable. */ }
+      finally { pending = false; }
+    };
+    const onVisible = () => { if (!document.hidden) void acquire(); };
+    void acquire();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void lock?.release().catch(() => {});
+    };
+  }, [scanMode]);
 
   // Fullscreen saat masuk Mode Scan
   const enterScanMode = async () => {
     setScanMode(true);
-    requestWakeLock();
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen();
@@ -133,7 +149,6 @@ export function QrSayaClient({
   };
   const exitScanMode = () => {
     setScanMode(false);
-    releaseWakeLock();
     try {
       if (document.fullscreenElement && document.exitFullscreen) {
         document.exitFullscreen().catch(() => {});
@@ -146,17 +161,11 @@ export function QrSayaClient({
     const onFsChange = () => {
       if (!document.fullscreenElement && scanMode) {
         setScanMode(false);
-        releaseWakeLock();
       }
     };
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
   }, [scanMode]);
-
-  // Cleanup saat unmount
-  useEffect(() => {
-    return () => releaseWakeLock();
-  }, []);
 
   if (error || !payload) {
     return (
@@ -179,8 +188,8 @@ export function QrSayaClient({
       <div className="rounded-2xl border bg-white p-6 text-center shadow-sm">
         <p className="text-sm text-gray-500">QR Absensi</p>
         <h2 className="mt-1 text-xl font-bold text-gray-900">{nama}</h2>
-        <div className="mx-auto mt-4 w-fit rounded-xl border-4 border-gray-900 bg-white p-3">
-          <QRCode value={payload} size={240} />
+        <div className="mx-auto mt-4 w-full max-w-[304px] bg-white">
+          <QRCodeSVG value={payload} size={304} marginSize={4} style={{ width: "100%", height: "auto" }} />
         </div>
         <p className="mt-4 text-sm text-gray-500">
           Tunjukkan QR ini ke petugas saat absensi kegiatan.
@@ -207,9 +216,10 @@ export function QrSayaClient({
 
           {/* QR sebesar mungkin */}
           <div className="w-full max-w-[85vw] sm:max-w-[420px]">
-            <QRCode
+            <QRCodeSVG
               value={payload}
               size={512}
+              marginSize={4}
               style={{ width: "100%", height: "auto" }}
             />
           </div>

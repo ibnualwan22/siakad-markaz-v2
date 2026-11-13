@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { hasAnyPermission } from "@/lib/permission";
 import { verifySantriQr } from "@/lib/qr-signing";
-import { getActiveRiwayatListForAbsen } from "@/lib/absensi";
+import { getSantriScanTarget } from "@/lib/absensi-scan";
 import { triggerScanBerhasil } from "@/lib/pusher-server";
 
 async function checkAkses() {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const { sesiId, payload } = await request.json();
-    if (!sesiId || !payload) {
+    if (typeof sesiId !== "string" || !sesiId || typeof payload !== "string" || !payload) {
       return NextResponse.json({ hasil: "DITOLAK", alasan: "Data scan tidak lengkap" } as const);
     }
 
@@ -43,8 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ hasil: "DITOLAK", alasan: ver.reason } as const);
     }
 
-    const aktifList = await getActiveRiwayatListForAbsen();
-    const target = aktifList.find((s) => s.santriId === ver.santriId);
+    const target = await getSantriScanTarget(prisma, ver.santriId);
     if (!target) {
       return NextResponse.json({
         hasil: "DITOLAK",
@@ -86,9 +85,9 @@ export async function POST(request: Request) {
           keterangan: `Scan petugas (${aktor})`,
         },
       });
-    } catch (e: any) {
+    } catch (e) {
       // Balapan antar-jalur: record keburu dibuat jalur lain
-      if (e?.code === "P2002") {
+      if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
         return NextResponse.json({
           hasil: "SUDAH_TERCATAT",
           namaSantri: target.nama,
@@ -114,7 +113,7 @@ export async function POST(request: Request) {
           minute: "2-digit",
         }),
       });
-    })();
+    })().catch((error) => console.warn("Notifikasi scan gagal:", error));
 
     return NextResponse.json({
       hasil: "TERCATAT",
@@ -124,6 +123,6 @@ export async function POST(request: Request) {
     } as const);
   } catch (error) {
     console.error("POST scan error", error);
-    return NextResponse.json({ hasil: "DITOLAK", alasan: "Kesalahan server" } as const);
+    return NextResponse.json({ hasil: "DITOLAK", alasan: "Kesalahan server" } as const, { status: 500 });
   }
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
-import { Navigation } from "lucide-react";
+import { MARKAZ_ORIGIN } from "@/lib/markaz-explore";
 import "leaflet/dist/leaflet.css";
 
 // Perbaikan icon leaflet default di Next.js agar tidak broken
@@ -96,7 +96,7 @@ export default function LeafletMap({
   selectedDestId: string | null;
   recenterKey: number;
 }) {
-  const defaultPos: [number, number] = [-7.747, 112.183]; // Default Pare center
+  const defaultPos: [number, number] = [MARKAZ_ORIGIN.latitude, MARKAZ_ORIGIN.longitude]; // Pusat kawasan Markaz
   const center = currentPosition || defaultPos;
 
   return (

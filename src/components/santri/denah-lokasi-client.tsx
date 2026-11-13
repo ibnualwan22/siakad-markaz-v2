@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Navigation, Info, X, MapPin, Search, List, Eye, ArrowRight, ImageIcon } from "lucide-react";
 
@@ -70,7 +70,6 @@ export function DenahLokasiClient() {
 
   // Mode peta: 2D default (sesuai keputusan user), 3D opsional.
   const [mode, setMode] = useState<"2d" | "3d">("2d");
-  const [followKey, setFollowKey] = useState(0); // 3D: kamera ke user + ikuti
   const [recenterKey, setRecenterKey] = useState(0); // 2D: paksa peta ke user
   // Stabilisasi rute: posisi + tujuan terakhir yang sudah dirutekan.
   const lastRoutedRef = useRef<{ pos: [number, number]; destId: string } | null>(null);
@@ -91,69 +90,47 @@ export function DenahLokasiClient() {
       .catch((err) => console.error("Gagal memuat lokasi:", err));
   }, []);
 
-  const calculateRouteOSRM = useCallback(async () => {
-    if (!currentPosition || !selectedDestId) {
-      setRouteCoordinates([]);
-      setRouteDistance(null);
-      setRouteDuration(null);
-      routeExistsRef.current = false;
-      return;
-    }
-
-    const dest = destinations.find((d) => d.id === selectedDestId);
-    if (!dest) return;
-
-    try {
-      // OSRM foot profile route (tanpa tol, asumsi jalan kaki)
-      const url = `https://router.project-osrm.org/route/v1/foot/${currentPosition[1]},${currentPosition[0]};${dest.longitude},${dest.latitude}?overview=full&geometries=geojson`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      if (data.routes && data.routes.length > 0) {
-        const route = data.routes[0];
-        // Leaflet butuh [lat, lng]
-        const coords = route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]);
-        setRouteCoordinates(coords);
-        routeExistsRef.current = true;
-
-        // Jarak dalam meter
-        setRouteDistance(route.distance);
-        // Durasi dalam detik (jalan kaki) rata-rata 5 km/h ≈ 1.39 m/s
-        setRouteDuration(route.duration);
-      } else {
-        setRouteCoordinates([]);
-        setRouteDistance(null);
-        setRouteDuration(null);
-        routeExistsRef.current = false;
-      }
-    } catch (error) {
-      console.error("Gagal generate routing OSRM:", error);
-    }
-  }, [currentPosition, selectedDestId, destinations]);
-
-  // Hitung ulang rute hanya bila: ganti tujuan, atau user bergerak cukup
-  // jauh (≥25 m). Sebelumnya tiap update GPS (termasuk jitter 1–2 m)
-  // memicu fetch OSRM baru sehingga garis rute tampak berubah-ubah.
+  // Navigasi nyata hanya aktif di peta 2D. Batalkan permintaan lama saat
+  // berpindah mode/tujuan agar hasilnya tidak menimpa rute yang baru.
   useEffect(() => {
-    if (!currentPosition || !selectedDestId) {
-      calculateRouteOSRM();
-      lastRoutedRef.current = null;
-      return;
-    }
+    if (mode !== "2d" || !currentPosition || !selectedDestId) return;
+    const dest = destinations.find(d => d.id === selectedDestId);
+    if (!dest) return;
     const last = lastRoutedRef.current;
-    if (
-      last &&
-      last.destId === selectedDestId &&
-      routeExistsRef.current &&
-      jarakMeter(last.pos, currentPosition) < 25
-    ) {
-      return;
+    if (last?.destId === selectedDestId && routeExistsRef.current && jarakMeter(last.pos, currentPosition) < 25) return;
+    const abort = new AbortController();
+    const position = currentPosition;
+    async function loadRoute() {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/foot/${position[1]},${position[0]};${dest!.longitude},${dest!.latitude}?overview=full&geometries=geojson`;
+        const res = await fetch(url, { signal: abort.signal });
+        if (!res.ok) throw new Error("Rute tidak tersedia");
+        const data = await res.json();
+        if (abort.signal.aborted) return;
+        const route = data.routes?.[0];
+        if (route) {
+          setRouteCoordinates(route.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]]));
+          setRouteDistance(route.distance);
+          // Estimasi berjalan 5 km/jam; bukan durasi kendaraan dari server publik.
+          setRouteDuration(route.distance / 1.39);
+          routeExistsRef.current = true;
+          lastRoutedRef.current = { pos: position, destId: selectedDestId! };
+        } else {
+          setRouteCoordinates([]);
+          setRouteDistance(null);
+          setRouteDuration(null);
+          routeExistsRef.current = false;
+        }
+      } catch (error) {
+        if (!abort.signal.aborted) console.error("Gagal generate routing OSRM:", error);
+      }
     }
-    lastRoutedRef.current = { pos: currentPosition, destId: selectedDestId };
-    calculateRouteOSRM();
-  }, [selectedDestId, currentPosition, calculateRouteOSRM]);
+    void loadRoute();
+    return () => abort.abort();
+  }, [mode, currentPosition, selectedDestId, destinations]);
 
   const startTracking = () => {
+    if (watchIdRef.current !== null) return;
     if (!navigator.geolocation) {
       setErrorMsg("Browser tidak support GPS.");
       return;
@@ -170,8 +147,8 @@ export function DenahLokasiClient() {
         ];
         setCurrentPosition(newPos);
       },
-      (error) => {
-        // Jangan langsung false, mungkin delay sinyal aja
+      () => {
+        // Watcher tetap aktif untuk menerima posisi saat sinyal pulih.
         setErrorMsg("Sinyal GPS terputus. Pastikan izin lokasi aktif.");
       },
       {
@@ -189,15 +166,16 @@ export function DenahLokasiClient() {
     }
   };
 
-  // Mulai pantau posisi sejak halaman dirender
-  useEffect(() => {
-    startTracking();
-    return () => stopTracking();
+  // Jelajah virtual tidak memerlukan GPS. Mulai hanya saat navigasi nyata diminta.
+  useEffect(() => () => {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
   }, []);
 
   // Hanya id yang dipakai — penanda 2D (Leaflet) dan 3D (Three.js) memakai
   // tipe tujuan yang berbeda, keduanya punya id.
   const handleNavigate = (dest: { id: string }) => {
+    setMode("2d");
+    startTracking();
     setSelectedDestId(dest.id);
   };
 
@@ -207,6 +185,7 @@ export function DenahLokasiClient() {
     setRouteDistance(null);
     setRouteDuration(null);
     lastRoutedRef.current = null;
+    routeExistsRef.current = false;
   };
 
   const activeDest = destinations.find((d) => d.id === selectedDestId);
@@ -240,11 +219,10 @@ export function DenahLokasiClient() {
         ) : (
           <Denah3D
             destinations={destinations}
-            currentPosition={currentPosition}
-            routeCoordinates={routeCoordinates}
-            selectedDestId={selectedDestId}
-            onNavigate={handleNavigate}
-            followKey={followKey}
+            paused={showList || Boolean(detailItem)}
+            onSelect={(id) => setDetailItem(destinations.find(d => d.id === id) ?? null)}
+            onShowList={() => setShowList(true)}
+            onExit={() => setMode("2d")}
           />
         )}
       </div>
@@ -253,20 +231,22 @@ export function DenahLokasiClient() {
       <div className="absolute top-4 right-4 z-20 flex bg-white/90 backdrop-blur shadow-lg rounded-full border border-gray-100 overflow-hidden">
         <button
           onClick={() => setMode("2d")}
+          aria-pressed={mode === "2d"}
           className={`px-4 py-2 text-sm font-bold ${mode === "2d" ? "bg-blue-600 text-white" : "text-gray-700"}`}
         >
           2D
         </button>
         <button
-          onClick={() => setMode("3d")}
+          onClick={() => { stopTracking(); setIsTracking(false); setMode("3d"); }}
+          aria-pressed={mode === "3d"}
           className={`px-4 py-2 text-sm font-bold ${mode === "3d" ? "bg-blue-600 text-white" : "text-gray-700"}`}
         >
-          3D
+          Jelajah 3D
         </button>
       </div>
 
       {/* OVERLAY: Error GPS (di bawah toggle supaya tidak menutupinya) */}
-      {errorMsg && (
+      {mode === "2d" && errorMsg && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-sm px-4 py-3 bg-red-600/90 backdrop-blur text-white text-xs font-bold rounded-xl shadow-xl flex items-center justify-center gap-2 animate-in fade-in slide-in-from-top-4">
           <Info size={16} />
           {errorMsg}
@@ -274,7 +254,7 @@ export function DenahLokasiClient() {
       )}
 
       {/* OVERLAY: Navigasi Aktif Panel (Bawah) */}
-      {selectedDestId && activeDest && (
+      {mode === "2d" && selectedDestId && activeDest && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[92%] max-w-sm bg-white/95 backdrop-blur-md px-5 py-4 rounded-3xl shadow-2xl border border-gray-200/50 animate-in slide-in-from-bottom-10 fade-in duration-300">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -300,25 +280,22 @@ export function DenahLokasiClient() {
       )}
 
       {/* OVERLAY: Lokasi Tersedia (Jika tidak ada yang dipilih) */}
-      {!selectedDestId && (
-        <div className="absolute top-4 left-4 z-20">
+      {mode === "2d" && !selectedDestId && (
+        <div className="absolute top-16 sm:top-4 left-4 z-20 max-w-[calc(100%-32px)]">
           <div className="bg-white/90 backdrop-blur shadow-lg px-4 py-2.5 rounded-full border border-gray-100 flex items-center gap-2 text-sm font-bold text-gray-800">
              <Search size={16} className="text-blue-500" />
-             {mode === "3d" ? "Geser untuk memutar • ketuk balok sakan" : "Ketik Peta atau klik Marker Sakan"}
+             Ketuk penanda untuk melihat lokasi
           </div>
         </div>
       )}
 
       {/* OVERLAY: FAB Lacak Lokasi Saya */}
-      <button
+      {mode === "2d" && <button
         onClick={() => {
           if (!isTracking) {
              startTracking();
           }
-          // 2D: paksa peta kembali ke posisi user. 3D: kamera ke user +
-          // mode ikuti (di dalam komponen 3D).
-          if (mode === "3d") setFollowKey((k) => k + 1);
-          else setRecenterKey((k) => k + 1);
+          setRecenterKey((k) => k + 1);
         }}
         className={`absolute z-30 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border transition-all active:scale-95 flex items-center justify-center
           ${selectedDestId ? "bottom-28 right-4 lg:right-6" : "bottom-6 right-4 lg:right-6"}
@@ -331,10 +308,10 @@ export function DenahLokasiClient() {
         {isTracking && (
            <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
         )}
-      </button>
+      </button>}
 
       {/* OVERLAY: Tombol Daftar Sakan (Kiri Bawah) */}
-      {!selectedDestId && (
+      {mode === "2d" && !selectedDestId && (
         <div className="absolute bottom-6 left-4 lg:left-6 z-30">
           <button
             onClick={() => setShowList(true)}
@@ -382,7 +359,8 @@ export function DenahLokasiClient() {
                   </div>
                   <button
                     onClick={() => {
-                      handleNavigate(dest);
+                      if (mode === "3d") setDetailItem(dest);
+                      else handleNavigate(dest);
                       setShowList(false);
                     }}
                     className="w-10 h-10 shrink-0 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-colors"
@@ -402,7 +380,7 @@ export function DenahLokasiClient() {
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
              {detailItem.imageUrl ? (
                <div className="w-full h-48 bg-gray-100 relative">
-                 <img src={detailItem.imageUrl} alt="Serta" className="w-full h-full object-cover" />
+                 <img src={detailItem.imageUrl} alt={detailItem.nama} className="w-full h-full object-cover" />
                  <button onClick={() => setDetailItem(null)} className="absolute top-4 right-4 p-2 bg-black/40 text-white rounded-full backdrop-blur-sm hover:bg-black/60"><X size={16} /></button>
                </div>
              ) : (

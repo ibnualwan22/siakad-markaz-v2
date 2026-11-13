@@ -1,0 +1,75 @@
+.explorer { position: absolute; inset: 0; overflow: hidden; background: #dbe8e3; color: #183e33; font-family: inherit; }
+.scene { position: absolute; inset: 0; }
+.scene canvas:focus-visible { outline: 2px solid #287b59; }
+.identity { position: absolute; left: 24px; top: 24px; pointer-events: none; text-shadow: 0 1px 8px #e9f0e5; }
+.eyebrow { font-size: 10px; letter-spacing: .2em; font-weight: 800; }
+.identity h1 { margin: 3px 0 7px; font-size: 24px; font-weight: 750; line-height: 1.2; letter-spacing: -.04em; }
+.virtual { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+.virtual i { width: 6px; height: 6px; border-radius: 50%; background: #287b59; }
+.mapPanel { position: absolute; top: 72px; right: 16px; width: 166px; padding: 10px; background: #fbfcf2ed; border: 1px solid #ffffffb3; border-radius: 14px; box-shadow: 0 3px 18px #23403412; }
+.mapHeading { display: flex; justify-content: space-between; gap: 6px; font-size: 8px; letter-spacing: .07em; font-weight: 800; }
+.minimap { width: 100%; height: auto; margin: 5px 0; }
+.mapActions { display: flex; justify-content: space-between; border-top: 1px solid #dae0d4; padding-top: 5px; gap: 4px; }
+.mapActions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-size: 11px; font-weight: 650; min-height: 36px; flex: 1; border-radius: 7px; }
+.explorer button { cursor: pointer; }
+.explorer button:focus-visible, .credit a:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.mapActions button:hover { background: #e5eadc; }
+.help { position: absolute; left: 24px; bottom: 172px; display: flex; align-items: start; gap: 8px; max-width: min(520px, calc(100% - 48px)); padding: 12px 14px; border-radius: 12px; background: #f7f9eeeb; font-size: 12px; line-height: 1.6; box-shadow: 0 2px 12px #23392c0a; }
+.help strong { font-weight: 750; }
+.help button { margin: -4px -5px 0 0; min-width: 32px; min-height: 32px; display: grid; place-items: center; }
+.touchHelp { display: none; }
+.movement { position: absolute; left: 24px; right: 24px; bottom: 32px; display: flex; align-items: end; justify-content: space-between; gap: 18px; pointer-events: none; }
+.movement button, .joystick { pointer-events: auto; }
+.joystickWrap { display: grid; justify-items: center; gap: 8px; flex: 0 0 auto; }
+.joystickWrap > span { font-size: 9px; font-weight: 800; letter-spacing: .16em; text-shadow: 0 1px 8px white; }
+.joystick { width: 112px; height: 112px; display: grid; place-items: center; position: relative; border-radius: 50%; border: 1px solid #fcfff7aa; background: #eef2e566; box-shadow: inset 0 0 0 9px #f7faed33, 0 3px 18px #213b291a; touch-action: none; user-select: none; }
+.knob { width: 47px; height: 47px; border-radius: 50%; background: #f9fbf2eb; border: 1px solid white; box-shadow: 0 3px 12px #26433330; pointer-events: none; }
+.joystickArrow { position: absolute; top: 7px; opacity: .5; }
+.walkingInfo { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding-bottom: 7px; }
+.street { text-align: center; font-size: 12px; font-weight: 700; text-shadow: 0 1px 5px #ffffff, 0 1px 12px #ffffff; }
+.nearby { background: #f9fbf0ed; border: 1px solid #ffffffb3; padding: 10px 12px; border-radius: 10px; display: flex; align-items: center; gap: 7px; max-width: 300px; min-height: 42px; font-size: 12px; font-weight: 650; box-shadow: 0 3px 14px #26433312; }
+.nearby span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nearby svg, .nearby small { flex-shrink: 0; }
+.nearby small { color: #647965; font-size: 10px; font-weight: 500; }
+.run { min-width: 68px; min-height: 68px; margin-bottom: 24px; border-radius: 50%; background: #f9fbf0e0; border: 1px solid white; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px; box-shadow: 0 3px 14px #2643331a; flex: 0 0 auto; touch-action: manipulation; }
+.run span { font-size: 10px; font-weight: 700; }
+.running { background: #1f5e47; color: white; border-color: #8ebea2; }
+.credit { position: absolute; bottom: 5px; right: 12px; font-size: 9px; padding: 2px 5px; border-radius: 3px; background: #f5f7e5bb; color: #435944; }
+.credit a { text-decoration: underline; text-underline-offset: 2px; }
+.assetError { position: absolute; top: 105px; left: 16px; max-width: min(340px, calc(100% - 165px)); padding: 10px; background: #fff5d9; border-radius: 8px; color: #725018; font-size: 11px; }
+.loading, .error { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: #fbfcf3f5; padding: 26px; border-radius: 16px; width: min(360px, calc(100% - 40px)); box-shadow: 0 4px 24px #29413215; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; font-size: 13px; }
+.loading > span:last-child { font-size: 12px; color: #697b6a; }
+.spinner { width: 26px; height: 26px; border: 2px solid #ccd9c6; border-top-color: #346850; border-radius: 50%; animation: spin 1s linear infinite; }
+.error h2 { font-size: 17px; font-weight: 750; }
+.error p { line-height: 1.6; }
+.error > div { display: flex; gap: 8px; margin-top: 8px; }
+.error button { background: #e3eadb; border-radius: 8px; padding: 10px 14px; font-size: 12px; font-weight: 700; }
+.error button:last-child { background: #245b44; color: white; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (pointer: coarse) { .touchHelp { display: inline; } .keyboardHelp { display: none; } }
+@media (max-width: 600px) {
+  .identity { left: 16px; top: 20px; }
+  .identity h1 { font-size: 19px; }
+  .eyebrow { font-size: 8px; letter-spacing: .14em; }
+  .virtual { font-size: 10px; }
+  .mapPanel { top: 78px; width: 124px; right: 12px; padding: 8px; }
+  .mapHeading { font-size: 6px; }
+  .mapActions { gap: 1px; }
+  .mapActions button { font-size: 10px; min-height: 36px; gap: 3px; }
+  .mapActions svg { width: 13px; }
+  .movement { left: 20px; right: 20px; bottom: 36px; gap: 12px; }
+  .walkingInfo { position: absolute; bottom: 143px; left: 0; right: 0; gap: 5px; }
+  .nearby { max-width: 100%; padding: 9px 12px; }
+  .help { left: 16px; top: 126px; bottom: auto; max-width: calc(100% - 156px); font-size: 11px; padding: 10px 12px; }
+  .run { margin-bottom: 21px; }
+}
+@media (max-width: 359px) { .identity h1 { font-size: 16px; } .identity { left: 12px; } .eyebrow { letter-spacing: .1em; } }
+@media (max-height: 540px) {
+  .mapPanel { width: 116px; top: 64px; }
+  .identity h1 { font-size: 18px; }
+  .help { display: none; }
+  .movement { bottom: 24px; }
+  .joystick { width: 92px; height: 92px; }
+  .walkingInfo { bottom: 100px; }
+}
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }

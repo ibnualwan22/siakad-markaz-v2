@@ -1311,6 +1311,29 @@ model LokasiDenah {
   updatedAt DateTime @updatedAt
 }
 
+// Global Markaz scene: draft edits are isolated from the published snapshot.
+model DenahScene3D {
+  id                String   @id @default("markaz")
+  draft             Json
+  published         Json?
+  previousPublished Json?
+  revision          Int      @default(0)
+  publishedAt       DateTime?
+  updatedBy         String
+  updatedAt         DateTime @updatedAt
+}
+
+model DenahAsset3D {
+  id        String   @id @default(cuid())
+  name      String
+  url       String
+  publicId  String   @unique
+  bytes     Int
+  vertices  Int
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
 // =============================================
 // WIFI MANAGEMENT (RADIUS & EXTERNAL PORTAL)
 // =============================================

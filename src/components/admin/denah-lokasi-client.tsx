@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit2, Trash2, MapPin } from "lucide-react";
+import { Plus, Edit2, Trash2, MapPin, Box } from "lucide-react";
 import Swal from "sweetalert2";
 import dynamic from "next/dynamic";
 
@@ -9,6 +9,8 @@ const LocationPickerMap = dynamic(() => import("./location-picker-map"), {
   ssr: false,
   loading: () => <div className="w-full h-[300px] bg-gray-100 flex items-center justify-center animate-pulse rounded-xl border text-sm font-semibold text-gray-500">Memuat Peta Editor...</div>
 });
+
+const DenahEditor = dynamic(() => import("./denah-editor"), { ssr: false, loading: () => <div className="fixed inset-0 z-[100] grid place-items-center bg-white">Memuat editor 3D…</div> });
 
 interface Lokasi {
   id: string;
@@ -30,7 +32,8 @@ const fileToDataUri = (file: File) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
-export function DenahLokasiClient() {
+export function DenahLokasiClient({ canEdit3D = false }: { canEdit3D?: boolean }) {
+  const [showEditor, setShowEditor] = useState(false);
   const [data, setData] = useState<Lokasi[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -151,11 +154,11 @@ export function DenahLokasiClient() {
         title: "Berhasil",
         text: "Data lokasi berhasil disimpan",
       });
-    } catch (error: any) {
+    } catch (error) {
       Swal.fire({
         icon: "error",
         title: "Gagal",
-        text: error.message,
+        text: error instanceof Error ? error.message : "Gagal menyimpan lokasi.",
       });
     }
   };
@@ -179,10 +182,12 @@ export function DenahLokasiClient() {
 
       await fetchData();
       Swal.fire("Dihapus!", "Data lokasi berhasil dihapus.", "success");
-    } catch (error: any) {
-      Swal.fire("Error", error.message, "error");
+    } catch (error) {
+      Swal.fire("Error", error instanceof Error ? error.message : "Gagal menghapus lokasi.", "error");
     }
   };
+
+  if (showEditor && canEdit3D) return <DenahEditor locations={data.filter(d => d.isActive)} onClose={() => setShowEditor(false)} />;
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -196,6 +201,8 @@ export function DenahLokasiClient() {
             Kelola titik koordinat (Latitude & Longitude) gedung Sakan yang akan tampil di frontend halaman Santri.
           </p>
         </div>
+        <div className="flex gap-2 flex-wrap justify-end">
+        {canEdit3D && <button type="button" onClick={() => setShowEditor(true)} className="border border-teal-200 bg-white text-teal-800 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm"><Box size={18} /> Editor 3D</button>}
         <button
           onClick={() => handleOpenModal()}
           className="text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm hover:opacity-90 transition-opacity"
@@ -204,6 +211,7 @@ export function DenahLokasiClient() {
           <Plus size={18} />
           Tambah Lokasi
         </button>
+        </div>
       </div>
 
       {!loading && sakanBelumTerplot.length > 0 && (

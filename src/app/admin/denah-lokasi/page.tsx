@@ -12,5 +12,5 @@ export default async function DenahLokasiAdminPage() {
     redirect("/admin/login");
   }
 
-  return <DenahLokasiClient />;
+  return <DenahLokasiClient canEdit3D={session.role === "ADMIN"} />;
 }

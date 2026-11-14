@@ -175,7 +175,7 @@ export default function DenahEditor({ locations, onClose }: { locations: Explore
     <header className={styles.header}>
       <div><span className={styles.eyebrow}>DENAH LOKASI SAKAN</span><h1>Editor kawasan <span>3D</span></h1></div>
       <div className={styles.headerActions}>
-        <span className={styles.draftState}>{dirty ? "Perubahan belum disimpan" : "Draf tersimpan"}</span>
+        <span className={styles.draftState}>{loading ? "Memuat…" : dirty ? "Perubahan belum disimpan" : revision ? "Draf tersimpan" : "Kawasan awal"}</span>
         <button type="button" onClick={startPreview} disabled={loading || busy || !area}><Play size={16} /> Coba jelajah</button>
         <button type="button" onClick={() => save("save")} disabled={loading || busy || !area}><Save size={16} /> Simpan draf</button>
         <button type="button" className={styles.primary} onClick={() => save("publish")} disabled={loading || busy || !area}><Send size={16} /> Terbitkan</button>

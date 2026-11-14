@@ -3,6 +3,7 @@ import { getSession, isMaxAgeExceeded } from "./auth";
 import prisma from "./prisma";
 import { EMPTY_SCENE, parseScene, type SceneDocument } from "./denah-scene";
 import areaData from "../../public/maps/markaz-area.json";
+import { isDenahRequestSameOrigin } from "./denah-request-origin";
 
 export const markazArea = areaData;
 export async function sceneAdmin(request: Request, mutation = false) {
@@ -10,8 +11,7 @@ export async function sceneAdmin(request: Request, mutation = false) {
   if (!session || isMaxAgeExceeded(session)) return { error: NextResponse.json({ error: "Sesi login berakhir. Silakan masuk kembali." }, { status: 401 }) };
   if (session.role !== "ADMIN") return { error: NextResponse.json({ error: "Editor kawasan hanya tersedia untuk admin." }, { status: 403 }) };
   if (mutation) {
-    const origin = request.headers.get("origin");
-    if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== new URL(request.url).origin)) return { error: NextResponse.json({ error: "Asal permintaan tidak diizinkan." }, { status: 403 }) };
+    if (!isDenahRequestSameOrigin(request)) return { error: NextResponse.json({ error: "Asal permintaan tidak diizinkan. Pastikan editor dibuka dari alamat utama aplikasi." }, { status: 403 }) };
   }
   return { session };
 }

@@ -164,7 +164,7 @@ export function createExploreScene(
   function clearInput() { keys.clear(); motion = { x: 0, z: 0 }; drag = null; }
   function editable(event: KeyboardEvent) {
     const el = event.target as HTMLElement | null;
-    return el?.isContentEditable || Boolean(el?.closest("input,textarea,select,[role=dialog]"));
+    return el?.isContentEditable || Boolean(el?.closest("input,textarea,select"));
   }
   const moveKeys = ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"];
   function keyDown(e: KeyboardEvent) {

@@ -20,3 +20,15 @@ Penyimpanan bukan localStorage: hasil tetap tersedia di perangkat lain. Pratinja
 ## Penerimaan
 
 Uji validasi payload/GLB, penggantian hambatan, rotasi dan jalur gerbang, spawn yang terhalang, otorisasi API, konflik revisi, isolasi draf/terbit. Periksa browser untuk menambah/mengubah/duplikasi/hapus, undo/redo, simpan dan muat lagi, pratinjau, terbitkan, gagal simpan, dan ukuran layar kecil. Tidak menerbitkan perubahan kawasan pengguna sebagai bagian pengujian.
+
+## Hasil implementasi dan pemeriksaan
+
+Editor dan pratinjau telah diperiksa di Chromium pada ukuran desktop dan HP: penggantian bangunan, seret pegangan objek, properti, undo/redo, salin/hapus, draf, muat ulang, konflik revisi, publikasi pada server simulasi, serta gerakan keyboard di pratinjau. Handler API diuji dengan penyimpanan simulasi untuk otorisasi, masa sesi, revisi, isolasi draf, dan pemulihan versi. Satu GLB uji kecil berhasil diunggah dan diunduh lewat Cloudinary, kemudian dihapus kembali.
+
+Dua tabel editor dibuat melalui transaksi SQL dari migrasi `20261114100000_denah_editor_3d`, tanpa mengubah tabel lama. Lingkungan database saat pemeriksaan tidak mempunyai tabel pencatatan `_prisma_migrations`; migrasi lain tidak dijalankan. Tidak ada draf atau versi terbit yang dibuat selama pengujian database. Deployment aplikasi belum dilakukan.
+
+### Perbaikan penolakan asal permintaan
+
+Pemeriksaan awal membandingkan `Origin` browser langsung dengan `request.url`. Pada deployment Docker/proxy, URL server dapat berupa HTTP internal sedangkan browser menggunakan HTTPS publik. Pemeriksaan sekarang memakai `X-Forwarded-Host` (atau `Host`) dan `X-Forwarded-Proto` untuk mencocokkan alamat publik. Proxy deployment harus menimpa kedua header ini dengan alamat yang diterimanya, bukan meneruskan nilai kiriman klien tanpa pemeriksaan. Domain lain, subdomain berbeda, port berbeda, metadata cross-site, serta header penerusan ambigu tetap ditolak. Hak akses akun dan pemeriksaan sesi tetap berlaku.
+
+Regresi kasus proxy dan penolakan domain asing terdapat di `tests/denah-request-origin.test.ts`; kasus aset/objek di `tests/denah-scene.test.ts` dan gerakan di `tests/markaz-explore.test.ts`.

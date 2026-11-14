@@ -1,5 +1,8 @@
 "use client";
 
+import Image from "next/image";
+import { BUILTIN_ASSETS } from "@/lib/denah-builtin-assets";
+import { housePlacement } from "@/lib/denah-houses";
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Box, Building2, Trees, Fence, DoorOpen, Armchair, Lamp, Signpost, Copy, Flag, Move, Redo2, RotateCcw, RotateCw, Save, Scaling, Trash2, Undo2, Upload, X, Play, Send, MapPin } from "lucide-react";
@@ -120,13 +123,16 @@ export default function DenahEditor({ locations, onClose }: { locations: Explore
   function add(kind: SceneKind, asset?: SceneAsset) {
     if (doc.objects.length >= MAX_SCENE_OBJECTS) { setError("Maksimal 150 objek tambahan dalam kawasan."); return; }
     const next = newSceneObject(kind, controller.current?.center() ?? { x: 0, z: 0 }, asset?.id ?? null);
-    if (asset) next.name = asset.name;
+    if (asset) {
+      next.name = asset.name;
+      if (asset.id === "builtin-hall") { next.width = 18; next.height = 7; next.depth = 14; }
+      else if (asset.id.startsWith("builtin-house-")) { next.width = 9; next.height = 4.4; next.depth = 8; }
+    }
     if (building) {
-      const xs = building.points.map(p => p.x), zs = building.points.map(p => p.z);
-      next.x = (Math.min(...xs) + Math.max(...xs)) / 2; next.z = (Math.min(...zs) + Math.max(...zs)) / 2;
-      next.width = Math.min(80, Math.max(0.1, Math.max(...xs) - Math.min(...xs)));
-      next.depth = Math.min(80, Math.max(0.1, Math.max(...zs) - Math.min(...zs)));
-      next.height = Math.min(40, building.height + (kind === "building" ? 1 : 0)); next.replacesBuildingId = building.id;
+      const house = housePlacement(building);
+      next.x = house.x; next.z = house.z; next.rotation = house.rotation * 180 / Math.PI;
+      next.width = Math.min(80, house.width); next.depth = Math.min(80, house.depth);
+      next.height = Math.min(40, house.height); next.replacesBuildingId = building.id;
     }
     commit({ ...doc, objects: [...doc.objects, next] }); setSelection({ type: "object", id: next.id }); setError("");
   }
@@ -201,11 +207,13 @@ export default function DenahEditor({ locations, onClose }: { locations: Explore
       <aside className={styles.library}>
         <h2>Koleksi aset</h2><p>{building ? "Pilih aset untuk mengganti bangunan yang ditandai." : "Pilih aset untuk menambahkannya di tengah pandangan."}</p>
         <div className={styles.presets}>{PRESETS.map(p => { const Icon = presetIcons[p.kind]; return <button type="button" key={p.kind} onClick={() => add(p.kind)} disabled={loading || !area}><span className={styles.assetIcon} data-kind={p.kind}><Icon size={23} /></span><span><strong>{p.name}</strong><small>{p.description}</small></span></button>; })}</div>
+        <div className={styles.sectionTitle}><h2>Rumah & aula</h2></div>
+        {BUILTIN_ASSETS.map(asset => <button type="button" className={styles.assetRow} key={asset.id} disabled={loading || !area} onClick={() => add("model", asset)}><Image src={asset.url.replace(".glb", ".png")} alt="" width={48} height={48} unoptimized /><span>{asset.name}<small>Kenney · siap ditempatkan</small></span></button>)}
         <div className={styles.sectionTitle}><h2>Model sendiri</h2><button type="button" onClick={() => uploadInput.current?.click()} disabled={loading}><Upload size={14} /> Unggah</button></div>
         <input ref={uploadInput} type="file" accept=".glb,model/gltf-binary" hidden onChange={e => { const file = e.currentTarget.files?.[0]; if (file) void upload(file); }} />
         <p className={styles.hint}>GLB · maks. 3 MiB · tekstur tertanam PNG/JPEG, maks. 2048 px.</p>
-        {!assets.length && <p className={styles.empty}>Belum ada model unggahan.</p>}
-        {assets.map(asset => <button type="button" className={styles.assetRow} key={asset.id} onClick={() => add("model", asset)}><Box size={18} /><span>{asset.name}<small>{(asset.bytes / 1024 / 1024).toFixed(1)} MiB</small></span></button>)}
+        {!assets.some(a => !a.id.startsWith("builtin-")) && <p className={styles.empty}>Belum ada model unggahan.</p>}
+        {assets.filter(a => !a.id.startsWith("builtin-")).map(asset => <button type="button" className={styles.assetRow} key={asset.id} onClick={() => add("model", asset)}><Box size={18} /><span>{asset.name}<small>{(asset.bytes / 1024 / 1024).toFixed(1)} MiB</small></span></button>)}
         <div className={styles.sectionTitle}><h2>Objek kawasan</h2><span>{doc.objects.length}/{MAX_SCENE_OBJECTS}</span></div>
         {!doc.objects.length && <p className={styles.empty}>Klik bangunan di peta untuk mulai menggantinya.</p>}
         {doc.objects.map(o => <button type="button" className={styles.objectRow} aria-pressed={object?.id === o.id} key={o.id} onClick={() => { setSelection({ type: "object", id: o.id }); controller.current?.focus(o); }}><Box size={14} /><span>{o.name}</span></button>)}
@@ -236,7 +244,7 @@ export default function DenahEditor({ locations, onClose }: { locations: Explore
           <p>Bangunan dari peta dasar sedang dipilih. Pilih gedung atau model dari koleksi untuk menggantinya.</p>
           <button type="button" className={styles.wideButton} onClick={() => add("building")}><Box size={16} /> Ganti dengan gedung</button>
           <button type="button" className={styles.wideButton} onClick={() => { commit({ ...doc, hiddenBuildingIds: [...new Set([...doc.hiddenBuildingIds, building.id])] }); setSelection(null); }}>Sembunyikan bangunan</button>
-        </> : <p>Klik objek di peta atau pilih dari daftar. Bangunan abu-abu dapat diganti dengan aset sendiri.</p>}
+        </> : <p>Klik objek di peta atau pilih dari daftar. Rumah warga dapat diganti dengan aset dari koleksi.</p>}
         <div className={styles.publishInfo}><h3>Titik awal karakter</h3><p>{doc.spawn ? `${doc.spawn.x.toFixed(1)}, ${doc.spawn.z.toFixed(1)} meter dari Maktab` : "Otomatis di jalan dekat Maktab"}</p>{doc.spawn && <button type="button" onClick={() => commit({ ...doc, spawn: null })}>Gunakan titik otomatis</button>}</div>
         {doc.hiddenBuildingIds.length > 0 && <button type="button" className={styles.wideButton} onClick={() => commit({ ...doc, hiddenBuildingIds: [] })}>Pulihkan {doc.hiddenBuildingIds.length} bangunan tersembunyi</button>}
         <div className={styles.publishInfo}><h3>Versi santri</h3><p>{publishedAt ? `Terakhir terbit ${new Date(publishedAt).toLocaleString("id-ID")}` : "Masih memakai kawasan awal."}</p><p>Draf baru terlihat oleh santri setelah diterbitkan.</p>{canRestore && <button type="button" onClick={() => save("restore")}>Pulihkan versi terbit sebelumnya</button>}</div>

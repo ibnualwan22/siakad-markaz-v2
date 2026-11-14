@@ -6,7 +6,10 @@ import {
 } from "@/lib/markaz-explore";
 
 import { EMPTY_SCENE, hiddenBuildings, sceneObstacles, sceneSpawn, type SceneAsset, type SceneDocument } from "@/lib/denah-scene";
-import { createObjectLayer } from "./denah-objects";
+import { createHouseLayer } from "./denah-house-layer";
+import { createObjectLayer, disposeObject } from "./denah-objects";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { CHARACTER_URL } from "@/lib/denah-builtin-assets";
 
 export interface ExploreLocation {
   id: string; nama: string; latitude: number; longitude: number; sakan?: string | null;
@@ -68,7 +71,7 @@ function label(text: string) {
   return sprite;
 }
 
-function createCharacter() {
+function createFallbackCharacter() {
   const avatar = new THREE.Group();
   const green = new THREE.MeshStandardMaterial({ color: 0x236953, roughness: 0.9 });
   const cream = new THREE.MeshStandardMaterial({ color: 0xe9dfc9, roughness: 1 });
@@ -107,6 +110,40 @@ function createCharacter() {
   } };
 }
 
+function createCharacter(onError: (name: string) => void) {
+  const fallback = createFallbackCharacter(), avatar = new THREE.Group();
+  avatar.add(fallback.avatar);
+  const abort = new AbortController();
+  let disposed = false, mixer: THREE.AnimationMixer | null = null;
+  const actions = new Map<string, THREE.AnimationAction>();
+  let active: THREE.AnimationAction | undefined;
+  void (async () => {
+    const response = await fetch(CHARACTER_URL, { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) });
+    if (!response.ok) throw new Error("Karakter gagal dimuat");
+    const gltf = await new GLTFLoader().parseAsync(await response.arrayBuffer(), "");
+    if (disposed) { disposeObject(gltf.scene); return; }
+    const bounds = new THREE.Box3().setFromObject(gltf.scene), size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3()), model = new THREE.Group();
+    gltf.scene.position.sub(new THREE.Vector3(center.x, bounds.min.y, center.z));
+    model.add(gltf.scene); model.scale.setScalar(1.85 / size.y); avatar.add(model);
+    fallback.avatar.visible = false;
+    mixer = new THREE.AnimationMixer(gltf.scene);
+    for (const clip of gltf.animations) actions.set(clip.name, mixer.clipAction(clip));
+  })().catch(() => { if (!disposed) onError("Karakter penjelajah"); });
+  return {
+    avatar,
+    animate(phase: number, moving: boolean, dt: number, sprinting: boolean) {
+      if (!mixer) { fallback.animate(phase, moving); return; }
+      const next = actions.get(moving ? sprinting ? "sprint" : "walk" : "idle");
+      if (next && next !== active) {
+        active?.fadeOut(0.18); next.reset().fadeIn(0.18).play(); active = next;
+      }
+      mixer.update(dt);
+    },
+    dispose() { disposed = true; abort.abort(); mixer?.stopAllAction(); if (mixer) mixer.uncacheRoot(mixer.getRoot()); },
+  };
+}
+
 /** No location API, per-frame React updates, remote textures, or continuous hidden-tab rendering. */
 export function createExploreScene(
   host: HTMLDivElement,
@@ -132,10 +169,11 @@ export function createExploreScene(
   canvas.tabIndex = 0; canvas.setAttribute("aria-label", "Jelajah Markaz 3D. WASD atau panah untuk berjalan, Shift untuk berlari, R kembali ke awal. Geser untuk memutar kamera.");
   canvas.style.cssText = "display:block;width:100%;height:100%;touch-action:none;outline-offset:-4px";
   host.appendChild(canvas);
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 650);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 260);
   const collisionMeshes: THREE.Object3D[] = [];
   const markers = new THREE.Group();
   const custom = createObjectLayer(() => {}, onAssetError);
+  let houses: ReturnType<typeof createHouseLayer> | undefined;
   let pois: (ExploreLocation & PointXZ & { marker: THREE.Group })[] = [];
   let disposed = false, failed = false, paused = false, running = false;
   let position = { ...spawn.point }, heading = spawn.heading, yaw = spawn.heading + Math.PI;
@@ -158,6 +196,8 @@ export function createExploreScene(
     canvas.removeEventListener("pointerup", pointerEnd); canvas.removeEventListener("pointercancel", pointerEnd);
     canvas.removeEventListener("lostpointercapture", pointerEnd); canvas.removeEventListener("wheel", wheel);
     canvas.removeEventListener("webglcontextlost", contextLost);
+    if (houses) { scene.remove(houses.group); houses.dispose(); }
+    character?.dispose();
     scene.remove(custom.group); custom.dispose();
     disposeTree(scene); renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
   };
@@ -226,7 +266,7 @@ export function createExploreScene(
       position = next; gait += moved * 4.5;
     }
     character.avatar.position.set(position.x, 0, position.z); character.avatar.rotation.y = heading;
-    character.animate(gait, moved > 0.001);
+    character.animate(gait, moved > 0.001, paused ? 0 : dt, running || keys.has("ShiftLeft") || keys.has("ShiftRight"));
     target.set(position.x, 1.3, position.z);
     cameraTarget.lerp(target, snapCamera ? 1 : 1 - Math.exp(-12 * dt));
     desired.set(Math.sin(yaw) * Math.cos(pitch) * distance, Math.sin(pitch) * distance + 0.5, Math.cos(yaw) * Math.cos(pitch) * distance).add(cameraTarget);
@@ -275,48 +315,13 @@ export function createExploreScene(
       addMerged(scene, parts, new THREE.MeshStandardMaterial({ color: shoulder ? 0xc5c2ad : 0x737d75, roughness: 1 }));
     }
 
-    // Merge by neighbourhood, not the entire map: offscreen chunks can be culled,
-    // and camera rays only test nearby geometry. All footprints share materials.
-    const chunks = new Map<string, { walls: THREE.BufferGeometry[]; roofs: THREE.BufferGeometry[]; windows: THREE.BufferGeometry[] }>();
-    const palette = [0xe3ddc6, 0xd6ddc9, 0xe3d1b9].map(color => new THREE.Color(color));
-    for (const building of area.buildings.filter(b => !hidden.has(b.id))) {
-      const center = building.points.reduce((p, q) => ({ x: p.x + q.x / building.points.length, z: p.z + q.z / building.points.length }), { x: 0, z: 0 });
-      const key = `${Math.floor(center.x / 50)},${Math.floor(center.z / 50)}`;
-      if (!chunks.has(key)) chunks.set(key, { walls: [], roofs: [], windows: [] });
-      const chunk = chunks.get(key)!;
-      const shape = new THREE.Shape(building.points.map(p => new THREE.Vector2(p.x, -p.z)));
-      const g = new THREE.ExtrudeGeometry(shape, { depth: building.height, bevelEnabled: false, steps: 1 });
-      g.clearGroups(); g.rotateX(-Math.PI / 2);
-      const color = palette[building.id % palette.length];
-      const colors = new Float32Array(g.getAttribute("position").count * 3);
-      for (let i = 0; i < colors.length; i += 3) color.toArray(colors, i);
-      g.setAttribute("color", new THREE.BufferAttribute(colors, 3)); chunk.walls.push(g);
-      const roof = new THREE.ShapeGeometry(shape); roof.rotateX(-Math.PI / 2); roof.translate(0, building.height + 0.04, 0); chunk.roofs.push(roof);
-      // A few street-facing windows give scale; footprints remain exactly where the source puts them.
-      for (let i = 0; i < building.points.length; i++) {
-        const a = building.points[i], b = building.points[(i + 1) % building.points.length];
-        const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-        const road = nearestRoad(mid, area.roads);
-        if (!road || road.distance > 12 || Math.hypot(b.x - a.x, b.z - a.z) < 2.5) continue;
-        const angle = Math.atan2(b.x - a.x, b.z - a.z);
-        const window = new THREE.BoxGeometry(0.12, 1.1, 0.85);
-        window.rotateY(angle); window.translate(mid.x, 1.9, mid.z); chunk.windows.push(window);
-      }
-    }
-    const wallMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
-    const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xb37d60, roughness: 1, side: THREE.DoubleSide });
-    const windowMaterial = new THREE.MeshStandardMaterial({ color: 0x48706a, roughness: 0.7 });
-    for (const chunk of chunks.values()) {
-      const buildings = addMerged(scene, chunk.walls, wallMaterial);
-      if (buildings) collisionMeshes.push(buildings);
-      if (chunk.roofs.length) addMerged(scene, chunk.roofs, roofMaterial);
-      if (chunk.windows.length) addMerged(scene, chunk.windows, windowMaterial);
-    }
+    houses = createHouseLayer(area, () => {}, onAssetError);
+    houses.sync(hidden); scene.add(houses.group); collisionMeshes.push(houses.group);
 
     const boundary = new THREE.Mesh(new THREE.RingGeometry(EXPLORE_RADIUS - 0.5, EXPLORE_RADIUS + 0.5, 128), new THREE.MeshBasicMaterial({ color: 0xc7a765, transparent: true, opacity: 0.65, side: THREE.DoubleSide }));
     boundary.rotation.x = -Math.PI / 2; boundary.position.y = 0.05; scene.add(boundary);
     custom.sync(layout.objects, assets); scene.add(custom.group); collisionMeshes.push(custom.group);
-    character = createCharacter(); scene.add(character.avatar, markers);
+    character = createCharacter(onAssetError); scene.add(character.avatar, markers);
     resize(); observer.observe(host);
     window.addEventListener("keydown", keyDown); window.addEventListener("keyup", keyUp);
     window.addEventListener("blur", clearInput); document.addEventListener("visibilitychange", visibility);

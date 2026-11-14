@@ -1,4 +1,5 @@
 import { EXPLORE_RADIUS, findSpawn, isWalkable, makeObstacle, type ExploreArea, type Obstacle, type PointXZ } from "./markaz-explore";
+import { housePlacement } from "./denah-houses";
 
 export const SCENE_KINDS = ["building", "gate", "tree", "wall", "bench", "lamp", "sign", "model"] as const;
 export type SceneKind = typeof SCENE_KINDS[number];
@@ -94,7 +95,7 @@ export function objectObstacles(o: SceneObject): Obstacle[] {
 }
 export function sceneObstacles(area: ExploreArea, doc: SceneDocument): Obstacle[] {
   const hidden = hiddenBuildings(doc);
-  return [...area.buildings.filter(b => !hidden.has(b.id)).map(b => makeObstacle(b.points)), ...doc.objects.flatMap(objectObstacles)];
+  return [...area.buildings.filter(b => !hidden.has(b.id)).map(b => housePlacement(b).obstacle), ...doc.objects.flatMap(objectObstacles)];
 }
 export function sceneSpawn(area: ExploreArea, doc: SceneDocument) {
   const obstacles = sceneObstacles(area, doc);

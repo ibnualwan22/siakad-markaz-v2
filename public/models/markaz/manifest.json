@@ -1,0 +1,37 @@
+[
+  {
+    "id": "builtin-house-a",
+    "name": "Rumah warga A",
+    "url": "/models/markaz/house-a.glb",
+    "bytes": 110480,
+    "vertices": 1870
+  },
+  {
+    "id": "builtin-house-b",
+    "name": "Rumah warga B",
+    "url": "/models/markaz/house-b.glb",
+    "bytes": 77244,
+    "vertices": 1228
+  },
+  {
+    "id": "builtin-house-c",
+    "name": "Rumah warga C",
+    "url": "/models/markaz/house-c.glb",
+    "bytes": 100424,
+    "vertices": 1676
+  },
+  {
+    "id": "builtin-hall",
+    "name": "Gedung aula",
+    "url": "/models/markaz/hall.glb",
+    "bytes": 85932,
+    "vertices": 2780
+  },
+  {
+    "id": "builtin-character",
+    "name": "Karakter penjelajah",
+    "url": "/models/markaz/character.glb",
+    "bytes": 133676,
+    "vertices": 143
+  }
+]

@@ -4,6 +4,7 @@ import prisma from "./prisma";
 import { EMPTY_SCENE, parseScene, type SceneDocument } from "./denah-scene";
 import areaData from "../../public/maps/markaz-area.json";
 import { isDenahRequestSameOrigin } from "./denah-request-origin";
+import { withBuiltinAssets } from "./denah-builtin-assets";
 
 export const markazArea = areaData;
 export async function sceneAdmin(request: Request, mutation = false) {
@@ -16,7 +17,8 @@ export async function sceneAdmin(request: Request, mutation = false) {
   return { session };
 }
 export async function sceneAssets(ids?: string[]) {
-  return prisma.denahAsset3D.findMany({ where: ids ? { id: { in: ids } } : undefined, select: { id: true, name: true, url: true, bytes: true, vertices: true }, orderBy: { createdAt: "desc" } });
+  const uploaded = await prisma.denahAsset3D.findMany({ where: ids ? { id: { in: ids } } : undefined, select: { id: true, name: true, url: true, bytes: true, vertices: true }, orderBy: { createdAt: "desc" } });
+  return withBuiltinAssets(uploaded).filter(asset => !ids || ids.includes(asset.id));
 }
 export function readStoredScene(value: unknown): SceneDocument { return value ? parseScene(value) : structuredClone(EMPTY_SCENE); }
 export function sceneFailure(error: unknown) {

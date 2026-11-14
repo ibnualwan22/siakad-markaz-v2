@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { EXPLORE_RADIUS, type ExploreArea, type PointXZ } from "@/lib/markaz-explore";
 import { hiddenBuildings, type SceneAsset, type SceneDocument, type SceneObject } from "@/lib/denah-scene";
+import { createHouseLayer } from "@/components/santri/denah-house-layer";
 import { createObjectLayer, disposeObject } from "@/components/santri/denah-objects";
 
 export type EditorSelection = { type: "object"; id: string } | { type: "building"; id: number } | null;
@@ -26,11 +27,13 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
   const transform = new TransformControls(camera, canvas); transform.setSize(0.8); transform.setTranslationSnap(0.5); transform.setRotationSnap(Math.PI / 12);
   scene.add(transform.getHelper());
   const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
-  const base = new Map<number, THREE.Mesh>();
+
   let selection: EditorSelection = null, document: SceneDocument | null = null, pickingSpawn = false;
   let disposed = false, frame = 0, down: { x: number; y: number } | null = null, manipulated = false;
   let box: THREE.BoxHelper | null = null;
   const custom = createObjectLayer(render, name => callbacks.error(`Model ${name} belum berhasil dimuat. Coba muat ulang atau pilih aset lain.`));
+  const houses = createHouseLayer(area, render, name => callbacks.error(`Aset ${name} gagal dimuat. Rumah sementara ditampilkan; muat ulang untuk mencoba lagi.`));
+  scene.add(houses.group);
   const spawnMarker = new THREE.Mesh(new THREE.ConeGeometry(1.3, 3.2, 4), new THREE.MeshBasicMaterial({ color: 0xca9031 }));
   scene.add(custom.group, spawnMarker); spawnMarker.visible = false;
   function render() {
@@ -40,7 +43,7 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
   function setSelection(value: EditorSelection) {
     selection = value; transform.detach();
     if (box) { scene.remove(box); disposeObject(box); box = null; }
-    const root = value?.type === "object" ? custom.get(value.id) : value?.type === "building" ? base.get(value.id) : null;
+    const root = value?.type === "object" ? custom.get(value.id) : value?.type === "building" ? houses.get(value.id) : null;
     if (root) {
       if (value?.type === "object") transform.attach(root);
       box = new THREE.BoxHelper(root, 0x08766a); scene.add(box);
@@ -66,8 +69,9 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
       else callbacks.error("Pilih titik di dalam batas kawasan Markaz.");
       return;
     }
-    const hit = raycaster.intersectObjects([...base.values()].filter(m => m.visible).concat(custom.group.children as THREE.Mesh[]), true)[0];
-    let value: EditorSelection = null, object: THREE.Object3D | null = hit?.object ?? null;
+    const hit = raycaster.intersectObjects([houses.group, custom.group], true)[0];
+    const buildingId = hit ? houses.pick(hit) : undefined;
+    let value: EditorSelection = buildingId ? { type: "building", id: buildingId } : null, object: THREE.Object3D | null = hit?.object ?? null;
     while (object) {
       if (object.userData.objectId) { value = { type: "object", id: object.userData.objectId }; break; }
       if (object.userData.buildingId) { value = { type: "building", id: object.userData.buildingId }; break; }
@@ -105,12 +109,6 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
     const mesh = new THREE.Mesh(geometry, roadMaterial);
     mesh.position.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2); scene.add(mesh);
   }
-  const wall = new THREE.MeshLambertMaterial({ color: 0xd8dccf }), roof = new THREE.MeshLambertMaterial({ color: 0xc3b6a0 });
-  for (const building of area.buildings) {
-    const shape = new THREE.Shape(building.points.map(p => new THREE.Vector2(p.x, -p.z)));
-    const g = new THREE.ExtrudeGeometry(shape, { depth: building.height, bevelEnabled: false }); g.rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(g, [roof, wall]); mesh.userData.buildingId = building.id; base.set(building.id, mesh); scene.add(mesh);
-  }
   const boundary = new THREE.Mesh(new THREE.RingGeometry(EXPLORE_RADIUS - 0.6, EXPLORE_RADIUS + 0.6, 128), new THREE.MeshBasicMaterial({ color: 0xbe914b, side: THREE.DoubleSide })); boundary.rotation.x = -Math.PI / 2; boundary.position.y = 0.04; scene.add(boundary);
   orbit.addEventListener("change", render); transform.addEventListener("change", render); transform.addEventListener("dragging-changed", dragChanged); transform.addEventListener("mouseUp", commitTransform);
   canvas.addEventListener("pointerdown", pointerDown, true); canvas.addEventListener("pointerup", pointerUp); canvas.addEventListener("keydown", keyDown); canvas.addEventListener("webglcontextlost", contextLost);
@@ -121,7 +119,7 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
     spawnPicking(value: boolean) { pickingSpawn = value; transform.enabled = !value; canvas.style.cursor = value ? "crosshair" : "grab"; },
     sync(doc: SceneDocument, assets: SceneAsset[]) {
       document = doc; const hidden = hiddenBuildings(doc);
-      base.forEach((mesh, id) => { mesh.visible = !hidden.has(id); });
+      houses.sync(hidden);
       custom.sync(doc.objects, assets); spawnMarker.visible = Boolean(doc.spawn);
       if (doc.spawn) spawnMarker.position.set(doc.spawn.x, 2, doc.spawn.z);
       setSelection(selection); render();
@@ -132,7 +130,7 @@ export function createEditorScene(host: HTMLDivElement, area: ExploreArea, callb
       disposed = true; cancelAnimationFrame(frame); observer.disconnect();
       canvas.removeEventListener("pointerdown", pointerDown, true); canvas.removeEventListener("pointerup", pointerUp); canvas.removeEventListener("keydown", keyDown); canvas.removeEventListener("webglcontextlost", contextLost);
       orbit.removeEventListener("change", render); transform.removeEventListener("change", render); transform.removeEventListener("dragging-changed", dragChanged); transform.removeEventListener("mouseUp", commitTransform);
-      orbit.dispose(); transform.dispose(); scene.remove(custom.group); custom.dispose(); disposeObject(scene); renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
+      orbit.dispose(); transform.dispose(); scene.remove(houses.group); houses.dispose(); scene.remove(custom.group); custom.dispose(); disposeObject(scene); renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
     },
   };
 }

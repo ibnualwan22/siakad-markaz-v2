@@ -11,6 +11,16 @@ atau menggeser jari ke variasi dan melepas. Tetap tersedia tombol hapus, spasi, 
 penggerak kursor dan tutup. Keyboard dipasang di luar tabel yang di-zoom, tetap terlihat
 dalam fullscreen, dan memberi ruang gulir supaya jawaban terlihat di atasnya.
 
+Penyesuaian berdasarkan foto pengguna: huruf Arab memakai tiga baris 11/11/10 huruf,
+dengan tombol hapus berikon mengarah ke kanan di ujung baris ketiga. Lam-alif tersedia
+dengan menahan lam; hamzah di atas ya tetap tersedia melalui variasi ya/hamzah.
+Pilihan bahasa dan harakat tetap di atas, tanpa preview teks jawaban tambahan.
+Aktivasi keyboard mengikuti kolom yang dipilih, bukan setiap perubahan seleksi kursor.
+Pengguliran hanya disesuaikan saat kolom/ukuran keyboard berubah, tanpa animasi gulir
+berulang. Ruang indikator penyimpanan di header tetap dialokasikan saat indikator
+tersembunyi agar mengetik tidak mengubah tinggi header. Tombol fullscreen dibuat ringkas
+dan label soal dibatasi lebarnya supaya header tidak meluber pada layar HP.
+
 Kolom jawaban readonly + inputmode none; perubahan normal hanya melalui tombol halaman.
 Paste/drop/composition/input native ditolak/dikembalikan ke nilai aplikasi. Papan klip
 perangkat tidak dibaca. Tidak menyimpulkan kecurangan dari panjang input atau memberi
@@ -31,3 +41,11 @@ merupakan temuan yang sudah ada. Uji interaksi Chromium dan WebKit lulus pada uk
 simpan lokal seketika, pergantian soal, pemulihan jawaban kosong setelah offline/reload,
 dan memastikan keyboard tidak memicu auto-submit. Keyboard bisa ditutup melalui panah
 kanan atas sebelum menggunakan navigasi soal di bawahnya. Belum diuji pada HP fisik.
+
+Uji regresi penyesuaian: sebelum perbaikan, Chromium mencatat perubahan posisi kolom
+10 px saat indikator simpan muncul, sedangkan WebKit memanggil scrollIntoView 19 kali
+saat mengetik. Setelah perbaikan, kedua browser mencatat 0 pemanggilan scroll selama
+mengetik dan 0 px perubahan posisi pada skenario yang sama (20 ketukan huruf/harakat,
+layar 390×844, soal panjang, respons API tertunda). Variasi lam-alif, hamzah, tanwin,
+posisi tombol hapus, penggantian teks, isian rumpang/tasrif, dan orientasi lanskap diuji
+kembali di kedua browser dan lulus.

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { Delete } from "lucide-react";
 import { ARABIC_ROWS, LATIN_ROWS, NUMBER_ROWS, HARAKAT, KEY_VARIANTS, keyLabel, keyDisplay, insertExamText, deleteExamText, moveExamCursor, isArabicDirection, type KeyboardLanguage } from "@/lib/exam-keyboard";
 import styles from "./exam-keyboard.module.css";
 
@@ -57,9 +58,8 @@ function CharacterKey({ value, shifted, insert, variants, chooseAt }: {
 }
 
 export function ExamKeyboardProvider({ children, disabled = false }: { children: ReactNode; disabled?: boolean }) {
-  const [active, setActive] = useState<Binding | null>(null);
+  const [active, setActive] = useState<Field | null>(null);
   const activeRef = useRef<Binding | null>(null);
-  const [editing, setEditing] = useState({ text: "", start: 0, end: 0 });
   const [language, setLanguage] = useState<KeyboardLanguage>("ar");
   const [numbers, setNumbers] = useState(false), [shift, setShift] = useState(false);
   const [menu, setMenu] = useState<VariantMenu | null>(null);
@@ -68,8 +68,8 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
   const animation = useRef(0);
   const activate = useCallback((field: Binding) => {
     if (disabled) return;
-    activeRef.current = field; setActive(field); setMenu(null);
-    setEditing({ text: field.read(), start: field.element.selectionStart ?? 0, end: field.element.selectionEnd ?? 0 });
+    // Keep activation stable while typing; selection changes must not restart scrolling.
+    activeRef.current = field; setActive(field.element); setMenu(null);
   }, [disabled]);
   const close = useCallback(() => {
     const field = activeRef.current;
@@ -87,9 +87,10 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
     if (result.text !== text) field.write(result.text);
     // Restore the controlled value before setting the selection; never save a DOM-injected value.
     field.element.value = result.text;
-    field.element.focus({ preventScroll: true }); field.element.setSelectionRange(result.start, result.end);
+    if (document.activeElement !== field.element) field.element.focus({ preventScroll: true });
+    field.element.setSelectionRange(result.start, result.end);
     if (result.start === result.text.length) field.element.scrollTop = field.element.scrollHeight;
-    setEditing(result); setMenu(null);
+    setMenu(null);
     if (operation === "insert") setShift(false);
   }
 
@@ -124,14 +125,19 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
     if (!active || disabled || !height) return;
     cancelAnimationFrame(animation.current);
     animation.current = requestAnimationFrame(() => {
-      const field = active.element;
+      const field = active;
       if (!field.isConnected) return;
-      field.scrollIntoView({ block: "nearest", inline: "nearest" });
-      const bottom = panel.current?.getBoundingClientRect().top ?? window.innerHeight;
-      const rect = field.getBoundingClientRect();
       let scroller: HTMLElement | null = field.parentElement;
       while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
-      if (rect.bottom > bottom - 16) (scroller ?? document.scrollingElement)?.scrollBy({ top: rect.bottom - bottom + 16 });
+      const viewport = scroller?.getBoundingClientRect();
+      const top = Math.max(0, viewport?.top ?? 0) + 16;
+      const bottom = Math.min(viewport?.bottom ?? window.innerHeight, panel.current?.getBoundingClientRect().top ?? window.innerHeight) - 16;
+      const rect = field.getBoundingClientRect();
+      const delta = rect.top < top || rect.height > bottom - top ? rect.top - top
+        : rect.bottom > bottom ? rect.bottom - bottom : 0;
+      // One bounded adjustment on open/field change/resize. Override scroll-smooth so
+      // it cannot compete with the browser's cursor selection and scroll anchoring.
+      if (Math.abs(delta) > 1) (scroller ?? document.scrollingElement)?.scrollBy({ top: delta, behavior: "instant" });
     });
     return () => cancelAnimationFrame(animation.current);
   }, [active, height, disabled]);
@@ -145,15 +151,17 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
   }
   const insert = (value: string) => update("insert", value);
   const rows = numbers ? NUMBER_ROWS : language === "ar" ? ARABIC_ROWS : LATIN_ROWS;
+  const arabicLetters = !numbers && language === "ar";
+  const multiline = active?.tagName === "TEXTAREA";
+  const deleteKey = <button type="button" className={arabicLetters ? styles.deleteKey : undefined} aria-label="Hapus satu karakter" onPointerDown={e => e.preventDefault()} onClick={() => update("delete")}>
+    <Delete size={24} strokeWidth={1.8} aria-hidden="true" style={language === "ar" ? { transform: "scaleX(-1)" } : undefined} />
+  </button>;
   const destination = typeof document !== "undefined" ? document.fullscreenElement ?? document.body : null;
   return <KeyboardContext.Provider value={{ activate, disabled }}>
     {children}
     {active && !disabled && <div aria-hidden="true" style={{ height }} />}
     {active && !disabled && destination && createPortal(<div ref={panel} className={styles.keyboard} role="region" aria-label="Keyboard ujian" dir="ltr" onContextMenu={e => e.preventDefault()}>
       <div className={styles.heading}><span>Keyboard ujian <small>Tahan tombol bertanda • untuk variasi</small></span><button type="button" onClick={close} aria-label="Tutup keyboard">⌄</button></div>
-      <div className={styles.preview} dir={isArabicDirection(editing.text) ? "rtl" : "ltr"} aria-label="Posisi kursor jawaban">
-        <span>{editing.start > 28 ? "…" : ""}{editing.text.slice(Math.max(0, editing.start - 28), editing.start).replace(/\n/g, " ↵ ")}</span><span className={styles.caret} aria-hidden="true">│</span><span>{editing.text.slice(editing.end, editing.end + 28).replace(/\n/g, " ↵ ")}{editing.text.length > editing.end + 28 ? "…" : ""}</span>
-      </div>
       <div className={styles.tools}>
         <button type="button" aria-pressed={!numbers && language === "ar"} onClick={() => { setLanguage("ar"); setNumbers(false); setMenu(null); }}>العربية</button>
         <button type="button" aria-pressed={!numbers && language === "id"} onClick={() => { setLanguage("id"); setNumbers(false); setMenu(null); }}>Indonesia</button>
@@ -162,13 +170,16 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
         <button type="button" aria-label="Kursor ke kanan" onPointerDown={e => e.preventDefault()} onClick={() => update("right")}>→</button>
       </div>
       {!numbers && language === "ar" && <div className={styles.harakat}>{HARAKAT.map(value => <CharacterKey key={value} value={value} shifted={false} insert={insert} variants={showVariants} chooseAt={chooseAt} />)}</div>}
-      {rows.map((row, index) => <div className={styles.row} key={`${numbers}:${language}:${index}`}>{row.map(value => <CharacterKey key={value} value={value} shifted={shift && !numbers && language === "id"} insert={insert} variants={showVariants} chooseAt={chooseAt} />)}</div>)}
+      {rows.map((row, index) => <div className={styles.row} key={`${numbers}:${language}:${index}`}>
+        {row.map(value => <CharacterKey key={value} value={value} shifted={shift && !numbers && language === "id"} insert={insert} variants={showVariants} chooseAt={chooseAt} />)}
+        {arabicLetters && index === rows.length - 1 && deleteKey}
+      </div>)}
       <div className={styles.bottom}>
         {!numbers && language === "id" && <button type="button" aria-label="Huruf kapital" aria-pressed={shift} onClick={() => { setShift(v => !v); setMenu(null); }}>⇧</button>}
         <CharacterKey value={language === "ar" ? "؟" : "."} shifted={false} insert={insert} variants={showVariants} chooseAt={chooseAt} />
         <button type="button" className={styles.space} aria-label="Spasi" onPointerDown={e => e.preventDefault()} onClick={() => insert(" ")}>Spasi</button>
-        <button type="button" aria-label="Hapus satu karakter" onPointerDown={e => e.preventDefault()} onClick={() => update("delete")}>⌫</button>
-        <button type="button" className={styles.enter} aria-label={active.multiline ? "Baris baru" : "Selesai mengetik"} onPointerDown={e => e.preventDefault()} onClick={() => active.multiline ? insert("\n") : close()}>{active.multiline ? "↵" : "✓"}</button>
+        {!arabicLetters && deleteKey}
+        <button type="button" className={styles.enter} aria-label={multiline ? "Baris baru" : "Selesai mengetik"} onPointerDown={e => e.preventDefault()} onClick={() => multiline ? insert("\n") : close()}>{multiline ? "↵" : "✓"}</button>
       </div>
       {menu && <div className={styles.variants} role="listbox" aria-label={`Variasi ${keyLabel(menu.key)}`} style={{ left: menu.left, top: menu.top }}>
         {menu.values.map(value => <button type="button" role="option" aria-selected={false} aria-label={keyLabel(value)} data-exam-variant={value} key={value} onPointerDown={e => e.preventDefault()} onClick={() => insert(value)}>{keyDisplay(value)}</button>)}
@@ -201,7 +212,7 @@ export function ExamTextInput({ value, onValueChange, multiline = false, rows = 
     id, name, value, placeholder, className, style, "aria-label": label, "data-exam-input": keyboard ? "true" : undefined,
     dir: "auto" as const, disabled: keyboard?.disabled, readOnly: Boolean(keyboard), inputMode: keyboard ? "none" as const : "text" as const,
     autoComplete: "off", autoCorrect: "off", autoCapitalize: "off", spellCheck: false,
-    onFocus: open, onClick: open, onSelect: () => { if (keyboard && document.activeElement === field.current) open(); },
+    onFocus: open, onClick: open,
     onBeforeInput: (e: React.FormEvent<Field>) => { if (keyboard) e.preventDefault(); },
     onInput: (e: React.FormEvent<Field>) => { if (keyboard) e.currentTarget.value = latest.current.value; },
     onChange: (e: React.ChangeEvent<Field>) => { if (!keyboard) onValueChange(e.currentTarget.value); },

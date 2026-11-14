@@ -15,7 +15,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, X } from "lucide-react";
+import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, Maximize2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 import QuestionRenderer from "@/components/ujian/QuestionRenderer";
@@ -1030,26 +1030,28 @@ export default function ClientMengerjakanUjian() {
 
         {/* Header - Timer */}
         <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
               {currentTypeIdx}
             </div>
-            <div>
-              <p className="text-[10px] md:text-xs font-bold text-blue-600 uppercase tracking-widest mb-0.5">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] md:text-xs font-bold text-blue-600 uppercase tracking-widest mb-0.5" title={soal.namaMapel || "Mata Pelajaran"}>
                 {soal.namaMapel || "Mata Pelajaran"}
               </p>
-              <h1 className="font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide">{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
+              <h1 className="truncate font-bold text-xs md:text-sm text-gray-800 uppercase tracking-wide" title={`${readableType} ${currentTypeIdx} / ${currentTypeTotal}`}>{readableType} {currentTypeIdx} / {currentTypeTotal}</h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {/* Fullscreen Fallback Toggle */}
             {!isFullscreen && hasStarted && !hasSubmitted.current && (
               <button
                 onClick={enterFullscreen}
-                className="px-3 py-1.5 md:py-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition font-bold text-xs"
+                className="p-2 rounded-lg bg-orange-100 text-orange-600 hover:bg-orange-200 transition"
+                aria-label="Kembali ke fullscreen"
+                title="Kembali ke fullscreen"
               >
-                Abaikan ini dan Kembali ke Fullscreen
+                <Maximize2 size={16} />
               </button>
             )}
 
@@ -1060,11 +1062,14 @@ export default function ClientMengerjakanUjian() {
             >
               <Grid3X3 size={18} />
             </button>
-            {unsavedCount > 0 && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold animate-pulse" title={`${unsavedCount} jawaban sedang disimpan...`}>
-                ⏳ {unsavedCount}
-              </div>
-            )}
+            {/* Reserve the save indicator's width so typing cannot reflow the header. */}
+            <div
+              className={`flex w-11 shrink-0 items-center justify-center gap-1 px-1 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold tabular-nums ${unsavedCount > 0 ? "animate-pulse" : "invisible"}`}
+              aria-hidden={unsavedCount === 0}
+              title={unsavedCount > 0 ? `${unsavedCount} jawaban sedang disimpan...` : undefined}
+            >
+              ⏳ {unsavedCount > 99 ? "99+" : unsavedCount}
+            </div>
             <div className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r rounded-lg md:rounded-xl shadow-inner font-mono font-bold text-base md:text-xl transition-colors ${timeLeft < 300 ? 'from-red-600 to-rose-500 text-white shadow-red-200 animate-pulse' : 'from-gray-100 to-gray-50 text-gray-800 border'}`}>
               <Clock size={16} className="md:w-5 md:h-5" />
               {formatTime(timeLeft)}

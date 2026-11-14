@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { ARABIC_ROWS, HARAKAT, KEY_VARIANTS, deleteExamText, insertExamText, isArabicDirection, moveExamCursor } from "../src/lib/exam-keyboard";
 
 test("Arabic letters, hamzah and required harakat are reachable", () => {
-  const available = new Set([...ARABIC_ROWS.flat(), ...HARAKAT, ...Object.values(KEY_VARIANTS).flat()]);
+  const visibleKeys = [...ARABIC_ROWS.flat(), ...HARAKAT];
+  const available = new Set([...visibleKeys, ...visibleKeys.flatMap(key => KEY_VARIANTS[key] ?? [])]);
   for (const letter of Array.from("ابتثجحخدذرزسشصضطظعغفقكلمنهويءأإآؤئىةًٌٍَُِّْٰ")) assert.ok(available.has(letter), letter);
   assert.deepEqual(KEY_VARIANTS["ا"], ["ا", "أ", "إ", "آ", "ٱ"]);
 });

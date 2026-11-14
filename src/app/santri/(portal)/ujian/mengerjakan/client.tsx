@@ -23,7 +23,7 @@ import QuestionRenderer from "@/components/ujian/QuestionRenderer";
 export default function ClientMengerjakanUjian() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sesiId = searchParams.get("s");
+  const sesiId = searchParams?.get("s");
 
   const [examData, setExamData] = useState<any>(null);
   const examDataRef = useRef<any>(null); // Ref utk avoid stale closure di handleAnswerSubmit
@@ -184,7 +184,7 @@ export default function ClientMengerjakanUjian() {
       }
     };
 
-    // 1b. Block ALL paste & drop at document level (catches Samsung/Gboard clipboard)
+    // 1b. Defense in depth; answer fields use the page keyboard and stay readonly.
     const handlePaste = (e: ClipboardEvent) => {
       e.preventDefault();
     };
@@ -192,8 +192,8 @@ export default function ClientMengerjakanUjian() {
       e.preventDefault();
     };
     // Catch IME-injected paste (Samsung Keyboard "Papan Klip", Gboard clipboard)
-    // Samsung Keyboard menyuntik clipboard sebagai 'insertText' (bukan 'insertFromPaste'),
-    // sehingga perlu dicek panjang data: ketikan manual selalu 1 karakter per event.
+    // IME events vary by OS; this legacy filter is not evidence of cheating.
+    // The page keyboard updates answer state directly instead of relying on these events.
     const handleBeforeInput = (e: InputEvent) => {
       if (
         e.inputType === 'insertFromPaste' ||
@@ -493,6 +493,7 @@ export default function ClientMengerjakanUjian() {
   // 4. Sync 45 detik: rebuild antrean dari selisih versi lalu proses.
   //    Dijalankan juga 3 detik setelah halaman dimuat (tidak menunggu 45 detik).
   const isProcessing = useRef(false);
+  const keyboardSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingQueue = useRef<Map<string, { payload: any; version: number }>>(new Map());
   const savedVersions = useRef<Map<string, number>>(new Map());
   const currentVersions = useRef<Map<string, number>>(new Map());
@@ -569,6 +570,8 @@ export default function ClientMengerjakanUjian() {
     }
   }, [sendAnswer, persistQueue, updateFailedCount]);
 
+  useEffect(() => () => { if (keyboardSaveTimer.current) clearTimeout(keyboardSaveTimer.current); }, []);
+
   // Bangun ulang antrean dari selisih versi (dipakai periodic sync & setelah refresh)
   const rebuildQueueFromVersions = useCallback(() => {
     try {
@@ -578,14 +581,13 @@ export default function ClientMengerjakanUjian() {
       if (!parsed.soal) return;
       let added = 0;
       for (const s of parsed.soal) {
-        const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
-        if (!hasAnswer) continue;
+        // A cleared text answer is also an edit that must reach the server.
         const savedVer = savedVersions.current.get(s.soalId) || 0;
         const curVer = currentVersions.current.get(s.soalId) || 0;
         if (savedVer < curVer && !pendingQueue.current.has(s.soalId)) {
           const p: any = {};
           if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
-          if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
+          if (typeof s.jawabanTeks === "string") p.jawabanTeks = s.jawabanTeks;
           if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
           if (s.rpiId) p.rpiId = s.rpiId;
           pendingQueue.current.set(s.soalId, { payload: p, version: curVer });
@@ -635,8 +637,7 @@ export default function ClientMengerjakanUjian() {
 
       // Kirim SEMUA jawaban yang sudah diisi dan versinya belum cocok
       const unsaved = parsed.soal.filter((s: any) => {
-        const hasAnswer = s.opsiTerpilih || s.jawabanTeks || (s.jawabanData && Object.keys(s.jawabanData).length > 0);
-        if (!hasAnswer) return false;
+        // Compare versions even when the last edit cleared the answer.
         const savedVer = savedVersions.current.get(s.soalId) || 0;
         const curVer = currentVersions.current.get(s.soalId) || 0;
         return savedVer < curVer;
@@ -648,7 +649,7 @@ export default function ClientMengerjakanUjian() {
       for (const s of unsaved) {
         const p: any = {};
         if (s.opsiTerpilih) p.opsiId = s.opsiTerpilih;
-        if (s.jawabanTeks) p.jawabanTeks = s.jawabanTeks;
+        if (typeof s.jawabanTeks === "string") p.jawabanTeks = s.jawabanTeks;
         if (s.jawabanData && Object.keys(s.jawabanData).length > 0) p.jawabanData = s.jawabanData;
         if (s.rpiId) p.rpiId = s.rpiId;
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -768,7 +769,9 @@ export default function ClientMengerjakanUjian() {
     pendingQueue.current.set(soalId, { payload, version: newVersion });
     setUnsavedCount(pendingQueue.current.size);
     persistQueue();
-    processQueue();
+    // Persist every key locally immediately; coalesce network writes while typing.
+    if (keyboardSaveTimer.current) clearTimeout(keyboardSaveTimer.current);
+    keyboardSaveTimer.current = setTimeout(() => { keyboardSaveTimer.current = null; void processQueue(); }, 400);
   }, [sesiId, persistVersions, persistQueue, processQueue]);
 
   const toggleRagu = useCallback(() => {
@@ -784,15 +787,15 @@ export default function ClientMengerjakanUjian() {
     const newExamData = { ...latestExamData, soal: newSoalArr };
     setExamDataSynced(newExamData);
     localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
-    persistVersions();
 
     // Naikkan versi dan kirim melalui robust save
     const newVersion = (currentVersions.current.get(curSoal.soalId) || 0) + 1;
     currentVersions.current.set(curSoal.soalId, newVersion);
+    persistVersions();
 
     const payload: any = { rpiId: newRagu };
     if (curSoal.opsiTerpilih) payload.opsiId = curSoal.opsiTerpilih;
-    if (curSoal.jawabanTeks) payload.jawabanTeks = curSoal.jawabanTeks;
+    if (typeof curSoal.jawabanTeks === "string") payload.jawabanTeks = curSoal.jawabanTeks;
     if (curSoal.jawabanData && Object.keys(curSoal.jawabanData).length > 0) payload.jawabanData = curSoal.jawabanData;
 
     pendingQueue.current.set(curSoal.soalId, { payload, version: newVersion });
@@ -1196,6 +1199,8 @@ export default function ClientMengerjakanUjian() {
           </div>
 
           <QuestionRenderer
+            examKeyboard
+            disabled={isSubmitting}
             soal={soal}
             onAnswer={(payload) => handleAnswerSubmit(soal.soalId, payload)}
           />

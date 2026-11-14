@@ -21,6 +21,7 @@ function stableShuffle(array: any[], seedStr: string) {
 import React, { useState, useEffect } from "react";
 import { Grid3X3 } from "lucide-react";
 import SoalText from "@/components/soal-text";
+import { ExamKeyboardProvider, ExamTextInput } from "./exam-keyboard";
 import {
   DndContext,
   closestCenter,
@@ -41,6 +42,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 interface QuestionRendererProps {
+  examKeyboard?: boolean;
+  disabled?: boolean;
   soal: any;
   onAnswer: (payload: { opsiId?: string, jawabanTeks?: string, jawabanData?: any }) => void;
 }
@@ -414,7 +417,12 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
   );
 };
 
-export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererProps) {
+export default function QuestionRenderer({ examKeyboard = false, disabled = false, ...props }: QuestionRendererProps) {
+  const content = <QuestionContent {...props} />;
+  return examKeyboard ? <ExamKeyboardProvider key={props.soal.soalId} disabled={disabled}>{content}</ExamKeyboardProvider> : content;
+}
+
+function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
   const { tipeSoal, opsiList, opsiTerpilih, jawabanTeks, jawabanData, dataTambahan } = soal;
 
   if (tipeSoal === "PG") {
@@ -659,7 +667,7 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
   if (["ESSAY_SINGKAT", "ESSAY_ARAB", "ISIAN_SAMPING", "ISIAN_BAWAH"].includes(tipeSoal)) {
     return (
       <div className="mt-4">
-        <DebouncedTextInput
+        <AnswerTextInput
           key={soal.soalId}
           isTextarea={true}
           rows={2}
@@ -675,7 +683,7 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
   if (["ESSAY_PANJANG", "ESSAY_GAMBAR"].includes(tipeSoal)) {
     return (
       <div className="mt-4">
-        <DebouncedTextInput
+        <AnswerTextInput
           key={soal.soalId}
           isTextarea={true}
           initialValue={jawabanTeks || ""}
@@ -705,21 +713,11 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
           if (match) {
             const idxStr = match[1];
             return (
-              <input
+              <ExamTextInput
                 key={i}
-                type="text"
-                dir="auto"
                 value={answers[idxStr] || ""}
-                onChange={(e) => {
-                   const nativeEvt = (e.nativeEvent as InputEvent);
-                   if (nativeEvt?.inputType === 'insertFromPaste' || nativeEvt?.inputType === 'insertFromDrop' || nativeEvt?.inputType === 'insertReplacementText' || (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) return;
-                   onAnswer({ jawabanData: { ...jawabanData, answers: { ...answers, [idxStr]: e.target.value } } });
-                }}
-                onFocus={(e) => {
-                   setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-                }}
-                onPaste={(e) => e.preventDefault()}
-                onDrop={(e) => e.preventDefault()}
+                label={`Jawaban rumpang ${idxStr}`}
+                onValueChange={value => onAnswer({ jawabanData: { ...jawabanData, answers: { ...answers, [idxStr]: value } } })}
                 className="mx-2 px-3 py-1 bg-gray-50 border-b-2 border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none transition-colors w-24 md:w-32 text-center text-blue-700 font-bold font-sans"
               />
             );
@@ -905,34 +903,11 @@ export default function QuestionRenderer({ soal, onAnswer }: QuestionRendererPro
                           return (
                             <td key={cIdx} className="p-2 border-r border-amber-100 align-middle min-w-[100px]">
                               {cell.isBlank ? (
-                                <textarea
-                                  dir="auto"
-                                  rows={1}
-                                  autoComplete="off"
-                                  autoCorrect="off"
-                                  autoCapitalize="off"
-                                  spellCheck={false}
-                                  data-form-type="other"
-                                  data-lpignore="true"
+                                <ExamTextInput
                                   name={`tasrif_${rIdx}_${cIdx}`}
+                                  label={`Jawaban tasrif ${rIdx + 1}, ${cIdx + 1}`}
                                   value={answers[key] || ""}
-                                  onChange={(e) => {
-                                     const nativeEvt = (e.nativeEvent as InputEvent);
-                                     if (nativeEvt?.inputType === 'insertFromPaste' || nativeEvt?.inputType === 'insertFromDrop' || nativeEvt?.inputType === 'insertReplacementText' || (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) return;
-                                     // Hapus newline agar tetap 1 baris
-                                     const val = e.target.value.replace(/\n/g, '');
-                                     onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: val } } });
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') e.preventDefault();
-                                  }}
-                                  onPaste={(e) => e.preventDefault()}
-                                  onDrop={(e) => e.preventDefault()}
-                                  onFocus={(e) => {
-                                     setTimeout(() => {
-                                       e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                     }, 400);
-                                  }}
+                                  onValueChange={value => onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: value } } })}
                                   className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner resize-none overflow-hidden"
                                   style={{ lineHeight: '1.5' }}
                                 />
@@ -1281,87 +1256,11 @@ function TapAndConnectComponent({
   );
 }
 
-function DebouncedTextInput({ initialValue, onSave, placeholder, className, isTextarea = false, rows = 6 }: any) {
-  const [val, setVal] = React.useState(initialValue || "");
-  const saveTimeout = React.useRef<NodeJS.Timeout | null>(null);
-
-  React.useEffect(() => {
-    // Only update internal state if the new prop diffs the stored payload
-    // and they aren't actively typing.
-    if (initialValue !== val && document.activeElement !== document.getElementById("debounced-input")) {
-      setVal(initialValue || "");
-    }
-  }, [initialValue]);
-
-  const handleChange = (e: any) => {
-    // Anti-paste backup: cek inputType dari nativeEvent
-    const nativeEvt = e.nativeEvent as InputEvent;
-    if (nativeEvt?.inputType === 'insertFromPaste' || 
-        nativeEvt?.inputType === 'insertFromDrop' ||
-        nativeEvt?.inputType === 'insertReplacementText' ||
-        (nativeEvt?.inputType === 'insertText' && nativeEvt?.data && nativeEvt.data.length > 2)) {
-      return; // Tolak — bukan ketikan manual
-    }
-    const newVal = e.target.value;
-    setVal(newVal);
-    if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    saveTimeout.current = setTimeout(() => {
-      onSave(newVal);
-    }, 500);
-  };
-
-  const handleBlur = (e: any) => {
-    if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    onSave(e.target.value);
-  };
-
-  const sharedProps = {
-    autoComplete: "off" as const,
-    autoCorrect: "off" as const,
-    autoCapitalize: "off" as const,
-    spellCheck: false,
-  };
-
-  if (isTextarea) {
-    return (
-      <textarea
-        id="debounced-input"
-        value={val}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        onFocus={(e) => {
-          setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-        }}
-        onPaste={(e) => e.preventDefault()}
-        onDrop={(e) => e.preventDefault()}
-        placeholder={placeholder}
-        className={className}
-        dir="auto"
-        rows={rows}
-        {...sharedProps}
-      />
-    );
-  }
-
-  return (
-    <input
-      id="debounced-input"
-      type="text"
-      value={val}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      onFocus={(e) => {
-        setTimeout(() => (e.target as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }), 300);
-      }}
-      onPaste={(e) => e.preventDefault()}
-      onDrop={(e) => e.preventDefault()}
-      placeholder={placeholder}
-      className={className}
-      dir="auto"
-      {...sharedProps}
-    />
-  );
-};
+function AnswerTextInput({ initialValue, onSave, placeholder, className, isTextarea = false, rows = 6 }: {
+  initialValue: string; onSave: (value: string) => void; placeholder: string; className: string; isTextarea?: boolean; rows?: number;
+}) {
+  return <ExamTextInput value={initialValue} onValueChange={onSave} placeholder={placeholder} className={className} multiline={isTextarea} rows={rows} />;
+}
 
 function TabelMatrixWrapper({ children }: { children: (zoom: number) => React.ReactNode }) {
   const [zoom, setZoom] = React.useState(1);

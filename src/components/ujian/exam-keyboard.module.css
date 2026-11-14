@@ -1,0 +1,26 @@
+.keyboard{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:150;width:min(100%,720px);box-sizing:border-box;padding:8px 8px max(8px,env(safe-area-inset-bottom));background:#e8edf4;border:1px solid #cbd5e1;border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px #0f172a1f;color:#17233a;font-family:Arial,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.keyboard button{font:inherit;cursor:pointer;border:0;outline-offset:2px;-webkit-tap-highlight-color:transparent;touch-action:none}
+.keyboard button:focus-visible{outline:3px solid #2563eb}
+.heading{display:flex;align-items:center;justify-content:space-between;padding:0 4px 5px;font-size:12px;font-weight:700}
+.heading small{display:block;font-size:10px;font-weight:400;color:#53657b;margin-top:2px}
+.heading button{background:transparent;color:#334155;min-width:44px;min-height:32px;font-size:24px}
+.preview{height:28px;overflow:hidden;white-space:pre;text-align:center;background:#f8fafc;border:1px solid #d7e0eb;border-radius:7px;padding:1px 4px;font-size:20px;line-height:24px;margin-bottom:5px;unicode-bidi:plaintext}
+.caret{color:#2563eb;font-weight:700}
+.tools{display:flex;gap:5px;margin-bottom:5px}
+.tools button{min-height:32px;flex:1;border-radius:7px;background:#d9e2ef;font-size:12px;color:#334155}
+.tools button[aria-pressed=true],.bottom button[aria-pressed=true]{background:#2563eb;color:white}
+.row,.harakat{display:flex;gap:4px;justify-content:center;margin-bottom:5px}
+.key{position:relative;flex:1;min-width:0;max-width:58px;min-height:42px;display:flex;align-items:center;justify-content:center;padding:0;background:#fff;border-radius:6px;box-shadow:0 1px 1px #94a3b8;font-size:23px!important;color:#17233a;touch-action:none}
+.key small{position:absolute;right:3px;top:0;font-size:10px;color:#7a8da5;line-height:12px}
+.key:active{background:#dbeafe}
+.harakat{gap:6px}
+.harakat .key{background:#dbe6f4;min-height:32px;max-width:none;font-size:23px!important}
+.bottom{display:flex;gap:5px;height:42px}
+.bottom>button{min-width:42px;background:#cedaeb;color:#263c5e;border-radius:7px;font-size:22px}
+.bottom .space{flex:1;background:white;font-size:13px}
+.bottom .enter{background:#2563eb;color:white;min-width:48px}
+.variants{position:absolute;z-index:2;display:flex;gap:2px;padding:6px;max-width:calc(100% - 16px);box-sizing:border-box;background:#1e40af;border-radius:10px;box-shadow:0 4px 16px #0f172a40;touch-action:none}
+.variants button{width:42px;min-width:0;flex-shrink:1;height:46px;border-radius:6px;background:white;color:#17233a;font-size:25px}
+.variants button:hover,.variants button:active{background:#bfdbfe}
+@media(max-height:500px){.keyboard{width:min(100%,600px);padding-top:4px}.heading{padding-bottom:0}.heading small{display:none}.heading button{min-height:24px}.preview{height:24px;line-height:20px;font-size:18px;margin-bottom:3px}.tools button{min-height:25px}.tools,.row,.harakat{margin-bottom:3px}.key{min-height:30px;font-size:20px!important}.harakat .key{min-height:26px}.bottom{height:32px}.variants button{height:38px}}
+@media(prefers-reduced-motion:reduce){.keyboard *{scroll-behavior:auto}}

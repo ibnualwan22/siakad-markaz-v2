@@ -57,6 +57,7 @@ export async function GET() {
     santriId: t.santriId,
     nama: t.nama,
     sakan: t.sakan,
+    kamar: t.kamar,
     kategori: t.kategori,
   }));
 

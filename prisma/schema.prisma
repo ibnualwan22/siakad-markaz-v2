@@ -1793,6 +1793,7 @@ enum UbudiyahStatus {
   GHOIB
   HADIR
   TIDAK_HADIR
+  LAINNYA
 }
 
 // Santri yang ditunjuk admin sebagai pencatat absen Ubudiyah untuk

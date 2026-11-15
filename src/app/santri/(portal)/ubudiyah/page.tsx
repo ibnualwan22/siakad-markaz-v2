@@ -16,6 +16,7 @@ type SantriRow = {
   santriId: string;
   nama: string;
   sakan: string;
+  kamar: string;
   kategori: string;
 };
 
@@ -283,11 +284,16 @@ export default function UbudiyahSantriPage() {
     const st = nilai[`${kegiatan}:${s.riwayatId}`]?.status;
     return st === UbudiyahStatus.GHOIB || st === UbudiyahStatus.TIDAK_HADIR;
   }).length;
+  const jmlLainnya = info.santriList.filter((s) => {
+    const st = nilai[`${kegiatan}:${s.riwayatId}`]?.status;
+    return st === UbudiyahStatus.LAINNYA;
+  }).length;
   const ringkasan =
     kegiatan === UbudiyahKegiatan.HALAQOH
       ? [
           jmlTepat > 0 ? `${jmlTepat} hadir` : "",
           jmlGhoib > 0 ? `${jmlGhoib} tidak hadir` : "",
+          jmlLainnya > 0 ? `${jmlLainnya} lainnya` : "",
         ]
           .filter(Boolean)
           .join(" • ")
@@ -295,12 +301,109 @@ export default function UbudiyahSantriPage() {
           jmlTepat > 0 ? `${jmlTepat} tepat waktu` : "",
           jmlMasbuq > 0 ? `${jmlMasbuq} masbuq` : "",
           jmlGhoib > 0 ? `${jmlGhoib} ghoib` : "",
+          jmlLainnya > 0 ? `${jmlLainnya} lainnya` : "",
         ]
           .filter(Boolean)
           .join(" • ");
 
+  // Khusus Bin Syihab: jamaah dibagi 2 lantai (kamar A–E lantai 1,
+  // kamar F ke atas lantai 2). Sakan lain tetap satu daftar.
+  const isBinSyihab = info.sakan === "Bin Syihab";
+  const lantaiOf = (kamar: string): 1 | 2 | 0 => {
+    const k = (kamar || "").trim().toUpperCase();
+    if (k >= "A" && k <= "E") return 1;
+    if (k >= "F") return 2;
+    return 0; // kamar kosong / tidak dikenal
+  };
+  const urutKamarNama = (a: SantriRow, b: SantriRow) =>
+    (a.kamar || "").localeCompare(b.kamar || "", "id") ||
+    a.nama.localeCompare(b.nama, "id");
+  const lantai1 = isBinSyihab
+    ? info.santriList.filter((s) => lantaiOf(s.kamar) === 1).sort(urutKamarNama)
+    : [];
+  const lantai2 = isBinSyihab
+    ? info.santriList.filter((s) => lantaiOf(s.kamar) === 2).sort(urutKamarNama)
+    : [];
+  const tanpaKamar = isBinSyihab
+    ? info.santriList.filter((s) => lantaiOf(s.kamar) === 0).sort(urutKamarNama)
+    : [];
+  const terisiDi = (list: SantriRow[]) =>
+    list.filter((s) => nilai[`${kegiatan}:${s.riwayatId}`]?.status).length;
+
+  // Satu tabel absen untuk satu daftar santri (dipakai sakan biasa, dan
+  // tiap lantai Bin Syihab).
+  const tabelAbsen = (list: SantriRow[]) => (
+    <div className="bg-white rounded-2xl border overflow-x-auto">
+      <table className="w-full text-sm min-w-[560px]">
+        <thead className="bg-slate-50 text-left">
+          <tr>
+            <th className="p-3 font-bold">Nama</th>
+            <th className="p-3 font-bold w-44">Status</th>
+            <th className="p-3 font-bold">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {list.map((s) => {
+            const n = nilai[`${kegiatan}:${s.riwayatId}`] ?? {
+              status: "" as const,
+              keterangan: "",
+            };
+            const perluKeterangan =
+              n.status !== "" && isUbudiyahKeteranganRequired(n.status);
+            return (
+              <tr key={s.riwayatId}>
+                <td className="p-3 font-semibold">
+                  {s.nama}{" "}
+                  {s.kategori === "KSU" && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      KSU
+                    </span>
+                  )}
+                </td>
+                <td className="p-3">
+                  <select
+                    value={n.status}
+                    onChange={(e) =>
+                      setStatus(
+                        s.riwayatId,
+                        e.target.value as UbudiyahStatus | ""
+                      )
+                    }
+                    className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[150px]"
+                  >
+                    <option value="">Pilih status...</option>
+                    {UBUDIYAH_STATUS_OPTIONS[kegiatan].map((st) => (
+                      <option key={st} value={st}>
+                        {UBUDIYAH_STATUS_LABEL[st]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-3">
+                  {perluKeterangan ? (
+                    <input
+                      type="text"
+                      value={n.keterangan}
+                      onChange={(e) =>
+                        setKeterangan(s.riwayatId, e.target.value)
+                      }
+                      placeholder="Keterangan (wajib diisi)"
+                      className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[160px]"
+                    />
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
-    <div className="space-y-6 p-4 max-w-4xl mx-auto">
+    <div className="space-y-6 p-4 pb-44 lg:pb-28 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-black">Qism Ubudiyah</h1>
         <p className="text-sm text-slate-500">
@@ -378,73 +481,35 @@ export default function UbudiyahSantriPage() {
               />
             </div>
           </div>
-          <div className="bg-white rounded-2xl border overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
-              <thead className="bg-slate-50 text-left">
-                <tr>
-                  <th className="p-3 font-bold">Nama</th>
-                  <th className="p-3 font-bold w-44">Status</th>
-                  <th className="p-3 font-bold">Keterangan</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {info.santriList.map((s) => {
-                  const n = nilai[`${kegiatan}:${s.riwayatId}`] ?? {
-                    status: "" as const,
-                    keterangan: "",
-                  };
-                  const perluKeterangan =
-                    n.status !== "" && isUbudiyahKeteranganRequired(n.status);
-                  return (
-                    <tr key={s.riwayatId}>
-                      <td className="p-3 font-semibold">
-                        {s.nama}{" "}
-                        {s.kategori === "KSU" && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                            KSU
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <select
-                          value={n.status}
-                          onChange={(e) =>
-                            setStatus(
-                              s.riwayatId,
-                              e.target.value as UbudiyahStatus | ""
-                            )
-                          }
-                          className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[150px]"
-                        >
-                          <option value="">Pilih status...</option>
-                          {UBUDIYAH_STATUS_OPTIONS[kegiatan].map((st) => (
-                            <option key={st} value={st}>
-                              {UBUDIYAH_STATUS_LABEL[st]}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3">
-                        {perluKeterangan ? (
-                          <input
-                            type="text"
-                            value={n.keterangan}
-                            onChange={(e) =>
-                              setKeterangan(s.riwayatId, e.target.value)
-                            }
-                            placeholder="Keterangan (wajib diisi)"
-                            className="w-full px-3 py-2 border rounded-xl text-sm bg-white min-w-[160px]"
-                          />
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {isBinSyihab ? (
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-bold mb-2">
+                  Lantai 1 — Kamar A–E · {lantai1.length} santri ·{" "}
+                  {terisiDi(lantai1)} terisi
+                </p>
+                {tabelAbsen(lantai1)}
+              </div>
+              <div>
+                <p className="text-sm font-bold mb-2">
+                  Lantai 2 — Kamar F ke atas · {lantai2.length} santri ·{" "}
+                  {terisiDi(lantai2)} terisi
+                </p>
+                {tabelAbsen(lantai2)}
+              </div>
+              {tanpaKamar.length > 0 && (
+                <div>
+                  <p className="text-sm font-bold mb-2">
+                    Tanpa kamar · {tanpaKamar.length} santri ·{" "}
+                    {terisiDi(tanpaKamar)} terisi
+                  </p>
+                  {tabelAbsen(tanpaKamar)}
+                </div>
+              )}
+            </div>
+          ) : (
+            tabelAbsen(info.santriList)
+          )}
 
           {simpanError && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">

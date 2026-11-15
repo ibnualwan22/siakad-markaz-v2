@@ -5,8 +5,10 @@ import prisma from "@/lib/prisma";
 import {
   UBUDIYAH_KEGIATAN_ORDER,
   formatUbudiyahReport,
+  formatUbudiyahReportLainnya,
   getUbudiyahMasbuqLevel,
   type UbudiyahReportGhoibRow,
+  type UbudiyahReportLainnyaRow,
   type UbudiyahReportMasbuqRow,
 } from "@/lib/ubudiyah";
 
@@ -17,9 +19,12 @@ export const dynamic = "force-dynamic";
 // atau ?secret=CRON_SECRET. Tanpa secret yang benar -> 401
 // (kecuali development).
 // Isi laporan = Subuh hari ini + Maghrib, Isya, Halaqoh tadi malam
-// (Subuh kemarin sudah masuk rekap kemarin). Dikirim ke penanggung
+// (Subuh kemarin sudah masuk rekap kemarin). Judul tanggal laporan =
+// KEMARIN, karena ini rekap absen kemarin. Dikirim ke penanggung
 // jawab Ubudiyah. Bila nihil (tidak ada masbuq/ghoib) tetap dikirim
-// sebagai pesan libur. ?dryRun=1 -> bangun pesan saja, tanpa kirim WA.
+// sebagai pesan libur. Pesan KEDUA (khusus "Lainnya", dengan
+// keterangan) dikirim ke nomor yang sama HANYA bila ada entrinya;
+// bila kosong dilewati. ?dryRun=1 -> bangun pesan saja, tanpa kirim WA.
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   let isValidCron = false;
@@ -102,6 +107,9 @@ export async function GET(request: NextRequest) {
     // TEPAT_WAKTU dan HADIR tidak masuk pesan.
     const masbuqByKey = new Map<string, UbudiyahReportMasbuqRow>();
     const ghoibByKey = new Map<string, UbudiyahReportGhoibRow>();
+    // Lainnya: satu baris per (santri, kegiatan) karena keterangannya
+    // bisa beda tiap kegiatan; tidak digabung dengan masbuq/ghoib.
+    const lainnya: UbudiyahReportLainnyaRow[] = [];
 
     for (const r of records) {
       const santriId = riwayatById.get(r.riwayatId);
@@ -148,7 +156,16 @@ export async function GET(request: NextRequest) {
           });
         }
       }
-      // TEPAT_WAKTU / HADIR: bukan masbuq maupun ghoib, lewati.
+
+      if (r.status === UbudiyahStatus.LAINNYA) {
+        lainnya.push({
+          nama: santri.nama,
+          sakan,
+          kegiatan: r.kegiatan,
+          keterangan: r.keterangan?.trim() || "-",
+        });
+      }
+      // TEPAT_WAKTU / HADIR: bukan masbuq, ghoib, maupun lainnya, lewati.
     }
 
     const sortKegiatan = (k: UbudiyahKegiatan[]) =>
@@ -164,7 +181,13 @@ export async function GET(request: NextRequest) {
       ghoibByKey.values()
     ).map((row) => ({ ...row, kegiatan: sortKegiatan(row.kegiatan) }));
 
-    const message = formatUbudiyahReport(todayLocal, masbuq, ghoib);
+    // Judul tanggal laporan = KEMARIN (rekap absen kemarin); jendela
+    // data tidak berubah (Subuh hari ini + Maghrib/Isya/Halaqoh kemarin).
+    const message = formatUbudiyahReport(yesterdayLocal, masbuq, ghoib);
+    const messageLainnya =
+      lainnya.length > 0
+        ? formatUbudiyahReportLainnya(yesterdayLocal, lainnya)
+        : null;
 
     let terkirim = false;
     if (!dryRun) {
@@ -175,13 +198,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Pesan kedua (Lainnya) hanya bila ada entrinya; bila kosong dilewati.
+    let pesanLainnya: "dikirim" | "dilewati" | "gagal" = "dilewati";
+    if (messageLainnya && !dryRun) {
+      const resultLainnya = await sendWhatsAppMessage(
+        "6282338545762",
+        messageLainnya
+      );
+      pesanLainnya = resultLainnya.success ? "dikirim" : "gagal";
+      if (!resultLainnya.success) {
+        console.error(
+          "Cron wa-rekap-ubudiyah gagal kirim WA Lainnya:",
+          resultLainnya.detail
+        );
+      }
+    }
+
     return NextResponse.json({
       ok: true,
-      tanggal: todayStr,
+      tanggal: yesterdayStr,
       masbuq: masbuq.length,
       ghoib: ghoib.length,
+      lainnya: lainnya.length,
       terkirim,
-      ...(dryRun ? { dryRun: true, message } : {}),
+      pesanLainnya,
+      ...(dryRun ? { dryRun: true, message, messageLainnya } : {}),
     });
   } catch (error: any) {
     console.error("Error wa-rekap-ubudiyah:", error);

@@ -216,6 +216,9 @@ export default function UbudiyahClient({
       r.status === UbudiyahStatus.GHOIB ||
       r.status === UbudiyahStatus.TIDAK_HADIR
   ).length;
+  const jmlRekapLainnya = rekapRows.filter(
+    (r) => r.status === UbudiyahStatus.LAINNYA
+  ).length;
 
   const togglePilih = (id: string) => {
     if (sudahQism.has(id)) return;
@@ -557,7 +560,7 @@ export default function UbudiyahClient({
           </div>
 
           {!rekapLoading && rekapRows.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               <div className="bg-white rounded-2xl border p-3 text-center">
                 <p className="text-lg font-black text-emerald-700">
                   {jmlRekapTepat}
@@ -580,6 +583,14 @@ export default function UbudiyahClient({
                 </p>
                 <p className="text-[11px] text-[var(--color-text-muted)]">
                   Ghoib / Tidak hadir
+                </p>
+              </div>
+              <div className="bg-white rounded-2xl border p-3 text-center">
+                <p className="text-lg font-black text-slate-700">
+                  {jmlRekapLainnya}
+                </p>
+                <p className="text-[11px] text-[var(--color-text-muted)]">
+                  Lainnya
                 </p>
               </div>
             </div>

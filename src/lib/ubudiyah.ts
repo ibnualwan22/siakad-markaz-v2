@@ -5,7 +5,8 @@ import { formatTanggalWa } from "./whatsapp";
  * Ubudiyah — absensi kegiatan wajib berjamaah (Subuh/Maghrib/Isya/
  * Halaqoh) per sakan. Qism Ubudiyah yang ditunjuk admin mengisi absen
  * lewat portal santri; laporan harian masbuq + ghoib dikirim WA tiap
- * 06:00 ke penanggung jawab Ubudiyah.
+ * 06:00 ke penanggung jawab Ubudiyah, plus pesan kedua khusus
+ * "Lainnya" (bila ada) ke nomor yang sama.
  */
 
 /** Urutan kegiatan dalam sehari; juga urutan daftar kegiatan di laporan. */
@@ -42,6 +43,7 @@ export const UBUDIYAH_STATUS_LABEL: Record<UbudiyahStatus, string> = {
   [UbudiyahStatus.GHOIB]: "Ghoib",
   [UbudiyahStatus.HADIR]: "Hadir",
   [UbudiyahStatus.TIDAK_HADIR]: "Tidak hadir",
+  [UbudiyahStatus.LAINNYA]: "Lainnya",
 };
 
 /**
@@ -55,6 +57,7 @@ export const UBUDIYAH_STATUS_OPTIONS: Record<UbudiyahKegiatan, UbudiyahStatus[]>
     UbudiyahStatus.MASBUQ_1,
     UbudiyahStatus.MASBUQ_2,
     UbudiyahStatus.GHOIB,
+    UbudiyahStatus.LAINNYA,
   ],
   [UbudiyahKegiatan.MAGHRIB]: [
     UbudiyahStatus.TEPAT_WAKTU,
@@ -62,6 +65,7 @@ export const UBUDIYAH_STATUS_OPTIONS: Record<UbudiyahKegiatan, UbudiyahStatus[]>
     UbudiyahStatus.MASBUQ_2,
     UbudiyahStatus.MASBUQ_3,
     UbudiyahStatus.GHOIB,
+    UbudiyahStatus.LAINNYA,
   ],
   [UbudiyahKegiatan.ISYA]: [
     UbudiyahStatus.TEPAT_WAKTU,
@@ -70,8 +74,13 @@ export const UBUDIYAH_STATUS_OPTIONS: Record<UbudiyahKegiatan, UbudiyahStatus[]>
     UbudiyahStatus.MASBUQ_3,
     UbudiyahStatus.MASBUQ_4,
     UbudiyahStatus.GHOIB,
+    UbudiyahStatus.LAINNYA,
   ],
-  [UbudiyahKegiatan.HALAQOH]: [UbudiyahStatus.HADIR, UbudiyahStatus.TIDAK_HADIR],
+  [UbudiyahKegiatan.HALAQOH]: [
+    UbudiyahStatus.HADIR,
+    UbudiyahStatus.TIDAK_HADIR,
+    UbudiyahStatus.LAINNYA,
+  ],
 };
 
 /** Apakah status ini pilihan yang sah untuk kegiatan tersebut? */
@@ -222,6 +231,59 @@ export function formatUbudiyahReport(
   // Hapus baris kosong di akhir bila seksi Ghoib tidak ada.
   while (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
+  }
+
+  return lines.join("\n");
+}
+
+/** Satu baris seksi Lainnya di laporan kedua (satu baris per kegiatan,
+ *  karena keterangannya bisa beda tiap kegiatan). */
+export type UbudiyahReportLainnyaRow = {
+  nama: string;
+  sakan: string;
+  kegiatan: UbudiyahKegiatan;
+  keterangan: string;
+};
+
+/**
+ * Format laporan kedua Ubudiyah (khusus "Lainnya") menjadi pesan WhatsApp
+ * terpisah — dikirim ke nomor yang sama dengan laporan utama, hanya bila
+ * ada entri Lainnya. Berbeda dengan laporan utama, pesan ini MENAMPILKAN
+ * keterangan tiap baris (alasan "lainnya"-nya justru yang perlu dibaca).
+ *
+ * Contoh output:
+ * ```
+ * 📿 *Sabtu, 14 November 2026*
+ * Subuh hari ini + Maghrib, Isya, Halaqoh tadi malam
+ *
+ * `Lainnya` (2)
+ * Ahmad_Sunan Ampel_lainnya (subuh) — izin pulang
+ * Budi_Sunan Muria_lainnya (isya) — sakit
+ * ```
+ */
+export function formatUbudiyahReportLainnya(
+  tanggal: Date,
+  lainnya: UbudiyahReportLainnyaRow[]
+): string {
+  const header = `📿 ${formatTanggalWa(toTanggalWaString(tanggal))}`;
+
+  const lines: string[] = [
+    header,
+    "Subuh hari ini + Maghrib, Isya, Halaqoh tadi malam",
+    "",
+    `\`Lainnya\` (${lainnya.length})`,
+  ];
+
+  const sorted = [...lainnya].sort(
+    (a, b) =>
+      compareUbudiyahReportRows(a, b) ||
+      UBUDIYAH_KEGIATAN_ORDER.indexOf(a.kegiatan) -
+        UBUDIYAH_KEGIATAN_ORDER.indexOf(b.kegiatan)
+  );
+  for (const row of sorted) {
+    lines.push(
+      `${row.nama}_${row.sakan}_lainnya (${UBUDIYAH_KEGIATAN_LABEL_KECIL[row.kegiatan]}) — ${row.keterangan}`
+    );
   }
 
   return lines.join("\n");

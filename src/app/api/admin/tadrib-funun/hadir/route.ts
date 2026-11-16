@@ -16,6 +16,27 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const pesertaId = searchParams.get("pesertaId");
+  const jenisId = searchParams.get("jenisId");
+  const pertemuanKe = searchParams.get("pertemuanKe");
+
+  // GET ?jenisId=...&pertemuanKe=... — daftar hadir SATU pertemuan untuk
+  // semua peserta satu jenis (dipakai tab Input Absen format sakan).
+  if (jenisId && pertemuanKe) {
+    const n = Number(pertemuanKe);
+    if (!Number.isInteger(n) || n < 1 || n > TADRIB_FUNUN_MAX_PERTEMUAN) {
+      return NextResponse.json(
+        { error: `pertemuanKe harus 1-${TADRIB_FUNUN_MAX_PERTEMUAN}` },
+        { status: 400 }
+      );
+    }
+    const hadir = await prisma.tadribFununHadir.findMany({
+      where: { peserta: { jenisId }, pertemuanKe: n },
+      select: { id: true, pesertaId: true, pertemuanKe: true, tanggal: true },
+      orderBy: { pesertaId: "asc" },
+    });
+    return NextResponse.json(hadir);
+  }
+
   if (!pesertaId) return NextResponse.json({ error: "pesertaId wajib diisi" }, { status: 400 });
 
   const hadir = await prisma.tadribFununHadir.findMany({

@@ -203,10 +203,8 @@ export default function TadribFununClient({
       )}
       {tab === "hadir" && (
         <HadirTab
-          pesertaList={pesertaList}
+          dufahAktif={dufahAktif}
           jenisList={jenisList}
-          filterJenis={filterJenis}
-          setFilterJenis={setFilterJenis}
           canEdit={canEdit}
           onRefresh={fetchPeserta}
         />
@@ -479,6 +477,11 @@ function PesertaTab({
   const [tambahJenisId, setTambahJenisId] = useState("");
   const [tambahLoading, setTambahLoading] = useState(false);
   const [terbitLoading, setTerbitLoading] = useState<string | null>(null);
+  // Riwayat hadir pindah ke tab ini (dulu di tab Input Absen).
+  const [riwayatPeserta, setRiwayatPeserta] = useState<Peserta | null>(null);
+  const [riwayatList, setRiwayatList] = useState<Hadir[]>([]);
+  const [riwayatLoading, setRiwayatLoading] = useState(false);
+  const [hapusRiwayatId, setHapusRiwayatId] = useState<string | null>(null);
 
   const tambahPeserta = async () => {
     if (!tambahSantriId || !tambahJenisId) return toast.error("Pilih santri dan jenis");
@@ -518,6 +521,36 @@ function PesertaTab({
       toast.error(e.message || "Gagal");
     } finally {
       setTerbitLoading(null);
+    }
+  };
+
+  const bukaRiwayat = async (p: Peserta) => {
+    setRiwayatPeserta(p);
+    setRiwayatLoading(true);
+    try {
+      const res = await fetch(`/api/admin/tadrib-funun/hadir?pesertaId=${encodeURIComponent(p.id)}`);
+      const json = await res.json();
+      setRiwayatList(Array.isArray(json) ? json : []);
+    } catch {
+      toast.error("Gagal memuat riwayat");
+    } finally {
+      setRiwayatLoading(false);
+    }
+  };
+
+  const hapusRiwayat = async (id: string) => {
+    setHapusRiwayatId(id);
+    try {
+      const res = await fetch(`/api/admin/tadrib-funun/hadir?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menghapus");
+      toast.success("Absen dihapus");
+      if (riwayatPeserta) bukaRiwayat(riwayatPeserta);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Gagal menghapus");
+    } finally {
+      setHapusRiwayatId(null);
     }
   };
 
@@ -636,6 +669,12 @@ function PesertaTab({
                             Cetak
                           </a>
                         )}
+                        <button
+                          onClick={() => bukaRiwayat(p)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold"
+                        >
+                          Riwayat
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -645,214 +684,305 @@ function PesertaTab({
           </div>
         )}
       </div>
+
+      {riwayatPeserta && (
+        <div className="bg-white rounded-2xl border p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold">Riwayat Hadir — {riwayatPeserta.nama} ({riwayatPeserta.jenis.nama})</h3>
+            <button
+              onClick={() => setRiwayatPeserta(null)}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold"
+            >
+              Tutup
+            </button>
+          </div>
+          {riwayatLoading ? (
+            <p className="text-sm">Memuat...</p>
+          ) : riwayatList.length === 0 ? (
+            <p className="text-sm text-[var(--color-text-muted)]">Belum ada absen.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-left">
+                  <tr>
+                    <th className="p-3 font-bold">Pertemuan</th>
+                    <th className="p-3 font-bold">Tanggal</th>
+                    <th className="p-3 font-bold">Pencatat</th>
+                    {canEdit && <th className="p-3 font-bold">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {riwayatList.map((h) => (
+                    <tr key={h.id}>
+                      <td className="p-3 font-bold">Pertemuan {h.pertemuanKe}</td>
+                      <td className="p-3">{String(h.tanggal).slice(0, 10)}</td>
+                      <td className="p-3">{h.pencatat?.nama || "-"}</td>
+                      {canEdit && (
+                        <td className="p-3">
+                          <button
+                            onClick={() => hapusRiwayat(h.id)}
+                            disabled={hapusRiwayatId === h.id}
+                            className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold disabled:opacity-50"
+                          >
+                            {hapusRiwayatId === h.id ? "..." : "Hapus"}
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ================= TAB ABSEN ================= */
+// Format ala absen sakan: pilih kategori dulu, lalu SEMUA peserta kategori
+// itu tampil sekaligus dalam satu tabel. Tiap baris cukup ditekan "Hadir"
+// untuk pertemuan yang dipilih, lalu satu tombol Simpan untuk semuanya.
+// Riwayat + hapus per peserta pindah ke tab Peserta (tombol "Riwayat").
 function HadirTab({
-  pesertaList,
+  dufahAktif,
   jenisList,
-  filterJenis,
-  setFilterJenis,
   canEdit,
   onRefresh,
 }: {
-  pesertaList: Peserta[];
+  dufahAktif: string;
   jenisList: Jenis[];
-  filterJenis: string;
-  setFilterJenis: (v: string) => void;
   canEdit: boolean;
   onRefresh: () => void;
 }) {
-  const [pesertaId, setPesertaId] = useState("");
-  const [hadirList, setHadirList] = useState<Hadir[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Filter kategori milik tab ini sendiri: mulai kosong, nama baru muncul
+  // setelah kategori dipilih (tanpa "Semua jenis", tanpa default).
+  const [jenisId, setJenisId] = useState("");
+  const [pesertaList, setPesertaList] = useState<Peserta[]>([]);
   const [pertemuanKe, setPertemuanKe] = useState(1);
   const [tanggal, setTanggal] = useState(() => new Date().toISOString().slice(0, 10));
+  // pesertaId -> catatan hadir yang sudah tersimpan untuk pertemuan ini.
+  const [tersimpan, setTersimpan] = useState<Record<string, { id: string; tanggal: string }>>({});
+  // pesertaId -> centang "Hadir" saat ini.
+  const [centang, setCentang] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [hapusId, setHapusId] = useState<string | null>(null);
 
-  // Ganti filter jenis = peserta yang sedang dipilih ikut direset, supaya
-  // tidak menampilkan absen peserta dari jenis lain.
-  useEffect(() => {
-    setPesertaId("");
-    setHadirList([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterJenis]);
-
-  const fetchHadir = async (id: string) => {
-    if (!id) return setHadirList([]);
+  const fetchPesertaJenis = async (id: string) => {
+    if (!id) {
+      setPesertaList([]);
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/tadrib-funun/hadir?pesertaId=${encodeURIComponent(id)}`);
+      const q = new URLSearchParams({ dufahNama: dufahAktif, jenisId: id });
+      const res = await fetch(`/api/admin/tadrib-funun/peserta?${q.toString()}`);
       const json = await res.json();
-      setHadirList(Array.isArray(json) ? json : []);
+      setPesertaList(json.data || []);
     } catch {
-      toast.error("Gagal memuat absen");
+      toast.error("Gagal memuat peserta");
     } finally {
       setLoading(false);
     }
   };
 
-  const pilihPeserta = (id: string) => {
-    setPesertaId(id);
-    fetchHadir(id);
+  const fetchTersimpan = async (id: string, pertemuan: number) => {
+    if (!id) {
+      setTersimpan({});
+      setCentang({});
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/admin/tadrib-funun/hadir?jenisId=${encodeURIComponent(id)}&pertemuanKe=${pertemuan}`
+      );
+      const json = await res.json();
+      const simpan: Record<string, { id: string; tanggal: string }> = {};
+      const cek: Record<string, boolean> = {};
+      if (Array.isArray(json)) {
+        for (const h of json) {
+          simpan[h.pesertaId] = { id: h.id, tanggal: String(h.tanggal).slice(0, 10) };
+          cek[h.pesertaId] = true;
+        }
+      }
+      setTersimpan(simpan);
+      setCentang(cek);
+    } catch {
+      toast.error("Gagal memuat status hadir");
+    }
+  };
+
+  useEffect(() => {
+    setTersimpan({});
+    setCentang({});
+    fetchPesertaJenis(jenisId);
+    fetchTersimpan(jenisId, pertemuanKe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jenisId]);
+
+  useEffect(() => {
+    fetchTersimpan(jenisId, pertemuanKe);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pertemuanKe]);
+
+  const toggleCentang = (id: string) => {
+    setCentang((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const simpan = async () => {
-    if (!pesertaId) return toast.error("Pilih peserta dulu");
+    if (!jenisId) return toast.error("Pilih kategori dulu");
     if (!tanggal) return toast.error("Tanggal wajib diisi");
     setSaving(true);
+    let berhasil = 0;
+    let gagal = 0;
     try {
-      const res = await fetch("/api/admin/tadrib-funun/hadir", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pesertaId, pertemuanKe, tanggal }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Gagal menyimpan absen");
-      toast.success(`Pertemuan ${pertemuanKe} dicatat`);
-      fetchHadir(pesertaId);
+      for (const p of pesertaList) {
+        const mauHadir = !!centang[p.id];
+        const sudah = tersimpan[p.id];
+        try {
+          if (mauHadir) {
+            // Sudah tercatat dengan tanggal yang sama: tidak perlu ditulis ulang.
+            if (sudah && sudah.tanggal === tanggal) continue;
+            const res = await fetch("/api/admin/tadrib-funun/hadir", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pesertaId: p.id, pertemuanKe, tanggal }),
+            });
+            if (!res.ok) throw new Error();
+            berhasil++;
+          } else if (sudah) {
+            // Dicentang-lepas: hapus catatan pertemuan ini.
+            const res = await fetch(`/api/admin/tadrib-funun/hadir?id=${encodeURIComponent(sudah.id)}`, {
+              method: "DELETE",
+            });
+            if (!res.ok) throw new Error();
+            berhasil++;
+          }
+        } catch {
+          gagal++;
+        }
+      }
+      if (gagal > 0) {
+        toast.error(`${berhasil} tersimpan, ${gagal} gagal — coba simpan lagi`);
+      } else {
+        toast.success(`Pertemuan ${pertemuanKe} disimpan (${berhasil} perubahan)`);
+      }
+      fetchTersimpan(jenisId, pertemuanKe);
       onRefresh();
-    } catch (e: any) {
-      toast.error(e.message || "Gagal menyimpan absen");
     } finally {
       setSaving(false);
     }
   };
 
-  const hapus = async (id: string) => {
-    setHapusId(id);
-    try {
-      const res = await fetch(`/api/admin/tadrib-funun/hadir?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Gagal menghapus");
-      toast.success("Absen dihapus");
-      fetchHadir(pesertaId);
-      onRefresh();
-    } catch (e: any) {
-      toast.error(e.message || "Gagal menghapus");
-    } finally {
-      setHapusId(null);
-    }
-  };
-
-  const pesertaTerpilih = pesertaList.find((p) => p.id === pesertaId);
+  const jumlahHadir = pesertaList.filter((p) => centang[p.id]).length;
+  const jumlahBelum = pesertaList.length - jumlahHadir;
 
   return (
     <div className="space-y-4">
-      {/* Filter per jenis — tersinkron dengan tab Peserta, agar daftar
-          peserta absen tidak lagi global (semua jenis tercampur). */}
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="text-sm font-bold">Filter jenis:</label>
-        <select
-          value={filterJenis}
-          onChange={(e) => setFilterJenis(e.target.value)}
-          className="rounded-xl border px-3 py-2 text-sm bg-white"
-        >
-          <option value="">Semua jenis</option>
-          {jenisList.map((j) => (
-            <option key={j.id} value={j.id}>{j.nama}</option>
-          ))}
-        </select>
-        <span className="text-sm text-[var(--color-text-muted)]">{pesertaList.length} peserta</span>
-      </div>
-
-      <div className="bg-white rounded-2xl border p-5 space-y-3">
-        <label className="text-sm font-bold block">Pilih peserta</label>
-        <select
-          value={pesertaId}
-          onChange={(e) => pilihPeserta(e.target.value)}
-          className="w-full md:w-96 rounded-xl border px-3 py-2 text-sm bg-white"
-        >
-          <option value="">Pilih peserta...</option>
-          {pesertaList.map((p) => (
-            <option key={p.id} value={p.id}>{p.nama} — {p.jenis.nama} ({p.kehadiran}/{p.minHadir})</option>
-          ))}
-        </select>
-        {pesertaTerpilih && (
-          <p className="text-sm text-[var(--color-text-muted)]">
-            {pesertaTerpilih.nama} — {pesertaTerpilih.jenis.nama}: kehadiran {pesertaTerpilih.kehadiran}/{pesertaTerpilih.minHadir}
-            {pesertaTerpilih.diterbitkan ? " • syahadah sudah terbit" : pesertaTerpilih.eligible ? " • layak terbit" : ""}
-          </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="block text-xs text-[var(--color-text-muted)] mb-1">Filter kategori</span>
+          <select
+            value={jenisId}
+            onChange={(e) => setJenisId(e.target.value)}
+            className="rounded-xl border px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Pilih kategori...</option>
+            {jenisList.map((j) => (
+              <option key={j.id} value={j.id}>{j.nama}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="block text-xs text-[var(--color-text-muted)] mb-1">Pertemuan ke-</span>
+          <select
+            value={pertemuanKe}
+            onChange={(e) => setPertemuanKe(Number(e.target.value))}
+            className="rounded-xl border px-3 py-2 text-sm bg-white"
+          >
+            {Array.from({ length: TADRIB_FUNUN_MAX_PERTEMUAN }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>Pertemuan {n}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="block text-xs text-[var(--color-text-muted)] mb-1">Tanggal</span>
+          <input
+            type="date"
+            value={tanggal}
+            onChange={(e) => setTanggal(e.target.value)}
+            className="rounded-xl border px-3 py-2 text-sm"
+          />
+        </label>
+        {canEdit && (
+          <button
+            onClick={simpan}
+            disabled={saving || !jenisId}
+            className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {saving ? "Menyimpan..." : "Simpan Absen"}
+          </button>
+        )}
+        {jenisId && (
+          <span className="text-sm text-[var(--color-text-muted)]">{pesertaList.length} peserta</span>
         )}
       </div>
 
-      {pesertaId && (
+      {!jenisId ? (
+        <div className="bg-white rounded-2xl border p-5">
+          <p className="text-sm text-[var(--color-text-muted)]">Pilih kategori dulu untuk menampilkan peserta.</p>
+        </div>
+      ) : (
         <>
-          {canEdit && (
-            <div className="bg-white rounded-2xl border p-5">
-              <h3 className="font-bold mb-3">Catat Kehadiran</h3>
-              <div className="flex flex-wrap items-end gap-3">
-                <label className="text-sm">
-                  <span className="block text-xs text-[var(--color-text-muted)] mb-1">Pertemuan ke-</span>
-                  <select
-                    value={pertemuanKe}
-                    onChange={(e) => setPertemuanKe(Number(e.target.value))}
-                    className="rounded-xl border px-3 py-2 text-sm bg-white"
-                  >
-                    {Array.from({ length: TADRIB_FUNUN_MAX_PERTEMUAN }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={n}>Pertemuan {n}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="text-sm">
-                  <span className="block text-xs text-[var(--color-text-muted)] mb-1">Tanggal</span>
-                  <input
-                    type="date"
-                    value={tanggal}
-                    onChange={(e) => setTanggal(e.target.value)}
-                    className="rounded-xl border px-3 py-2 text-sm"
-                  />
-                </label>
-                <button
-                  onClick={simpan}
-                  disabled={saving}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {saving ? "Menyimpan..." : "Simpan Absen"}
-                </button>
-                <span className="text-xs text-[var(--color-text-muted)]">
-                  Menyimpan pertemuan yang sama akan menimpa tanggal sebelumnya.
-                </span>
-              </div>
-            </div>
-          )}
+          <div className="flex flex-wrap gap-4 bg-white rounded-2xl border px-5 py-3 text-sm font-bold">
+            <span>Hadir: {jumlahHadir}</span>
+            <span className="text-[var(--color-text-muted)]">Belum: {jumlahBelum}</span>
+            <span className="text-[var(--color-text-muted)]">Pertemuan {pertemuanKe}</span>
+          </div>
 
           <div className="bg-white rounded-2xl border overflow-hidden">
             {loading ? (
               <p className="p-5 text-sm">Memuat...</p>
-            ) : hadirList.length === 0 ? (
-              <p className="p-5 text-sm text-[var(--color-text-muted)]">Belum ada absen.</p>
+            ) : pesertaList.length === 0 ? (
+              <p className="p-5 text-sm text-[var(--color-text-muted)]">Belum ada peserta di kategori ini.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 text-left">
                     <tr>
-                      <th className="p-3 font-bold">Pertemuan</th>
-                      <th className="p-3 font-bold">Tanggal</th>
-                      <th className="p-3 font-bold">Pencatat</th>
-                      {canEdit && <th className="p-3 font-bold">Aksi</th>}
+                      <th className="p-3 font-bold w-12 text-center">#</th>
+                      <th className="p-3 font-bold">Nama</th>
+                      <th className="p-3 font-bold">Kehadiran</th>
+                      <th className="p-3 font-bold">Hadir</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {hadirList.map((h) => (
-                      <tr key={h.id}>
-                        <td className="p-3 font-bold">Pertemuan {h.pertemuanKe}</td>
-                        <td className="p-3">{String(h.tanggal).slice(0, 10)}</td>
-                        <td className="p-3">{h.pencatat?.nama || "-"}</td>
-                        {canEdit && (
-                          <td className="p-3">
-                            <button
-                              onClick={() => hapus(h.id)}
-                              disabled={hapusId === h.id}
-                              className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold disabled:opacity-50"
-                            >
-                              {hapusId === h.id ? "..." : "Hapus"}
-                            </button>
-                          </td>
-                        )}
+                    {pesertaList.map((p, i) => (
+                      <tr key={p.id}>
+                        <td className="p-3 text-center font-bold text-[var(--color-text-muted)]">{i + 1}</td>
+                        <td className="p-3 font-semibold">
+                          {p.nama}
+                          {p.diterbitkan ? (
+                            <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">SYAHADAH TERBIT</span>
+                          ) : p.eligible ? (
+                            <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">LAYAK</span>
+                          ) : null}
+                        </td>
+                        <td className="p-3 font-bold">{p.kehadiran}/{p.minHadir}</td>
+                        <td className="p-3">
+                          <button
+                            onClick={() => toggleCentang(p.id)}
+                            disabled={!canEdit}
+                            className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all disabled:opacity-50 ${
+                              centang[p.id]
+                                ? "bg-emerald-600 text-white shadow-sm"
+                                : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                            }`}
+                          >
+                            {centang[p.id] ? "Hadir ✓" : "Hadir"}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -860,6 +990,9 @@ function HadirTab({
               </div>
             )}
           </div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            Menyimpan pertemuan yang sama akan menimpa tanggal sebelumnya. Melepas centang lalu menyimpan akan menghapus catatan pertemuan itu.
+          </p>
         </>
       )}
     </div>

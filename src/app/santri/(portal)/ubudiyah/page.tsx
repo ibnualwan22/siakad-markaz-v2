@@ -9,7 +9,9 @@ import {
   UBUDIYAH_STATUS_OPTIONS,
   isUbudiyahKeteranganRequired,
   isUbudiyahMasbuq,
+  ubudiyahKegiatanUntukLembaga,
 } from "@/lib/ubudiyah";
+import type { LembagaId } from "@/lib/lembaga";
 
 type SantriRow = {
   riwayatId: string;
@@ -27,6 +29,7 @@ type AbsenTersimpan = {
 
 type Info = {
   isQism: boolean;
+  lembaga: LembagaId;
   sakan: string | null;
   tanggal: string;
   dufahNama: string;
@@ -75,6 +78,7 @@ export default function UbudiyahSantriPage() {
       if (!res.ok) throw new Error(json.error || "Gagal memuat data");
       const next: Info = {
         isQism: !!json.isQism,
+        lembaga: json.lembaga || "ARABIYAH",
         sakan: json.sakan ?? null,
         tanggal: json.tanggal || "",
         dufahNama: json.dufahNama || "",
@@ -244,6 +248,10 @@ export default function UbudiyahSantriPage() {
       </p>
     );
 
+  // Tab kegiatan mengikuti lembaga Qism: Dzuhur & Ashar hanya
+  // Turats/Hufadz; Arabiyah tetap 4 kegiatan.
+  const kegiatanTampil = ubudiyahKegiatanUntukLembaga(info.lembaga);
+
   // Bukan Qism: halaman ini hanya untuk pencatat absen Ubudiyah.
   if (!info.isQism) {
     return (
@@ -251,8 +259,11 @@ export default function UbudiyahSantriPage() {
         <div>
           <h1 className="text-2xl font-black">Qism Ubudiyah</h1>
           <p className="text-sm text-slate-500">
-            Absensi kegiatan wajib berjamaah (Subuh, Maghrib, Isya, Halaqoh)
-            per sakan.
+            Absensi kegiatan wajib berjamaah (
+            {kegiatanTampil
+              .map((k) => UBUDIYAH_KEGIATAN_LABEL[k])
+              .join(", ")}
+            ) per sakan.
           </p>
         </div>
         <div className="bg-white rounded-2xl border p-6 text-center">
@@ -418,7 +429,7 @@ export default function UbudiyahSantriPage() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {UBUDIYAH_KEGIATAN_ORDER.map((k) => {
+        {kegiatanTampil.map((k) => {
           const tersimpan = Object.keys(info.absenHariIni[k] || {}).length;
           const sudahSimpan =
             info.santriList.length > 0 &&

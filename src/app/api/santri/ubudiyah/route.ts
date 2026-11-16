@@ -9,6 +9,7 @@ import {
 } from "@/lib/absensi";
 import { UbudiyahKegiatan, UbudiyahStatus } from "@prisma/client";
 import { isUbudiyahKeteranganRequired, isValidUbudiyahStatus } from "@/lib/ubudiyah";
+import { lembagaFromProgramKategori, type LembagaId } from "@/lib/lembaga";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,20 @@ async function getQismAktif(santriId: string, dufahNama: string) {
   });
 }
 
+// Lembaga Qism dari program riwayat aktifnya (TURATS/HUFADZ, selain
+// itu Arabiyah). Menentukan kegiatan apa yang boleh ia absen:
+// Dzuhur & Ashar hanya untuk Turats dan Hufadz.
+async function getLembagaQism(
+  santriId: string,
+  dufahNama: string
+): Promise<LembagaId> {
+  const riwayat = await prisma.riwayatSantri.findUnique({
+    where: { santriId_dufahNama: { santriId, dufahNama } },
+    include: { program: { select: { kategori: true } } },
+  });
+  return lembagaFromProgramKategori(riwayat?.program?.kategori ?? null);
+}
+
 // GET — daftar santri sakan + absen hari ini untuk Qism Ubudiyah yang login.
 // Bukan Qism -> { isQism: false, santriList: [], absenHariIni: {} }.
 export async function GET() {
@@ -34,9 +49,12 @@ export async function GET() {
 
   const tanggal = getTodayWibString();
   const dufahNama = (await getActiveDufahName()) || "";
+  const lembaga = dufahNama
+    ? await getLembagaQism(session.santriId, dufahNama)
+    : "ARABIYAH";
 
   const notQism = () =>
-    NextResponse.json({ isQism: false, tanggal, dufahNama, santriList: [], absenHariIni: {} });
+    NextResponse.json({ isQism: false, lembaga, tanggal, dufahNama, santriList: [], absenHariIni: {} });
   if (!dufahNama) return notQism();
 
   const qism = await getQismAktif(session.santriId, dufahNama);
@@ -74,7 +92,7 @@ export async function GET() {
     absenHariIni[h.kegiatan][h.riwayatId] = { status: h.status, keterangan: h.keterangan };
   }
 
-  return NextResponse.json({ isQism: true, sakan, tanggal, dufahNama, santriList, absenHariIni });
+  return NextResponse.json({ isQism: true, lembaga, sakan, tanggal, dufahNama, santriList, absenHariIni });
 }
 
 // POST { tanggal, kegiatan, absenList: [{ riwayatId, status, keterangan? }] }
@@ -130,6 +148,21 @@ export async function POST(request: Request) {
       { status: 403 }
     );
   }
+
+  // (c2) Dzuhur & Ashar hanya untuk Qism Turats dan Hufadz; Qism
+  // Arabiyah yang memaksa lewat API langsung ditolak di sini.
+  const lembaga = await getLembagaQism(session.santriId, dufahNama);
+  if (
+    lembaga === "ARABIYAH" &&
+    (kegiatan === UbudiyahKegiatan.DZUHUR ||
+      kegiatan === UbudiyahKegiatan.ASHAR)
+  ) {
+    return NextResponse.json(
+      { error: "Dzuhur dan Ashar hanya untuk lembaga Turats dan Hufadz" },
+      { status: 403 }
+    );
+  }
+
   const sakan = qism.sakan;
 
   // (d) tiap riwayatId harus dari sakan Qism

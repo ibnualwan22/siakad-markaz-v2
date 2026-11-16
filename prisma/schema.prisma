@@ -1779,6 +1779,8 @@ model TadribFununPeriode {
 // ghoib dikirim WA tiap 06:00 ke penanggung jawab Ubudiyah.
 enum UbudiyahKegiatan {
   SUBUH
+  DZUHUR
+  ASHAR
   MAGHRIB
   ISYA
   HALAQOH

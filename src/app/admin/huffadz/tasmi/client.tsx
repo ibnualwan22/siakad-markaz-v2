@@ -16,14 +16,23 @@ interface TasmiRow {
   ayatSampai: number;
   juz: number;
   durasiMenit: number;
-  nilaiTahfidz: number;
-  nilaiTahsin: number;
-  nilaiTartil: number;
-  nilaiAdab: number;
+  // Era Nukhbah 1 (legacy, arsip — tampil apa adanya, tidak bisa diedit)
+  nilaiTahfidz: number | null;
+  nilaiTahsin: number | null;
+  nilaiTartil: number | null;
+  nilaiAdab: number | null;
+  // Rubrik baru mulai Nukhbah 2
+  nilaiHafalan: number | null;
+  nilaiKelancaran: number | null;
+  nilaiTajwid: number | null;
+  nilaiMakhorijulHuruf: number | null;
   catatan: string | null;
   santri: { nama: string };
   penilai: { nama: string } | null;
 }
+
+// Baris rubrik baru bila kolom baru terisi; baris lama = arsip Nukhbah 1.
+const isBaru = (r: TasmiRow) => r.nilaiHafalan != null;
 
 function fmtWaktu(iso: string): string {
   try {
@@ -35,10 +44,10 @@ function fmtWaktu(iso: string): string {
 }
 
 const NILAI_FIELDS = [
-  { key: "nilaiTahfidz", label: "Tahfidz" },
-  { key: "nilaiTahsin", label: "Tahsin" },
-  { key: "nilaiTartil", label: "Tartil" },
-  { key: "nilaiAdab", label: "Adab" },
+  { key: "nilaiHafalan", label: "Ketetapan Hafalan" },
+  { key: "nilaiKelancaran", label: "Kelancaran" },
+  { key: "nilaiTajwid", label: "Tajwid" },
+  { key: "nilaiMakhorijulHuruf", label: "Makharijul Huruf" },
 ] as const;
 
 export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
@@ -64,7 +73,7 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
   const [juz, setJuz] = useState("1");
   const [durasi, setDurasi] = useState("");
   const [nilai, setNilai] = useState<Record<string, string>>({
-    nilaiTahfidz: "", nilaiTahsin: "", nilaiTartil: "", nilaiAdab: "",
+    nilaiHafalan: "", nilaiKelancaran: "", nilaiTajwid: "", nilaiMakhorijulHuruf: "",
   });
   const [catatan, setCatatan] = useState("");
 
@@ -108,11 +117,12 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     setSantriId("");
     onSurahChange(1);
     setDurasi("");
-    setNilai({ nilaiTahfidz: "", nilaiTahsin: "", nilaiTartil: "", nilaiAdab: "" });
+    setNilai({ nilaiHafalan: "", nilaiKelancaran: "", nilaiTajwid: "", nilaiMakhorijulHuruf: "" });
     setCatatan("");
   };
 
   const startEdit = (row: TasmiRow) => {
+    if (!isBaru(row)) return; // baris lama (Nukhbah 1) arsip, tidak bisa diedit
     setEditingId(row.id);
     setSantriId(row.santriId);
     setSurahNo(row.surahNo);
@@ -122,10 +132,10 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
     setJuz(String(row.juz));
     setDurasi(String(row.durasiMenit));
     setNilai({
-      nilaiTahfidz: String(row.nilaiTahfidz),
-      nilaiTahsin: String(row.nilaiTahsin),
-      nilaiTartil: String(row.nilaiTartil),
-      nilaiAdab: String(row.nilaiAdab),
+      nilaiHafalan: String(row.nilaiHafalan),
+      nilaiKelancaran: String(row.nilaiKelancaran),
+      nilaiTajwid: String(row.nilaiTajwid),
+      nilaiMakhorijulHuruf: String(row.nilaiMakhorijulHuruf),
     });
     setCatatan(row.catatan || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -173,10 +183,10 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
         ayatSampai: aSampai,
         juz: j,
         durasiMenit: parseInt(durasi) || 0,
-        nilaiTahfidz: parseInt(nilai.nilaiTahfidz),
-        nilaiTahsin: parseInt(nilai.nilaiTahsin),
-        nilaiTartil: parseInt(nilai.nilaiTartil),
-        nilaiAdab: parseInt(nilai.nilaiAdab),
+        nilaiHafalan: parseInt(nilai.nilaiHafalan),
+        nilaiKelancaran: parseInt(nilai.nilaiKelancaran),
+        nilaiTajwid: parseInt(nilai.nilaiTajwid),
+        nilaiMakhorijulHuruf: parseInt(nilai.nilaiMakhorijulHuruf),
         catatan: catatan || null,
       };
       const url = editingId ? `/api/admin/huffadz/tasmi/${editingId}` : "/api/admin/huffadz/tasmi";
@@ -215,7 +225,7 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <h1 className="text-2xl font-black text-gray-800 mb-1">Penilaian Tasmi' Huffadz</h1>
-      <p className="text-sm text-gray-500 mb-6">Form penilaian setoran tasmi' santri Markaz Huffadz</p>
+      <p className="text-sm text-gray-500 mb-6">Form penilaian setoran tasmi' santri Markaz Huffadz — rubrik baru mulai Nukhbah 2 (Ketetapan Hafalan, Kelancaran, Tajwid, Makharijul Huruf)</p>
 
       {canEdit && (
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6 mb-8">
@@ -320,7 +330,7 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
         </form>
       )}
 
-      {/* Tabel riwayat */}
+      {/* Tabel riwayat — dipisah per era rubrik */}
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b flex flex-wrap gap-3 items-center">
           <h2 className="font-black text-gray-800 flex-1">Riwayat Penilaian</h2>
@@ -331,50 +341,93 @@ export default function TasmiHuffadzClient({ canEdit }: { canEdit: boolean }) {
             className="p-2 text-sm border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500" />
           <button onClick={fetchRows} className="px-4 py-2 text-sm font-bold bg-gray-100 rounded-xl hover:bg-gray-200">Cari</button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[880px]">
-            <thead>
-              <tr className="bg-gray-50 text-xs uppercase text-gray-500">
-                <th className="px-4 py-3 text-left">Waktu</th>
-                <th className="px-4 py-3 text-left">Nama</th>
-                <th className="px-4 py-3 text-left">Surat / Juz</th>
-                <th className="px-4 py-3 text-center">Durasi</th>
-                <th className="px-4 py-3 text-center">Tahfidz</th>
-                <th className="px-4 py-3 text-center">Tahsin</th>
-                <th className="px-4 py-3 text-center">Tartil</th>
-                <th className="px-4 py-3 text-center">Adab</th>
-                {canEdit && <th className="px-4 py-3 text-center">Aksi</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Memuat...</td></tr>
-              ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-gray-400">Belum ada data</td></tr>
-              ) : rows.map(r => (
-                <tr key={r.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{fmtWaktu(r.waktuSubmit)}</td>
-                  <td className="px-4 py-3 font-bold text-gray-800">{r.santri.nama}</td>
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-gray-700">{rentangText(r)}</div>
-                    <div className="text-xs text-gray-500">Juz {r.juz}</div>
-                  </td>
-                  <td className="px-4 py-3 text-center">{r.durasiMenit} mnt</td>
-                  <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahfidz)}</td>
-                  <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahsin)}</td>
-                  <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTartil)}</td>
-                  <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiAdab)}</td>
-                  {canEdit && (
-                    <td className="px-4 py-3 text-center whitespace-nowrap">
-                      <button onClick={() => startEdit(r)} className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 mr-2">Edit</button>
-                      <button onClick={() => handleDelete(r.id, r.santri.nama)} className="px-3 py-1.5 text-xs font-bold bg-red-50 text-red-600 rounded-lg hover:bg-red-100">Hapus</button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="px-4 py-8 text-center text-gray-400">Memuat...</div>
+        ) : (
+          <>
+            {/* Rubrik baru — Nukhbah 2 ke atas */}
+            <div className="px-4 pt-4 pb-1 text-xs font-black uppercase tracking-wider text-emerald-700">Penilaian Baru (Nukhbah 2 ke atas)</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[880px]">
+                <thead>
+                  <tr className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <th className="px-4 py-3 text-left">Waktu</th>
+                    <th className="px-4 py-3 text-left">Nama</th>
+                    <th className="px-4 py-3 text-left">Surat / Juz</th>
+                    <th className="px-4 py-3 text-center">Durasi</th>
+                    <th className="px-4 py-3 text-center">Ketetapan Hafalan</th>
+                    <th className="px-4 py-3 text-center">Kelancaran</th>
+                    <th className="px-4 py-3 text-center">Tajwid</th>
+                    <th className="px-4 py-3 text-center">Makharijul Huruf</th>
+                    {canEdit && <th className="px-4 py-3 text-center">Aksi</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.filter(isBaru).length === 0 ? (
+                    <tr><td colSpan={canEdit ? 9 : 8} className="px-4 py-8 text-center text-gray-400">Belum ada penilaian baru</td></tr>
+                  ) : rows.filter(isBaru).map(r => (
+                    <tr key={r.id} className="border-t hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{fmtWaktu(r.waktuSubmit)}</td>
+                      <td className="px-4 py-3 font-bold text-gray-800">{r.santri.nama}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-gray-700">{rentangText(r)}</div>
+                        <div className="text-xs text-gray-500">Juz {r.juz}</div>
+                      </td>
+                      <td className="px-4 py-3 text-center">{r.durasiMenit} mnt</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiHafalan!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiKelancaran!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTajwid!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiMakhorijulHuruf!)}</td>
+                      {canEdit && (
+                        <td className="px-4 py-3 text-center whitespace-nowrap">
+                          <button onClick={() => startEdit(r)} className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 mr-2">Edit</button>
+                          <button onClick={() => handleDelete(r.id, r.santri.nama)} className="px-3 py-1.5 text-xs font-bold bg-red-50 text-red-600 rounded-lg hover:bg-red-100">Hapus</button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Riwayat lama — Nukhbah 1, arsip (tampil apa adanya, tanpa aksi) */}
+            <div className="px-4 pt-4 pb-1 text-xs font-black uppercase tracking-wider text-gray-500 border-t">Riwayat Nukhbah 1 (Arsip)</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[880px]">
+                <thead>
+                  <tr className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <th className="px-4 py-3 text-left">Waktu</th>
+                    <th className="px-4 py-3 text-left">Nama</th>
+                    <th className="px-4 py-3 text-left">Surat / Juz</th>
+                    <th className="px-4 py-3 text-center">Durasi</th>
+                    <th className="px-4 py-3 text-center">Tahfidz</th>
+                    <th className="px-4 py-3 text-center">Tahsin</th>
+                    <th className="px-4 py-3 text-center">Tartil</th>
+                    <th className="px-4 py-3 text-center">Adab</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.filter(r => !isBaru(r)).length === 0 ? (
+                    <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Tidak ada riwayat Nukhbah 1</td></tr>
+                  ) : rows.filter(r => !isBaru(r)).map(r => (
+                    <tr key={r.id} className="border-t hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-600">{fmtWaktu(r.waktuSubmit)}</td>
+                      <td className="px-4 py-3 font-bold text-gray-800">{r.santri.nama}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-gray-700">{rentangText(r)}</div>
+                        <div className="text-xs text-gray-500">Juz {r.juz}</div>
+                      </td>
+                      <td className="px-4 py-3 text-center">{r.durasiMenit} mnt</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahfidz!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTahsin!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiTartil!)}</td>
+                      <td className="px-4 py-3 text-center">{nilaiBadge(r.nilaiAdab!)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

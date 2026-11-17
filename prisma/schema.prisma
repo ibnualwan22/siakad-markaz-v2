@@ -1847,6 +1847,10 @@ model TemplateCetak {
 
 // Penilaian Tasmi' Markaz Huffadz — form penilaian harian.
 // Predikat dihitung (tidak disimpan): <70 مقبول | <80 جيد | <90 جيد جدا | else امتياز
+// Rubrik berubah mulai Nukhbah 2 (17 Nov 2026): 4 kolom baru
+// (Ketetapan Hafalan, Kelancaran, Tajwid, Makharijul Huruf — sama seperti
+// Munaqosah). Kolom lama era Nukhbah 1 dipertahankan (nullable) agar riwayat
+// lama tetap tampil apa adanya; baris lama tidak bisa diedit/dihapus (arsip).
 model HuffadzTasmi {
   id           String   @id @default(cuid())
   santriId     String
@@ -1859,10 +1863,14 @@ model HuffadzTasmi {
   ayatSampai   Int
   juz          Int
   durasiMenit  Int      @default(0)
-  nilaiTahfidz Int
-  nilaiTahsin  Int
-  nilaiTartil  Int
-  nilaiAdab    Int
+  nilaiTahfidz Int?     // Legacy Nukhbah 1: Tahfidz
+  nilaiTahsin  Int?     // Legacy Nukhbah 1: Tahsin
+  nilaiTartil  Int?     // Legacy Nukhbah 1: Tartil
+  nilaiAdab    Int?     // Legacy Nukhbah 1: Adab
+  nilaiHafalan         Int? // Nukhbah 2+: Ketetapan Hafalan
+  nilaiKelancaran      Int? // Nukhbah 2+: Kelancaran
+  nilaiTajwid          Int? // Nukhbah 2+: Tajwid
+  nilaiMakhorijulHuruf Int? // Nukhbah 2+: Makharijul Huruf
   catatan      String?
   penilaiId    String?
   createdAt    DateTime @default(now())

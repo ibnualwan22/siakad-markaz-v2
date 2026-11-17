@@ -73,13 +73,14 @@ function validasiRentang(b: any): string | null {
   if (sSampai === sDari && aSampai < aDari) return "Ayat akhir harus ≥ ayat awal";
   const j = Number(b.juz);
   if (!Number.isInteger(j) || j < 1 || j > 30) return "Juz harus 1-30";
-  for (const [k, v] of [["Tahfidz", b.nilaiTahfidz], ["Tahsin", b.nilaiTahsin], ["Tartil", b.nilaiTartil], ["Adab", b.nilaiAdab]] as const) {
+  for (const [k, v] of [["Ketetapan Hafalan", b.nilaiHafalan], ["Kelancaran", b.nilaiKelancaran], ["Tajwid", b.nilaiTajwid], ["Makharijul Huruf", b.nilaiMakhorijulHuruf]] as const) {
     if (!validNilai(Number(v))) return `Nilai ${k} harus 0-100`;
   }
   return null;
 }
 
 // POST — input penilaian baru (waktuSubmit otomatis = waktu server)
+// Rubrik baru mulai Nukhbah 2: 4 kolom baru; kolom lama era Nukhbah 1 tidak diisi.
 export async function POST(request: Request) {
   const session = await getSession();
   const hasPerm = await checkPermission("huffadz_edit");
@@ -120,10 +121,10 @@ export async function POST(request: Request) {
         ayatSampai: Number(b.ayatSampai),
         juz: Number(b.juz),
         durasiMenit: Math.max(0, Number(b.durasiMenit) || 0),
-        nilaiTahfidz: Number(b.nilaiTahfidz),
-        nilaiTahsin: Number(b.nilaiTahsin),
-        nilaiTartil: Number(b.nilaiTartil),
-        nilaiAdab: Number(b.nilaiAdab),
+        nilaiHafalan: Number(b.nilaiHafalan),
+        nilaiKelancaran: Number(b.nilaiKelancaran),
+        nilaiTajwid: Number(b.nilaiTajwid),
+        nilaiMakhorijulHuruf: Number(b.nilaiMakhorijulHuruf),
         catatan: b.catatan ? String(b.catatan).slice(0, 500) : null,
         penilaiId: (session as any).userId || null,
       },

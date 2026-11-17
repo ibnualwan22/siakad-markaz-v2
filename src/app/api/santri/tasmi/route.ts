@@ -32,22 +32,32 @@ export async function GET() {
     orderBy: { waktuSubmit: "desc" },
   });
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    tanggal: r.waktuSubmit,
-    surahNama: r.surahNama,
-    ayatDari: r.ayatDari,
-    surahSampaiNama: r.surahSampaiNama,
-    ayatSampai: r.ayatSampai,
-    juz: r.juz,
-    durasiMenit: r.durasiMenit,
-    nilaiTahfidz: r.nilaiTahfidz,
-    nilaiTahsin: r.nilaiTahsin,
-    nilaiTartil: r.nilaiTartil,
-    nilaiAdab: r.nilaiAdab,
-    rataRata: Math.round((r.nilaiTahfidz + r.nilaiTahsin + r.nilaiTartil + r.nilaiAdab) / 4),
-    catatan: r.catatan,
-  }));
+  // Rata-rata dari kolom yang terisi: rubrik baru (Nukhbah 2+) atau lama (Nukhbah 1).
+  const items = rows.map((r) => {
+    const baru = [r.nilaiHafalan, r.nilaiKelancaran, r.nilaiTajwid, r.nilaiMakhorijulHuruf];
+    const lama = [r.nilaiTahfidz, r.nilaiTahsin, r.nilaiTartil, r.nilaiAdab];
+    const pakai = baru.every((v) => v != null) ? baru : lama;
+    return {
+      id: r.id,
+      tanggal: r.waktuSubmit,
+      surahNama: r.surahNama,
+      ayatDari: r.ayatDari,
+      surahSampaiNama: r.surahSampaiNama,
+      ayatSampai: r.ayatSampai,
+      juz: r.juz,
+      durasiMenit: r.durasiMenit,
+      nilaiTahfidz: r.nilaiTahfidz,
+      nilaiTahsin: r.nilaiTahsin,
+      nilaiTartil: r.nilaiTartil,
+      nilaiAdab: r.nilaiAdab,
+      nilaiHafalan: r.nilaiHafalan,
+      nilaiKelancaran: r.nilaiKelancaran,
+      nilaiTajwid: r.nilaiTajwid,
+      nilaiMakhorijulHuruf: r.nilaiMakhorijulHuruf,
+      rataRata: Math.round(pakai.reduce<number>((a, b) => a + (b ?? 0), 0) / 4),
+      catatan: r.catatan,
+    };
+  });
 
   return NextResponse.json({
     isHufadz: true,

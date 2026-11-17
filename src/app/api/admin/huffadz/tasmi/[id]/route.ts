@@ -20,13 +20,19 @@ function validasiRentang(b: any): string | null {
   if (sSampai === sDari && aSampai < aDari) return "Ayat akhir harus ≥ ayat awal";
   const j = Number(b.juz);
   if (!Number.isInteger(j) || j < 1 || j > 30) return "Juz harus 1-30";
-  for (const [k, v] of [["Tahfidz", b.nilaiTahfidz], ["Tahsin", b.nilaiTahsin], ["Tartil", b.nilaiTartil], ["Adab", b.nilaiAdab]] as const) {
+  for (const [k, v] of [["Ketetapan Hafalan", b.nilaiHafalan], ["Kelancaran", b.nilaiKelancaran], ["Tajwid", b.nilaiTajwid], ["Makharijul Huruf", b.nilaiMakhorijulHuruf]] as const) {
     if (!validNilai(Number(v))) return `Nilai ${k} harus 0-100`;
   }
   return null;
 }
 
-// PUT — edit penilaian (waktuSubmit tidak diubah)
+// Baris lama era Nukhbah 1 (kolom baru kosong) sudah diarsip: tidak bisa diubah/hapus.
+async function isArsip(id: string): Promise<boolean> {
+  const row = await prisma.huffadzTasmi.findUnique({ where: { id }, select: { nilaiHafalan: true } });
+  return !row || row.nilaiHafalan == null;
+}
+
+// PUT — edit penilaian (waktuSubmit tidak diubah). Hanya baris rubrik baru.
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   const hasPerm = await checkPermission("huffadz_edit");
@@ -37,6 +43,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const b = await request.json();
+
+    if (await isArsip(id)) {
+      return NextResponse.json({ error: "Penilaian lama (Nukhbah 1) sudah diarsip, tidak bisa diedit" }, { status: 403 });
+    }
 
     const err = validasiRentang(b);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
@@ -52,10 +62,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         ayatSampai: Number(b.ayatSampai),
         juz: Number(b.juz),
         durasiMenit: Math.max(0, Number(b.durasiMenit) || 0),
-        nilaiTahfidz: Number(b.nilaiTahfidz),
-        nilaiTahsin: Number(b.nilaiTahsin),
-        nilaiTartil: Number(b.nilaiTartil),
-        nilaiAdab: Number(b.nilaiAdab),
+        nilaiHafalan: Number(b.nilaiHafalan),
+        nilaiKelancaran: Number(b.nilaiKelancaran),
+        nilaiTajwid: Number(b.nilaiTajwid),
+        nilaiMakhorijulHuruf: Number(b.nilaiMakhorijulHuruf),
         catatan: b.catatan ? String(b.catatan).slice(0, 500) : null,
       },
       include: { santri: { select: { nama: true } } },
@@ -76,6 +86,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
   try {
     const { id } = await params;
+    if (await isArsip(id)) {
+      return NextResponse.json({ error: "Penilaian lama (Nukhbah 1) sudah diarsip, tidak bisa dihapus" }, { status: 403 });
+    }
     await prisma.huffadzTasmi.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (e: any) {

@@ -12,10 +12,14 @@ type TasmiItem = {
   ayatSampai: number;
   juz: number;
   durasiMenit: number;
-  nilaiTahfidz: number;
-  nilaiTahsin: number;
-  nilaiTartil: number;
-  nilaiAdab: number;
+  nilaiTahfidz: number | null;
+  nilaiTahsin: number | null;
+  nilaiTartil: number | null;
+  nilaiAdab: number | null;
+  nilaiHafalan: number | null;
+  nilaiKelancaran: number | null;
+  nilaiTajwid: number | null;
+  nilaiMakhorijulHuruf: number | null;
   rataRata: number;
   catatan: string | null;
 };
@@ -139,10 +143,21 @@ export default function TasmiSantriPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <NilaiBox label="Tahfidz" nilai={r.nilaiTahfidz} />
-                <NilaiBox label="Tahsin" nilai={r.nilaiTahsin} />
-                <NilaiBox label="Tartil" nilai={r.nilaiTartil} />
-                <NilaiBox label="Adab" nilai={r.nilaiAdab} />
+                {r.nilaiHafalan != null ? (
+                  <>
+                    <NilaiBox label="Ketetapan Hafalan" nilai={r.nilaiHafalan} />
+                    <NilaiBox label="Kelancaran" nilai={r.nilaiKelancaran!} />
+                    <NilaiBox label="Tajwid" nilai={r.nilaiTajwid!} />
+                    <NilaiBox label="Makharijul Huruf" nilai={r.nilaiMakhorijulHuruf!} />
+                  </>
+                ) : (
+                  <>
+                    <NilaiBox label="Tahfidz" nilai={r.nilaiTahfidz!} />
+                    <NilaiBox label="Tahsin" nilai={r.nilaiTahsin!} />
+                    <NilaiBox label="Tartil" nilai={r.nilaiTartil!} />
+                    <NilaiBox label="Adab" nilai={r.nilaiAdab!} />
+                  </>
+                )}
               </div>
 
               <div className="flex items-center justify-between border-t pt-2.5 text-sm">

@@ -482,6 +482,7 @@ function PesertaTab({
   const [riwayatList, setRiwayatList] = useState<Hadir[]>([]);
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const [hapusRiwayatId, setHapusRiwayatId] = useState<string | null>(null);
+  const [hapusPesertaId, setHapusPesertaId] = useState<string | null>(null);
 
   const tambahPeserta = async () => {
     if (!tambahSantriId || !tambahJenisId) return toast.error("Pilih santri dan jenis");
@@ -551,6 +552,24 @@ function PesertaTab({
       toast.error(e.message || "Gagal menghapus");
     } finally {
       setHapusRiwayatId(null);
+    }
+  };
+
+  const hapusPeserta = async (p: Peserta) => {
+    if (p.diterbitkan) return toast.error("Syahadah sudah terbit — Batalkan Terbit dulu sebelum menghapus");
+    if (!confirm(`Hapus peserta ${p.nama} dari ${p.jenis.nama} (${dufahAktif})?\n\nRiwayat absen peserta ini ikut terhapus.`)) return;
+    setHapusPesertaId(p.id);
+    try {
+      const res = await fetch(`/api/admin/tadrib-funun/peserta?id=${encodeURIComponent(p.id)}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menghapus peserta");
+      toast.success(`Peserta ${p.nama} dihapus`);
+      if (riwayatPeserta?.id === p.id) setRiwayatPeserta(null);
+      onRefresh();
+    } catch (e: any) {
+      toast.error(e.message || "Gagal menghapus peserta");
+    } finally {
+      setHapusPesertaId(null);
     }
   };
 
@@ -675,6 +694,16 @@ function PesertaTab({
                         >
                           Riwayat
                         </button>
+                        {canEdit && !p.diterbitkan && (
+                          <button
+                            onClick={() => hapusPeserta(p)}
+                            disabled={hapusPesertaId === p.id}
+                            title="Hapus peserta (riwayat absen ikut terhapus)"
+                            className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold disabled:opacity-50"
+                          >
+                            {hapusPesertaId === p.id ? "..." : "Hapus"}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

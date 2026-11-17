@@ -89,3 +89,34 @@ export async function POST(request: Request) {
   });
   return NextResponse.json(peserta);
 }
+
+// DELETE ?id=... — hapus peserta; riwayat hadirnya ikut terhapus (cascade).
+// Diblokir bila syahadah sudah terbit — Batalkan Terbit dulu.
+export async function DELETE(request: Request) {
+  const session = await getSession();
+  const hasPerm = await checkPermission("tadrib_funun_edit");
+  if (!session || !hasPerm) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id wajib diisi" }, { status: 400 });
+
+  const peserta = await prisma.tadribFununPeserta.findUnique({
+    where: { id },
+    select: { id: true, syahadahDiterbitkanAt: true },
+  });
+  if (!peserta) {
+    return NextResponse.json({ error: "Peserta tidak ditemukan" }, { status: 404 });
+  }
+  if (peserta.syahadahDiterbitkanAt) {
+    return NextResponse.json(
+      { error: "Syahadah peserta sudah terbit — Batalkan Terbit dulu sebelum menghapus" },
+      { status: 403 }
+    );
+  }
+
+  await prisma.tadribFununPeserta.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}

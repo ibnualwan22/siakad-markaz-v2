@@ -190,6 +190,13 @@ export type UbudiyahReportGhoibRow = {
   kegiatan: UbudiyahKegiatan[];
 };
 
+/** Satu baris seksi Belum Absen di laporan harian: sakan + kegiatan
+ * yang tidak diisi sama sekali (tidak ada baris UbudiyahHadir). */
+export type UbudiyahReportBelumAbsenRow = {
+  sakan: string;
+  kegiatan: UbudiyahKegiatan[];
+};
+
 /** Urutan baris laporan: sakan ASC lalu nama ASC (locale Indonesia). */
 function compareUbudiyahReportRows(
   a: { sakan: string; nama: string },
@@ -233,12 +240,17 @@ function bagiBarisPerJendela<T extends { kegiatan: UbudiyahKegiatan[] }>(
   };
 }
 
-/** Satu seksi (satu tanggal) laporan: header + subjudul + blok Masbuq/Ghoib. */
+/** Satu seksi (satu tanggal) laporan: header + subjudul + blok Masbuq/Ghoib
+ * + blok Belum Absen. Bila `adaAbsen` true tapi seksi ini kosong (semua
+ * tepat waktu/hadir dan semua sakan mengisi), tampil baris nihil agar
+ * pesannya tidak disangka libur. */
 function formatSeksiLaporan(
   header: string,
   subtitle: string,
   masbuq: UbudiyahReportMasbuqRow[],
-  ghoib: UbudiyahReportGhoibRow[]
+  ghoib: UbudiyahReportGhoibRow[],
+  belumAbsen: UbudiyahReportBelumAbsenRow[] = [],
+  adaAbsen = false
 ): string {
   const lines: string[] = [header, subtitle, ""];
   if (masbuq.length > 0) {
@@ -258,6 +270,25 @@ function formatSeksiLaporan(
       );
     }
   }
+  if (belumAbsen.length > 0) {
+    if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+    lines.push(`⚠️ Belum absen (${belumAbsen.length})`);
+    for (const row of [...belumAbsen].sort((a, b) =>
+      a.sakan.localeCompare(b.sakan, "id")
+    )) {
+      lines.push(
+        `${row.sakan} — tidak mengisi absen (${formatUbudiyahKegiatanList(row.kegiatan)})`
+      );
+    }
+  }
+  if (
+    masbuq.length === 0 &&
+    ghoib.length === 0 &&
+    belumAbsen.length === 0 &&
+    adaAbsen
+  ) {
+    lines.push("Tidak ada santri masbuq/ghoib.");
+  }
   while (lines.length > 0 && lines[lines.length - 1] === "") {
     lines.pop();
   }
@@ -268,8 +299,16 @@ function formatSeksiLaporan(
  * Format laporan harian Ubudiyah menjadi SATU pesan WhatsApp dengan DUA
  * judul tanggal: kegiatan kemarin (Dzuhur, Ashar, Maghrib, Isya,
  * Halaqoh) memakai tanggal kemarin, Subuh memakai judul baru dengan
- * tanggal hari ini. Jendela yang tidak ada isinya tidak ditampilkan;
- * bila keduanya kosong, pesan libur dengan kedua tanggal.
+ * tanggal hari ini. Kedua jendela selalu ditampilkan bila bukan libur;
+ * jendela yang kosong berisi baris "Tidak ada santri masbuq/ghoib."
+ *
+ * `opts.adaAbsen` = ada baris absen sama sekali di jendela laporan.
+ * Libur HANYA bila tidak ada satu pun baris absen (tidak ada sakan
+ * yang mengisi absen sama sekali) — bukan lagi bila masbuq/ghoib
+ * kosong. `opts.belumAbsen` = sakan yang tidak mengisi absen (tampil
+ * sebagai seksi peringatan per jendela); `opts.qismDiganti` = sakan
+ * yang Qism-nya perlu segera diganti (tampil sebagai seksi peringatan
+ * di akhir pesan).
  *
  * Isi laporan = Subuh hari ini + kegiatan kemarin (Subuh kemarin sudah
  * masuk rekap kemarin). Halaqoh yang tidak hadir masuk seksi Ghoib;
@@ -297,7 +336,7 @@ function formatSeksiLaporan(
  * Ahmad_Sunan Ampel_masbuq 2 raka'at (subuh)
  * ```
  *
- * Bila masbuq dan ghoib keduanya kosong (nihil = libur):
+ * Bila tidak ada satu pun baris absen di seluruh jendela (libur):
  * ```
  * 📿 *Sabtu, 14 November 2026*
  * 📿 *Minggu, 15 November 2026*
@@ -310,15 +349,37 @@ export function formatUbudiyahReport(
   tanggalHariIni: Date,
   masbuq: UbudiyahReportMasbuqRow[],
   ghoib: UbudiyahReportGhoibRow[],
-  kegiatanKemarin: UbudiyahKegiatan[]
+  kegiatanKemarin: UbudiyahKegiatan[],
+  opts: {
+    /** Ada baris absen sama sekali di jendela laporan (kemarin + Subuh
+     * hari ini). Bila false -> libur. Bila tidak diisi, libur mengikuti
+     * aturan lama: masbuq/ghoib/belumAbsen/qismDiganti semuanya kosong. */
+    adaAbsen?: boolean;
+    /** Sakan yang tidak mengisi absen (per sakan + kegiatan). */
+    belumAbsen?: UbudiyahReportBelumAbsenRow[];
+    /** Sakan yang Qism-nya perlu segera diganti (Qism sudah checkout). */
+    qismDiganti?: string[];
+  } = {}
 ): string {
   const headerKemarin = `📿 ${formatTanggalWa(toTanggalWaString(tanggalKemarin))}`;
   const headerHariIni = `📿 ${formatTanggalWa(toTanggalWaString(tanggalHariIni))}`;
+  const belumAbsen = opts.belumAbsen ?? [];
+  const qismDiganti = [...(opts.qismDiganti ?? [])].sort((a, b) =>
+    a.localeCompare(b, "id")
+  );
+  const adaAbsen =
+    opts.adaAbsen ??
+    (masbuq.length > 0 ||
+      ghoib.length > 0 ||
+      belumAbsen.length > 0 ||
+      qismDiganti.length > 0);
 
   const mKemarin: UbudiyahReportMasbuqRow[] = [];
   const mHariIni: UbudiyahReportMasbuqRow[] = [];
   const gKemarin: UbudiyahReportGhoibRow[] = [];
   const gHariIni: UbudiyahReportGhoibRow[] = [];
+  const bKemarin: UbudiyahReportBelumAbsenRow[] = [];
+  const bHariIni: UbudiyahReportBelumAbsenRow[] = [];
   for (const row of masbuq) {
     const { kemarin, hariIni } = bagiBarisPerJendela(row);
     if (kemarin) mKemarin.push(kemarin);
@@ -329,13 +390,15 @@ export function formatUbudiyahReport(
     if (kemarin) gKemarin.push(kemarin);
     if (hariIni) gHariIni.push(hariIni);
   }
+  for (const row of belumAbsen) {
+    const { kemarin, hariIni } = bagiBarisPerJendela(row);
+    if (kemarin) bKemarin.push(kemarin);
+    if (hariIni) bHariIni.push(hariIni);
+  }
 
-  if (
-    mKemarin.length === 0 &&
-    gKemarin.length === 0 &&
-    mHariIni.length === 0 &&
-    gHariIni.length === 0
-  ) {
+  // Libur HANYA bila tidak ada satu pun baris absen di seluruh jendela
+  // (tidak ada sakan yang mengisi absen sama sekali).
+  if (!adaAbsen) {
     return `${headerKemarin}\n${headerHariIni}\n\nLibur — tidak ada santri masbuq/ghoib.`;
   }
 
@@ -348,14 +411,32 @@ export function formatUbudiyahReport(
     .join(", ")} tadi malam`;
 
   const sections: string[] = [];
-  if (mKemarin.length > 0 || gKemarin.length > 0) {
+  sections.push(
+    formatSeksiLaporan(
+      headerKemarin,
+      subtitleKemarin,
+      mKemarin,
+      gKemarin,
+      bKemarin,
+      true
+    )
+  );
+  sections.push(
+    formatSeksiLaporan(
+      headerHariIni,
+      "Subuh hari ini",
+      mHariIni,
+      gHariIni,
+      bHariIni,
+      true
+    )
+  );
+  if (qismDiganti.length > 0) {
     sections.push(
-      formatSeksiLaporan(headerKemarin, subtitleKemarin, mKemarin, gKemarin)
-    );
-  }
-  if (mHariIni.length > 0 || gHariIni.length > 0) {
-    sections.push(
-      formatSeksiLaporan(headerHariIni, "Subuh hari ini", mHariIni, gHariIni)
+      [
+        `⚠️ Qism perlu segera diganti (${qismDiganti.length})`,
+        ...qismDiganti.map((sakan) => `${sakan} — Qism sudah checkout`),
+      ].join("\n")
     );
   }
   return sections.join("\n\n");

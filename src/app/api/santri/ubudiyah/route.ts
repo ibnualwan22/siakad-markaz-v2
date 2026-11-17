@@ -61,15 +61,19 @@ export async function GET() {
   if (!qism || !qism.isActive) return notQism();
 
   // Sakan penunjukan harus sama dengan sakan santri saat ini; bila santri
-  // sudah pindah sakan, penunjukan dianggap tidak berlaku.
+  // sudah pindah sakan, penunjukan dianggap tidak berlaku. Qism yang
+  // sudah checkout dari Siakad juga dianggap bukan Qism lagi.
   const saya = await prisma.santriInternal.findUnique({
     where: { id: session.santriId },
-    select: { sakan: true },
+    select: { sakan: true, isCheckedOut: true },
   });
-  if (!saya?.sakan || saya.sakan !== qism.sakan) return notQism();
+  if (!saya?.sakan || saya.sakan !== qism.sakan || saya.isCheckedOut) return notQism();
 
   const sakan = qism.sakan;
-  const targets = await getActiveRiwayatListForAbsen(undefined, sakan);
+  // Santri yang sudah checkout tidak tampil di daftar absen.
+  const targets = (await getActiveRiwayatListForAbsen(undefined, sakan)).filter(
+    (t) => !t.isCheckedOut
+  );
   const santriList = targets.map((t) => ({
     riwayatId: t.riwayatId,
     santriId: t.santriId,
@@ -140,11 +144,17 @@ export async function POST(request: Request) {
   }
   const saya = await prisma.santriInternal.findUnique({
     where: { id: session.santriId },
-    select: { sakan: true },
+    select: { sakan: true, isCheckedOut: true },
   });
   if (!saya?.sakan || saya.sakan !== qism.sakan) {
     return NextResponse.json(
       { error: "Sakan Anda sudah tidak sama dengan sakan penunjukan Qism" },
+      { status: 403 }
+    );
+  }
+  if (saya.isCheckedOut) {
+    return NextResponse.json(
+      { error: "Anda sudah checkout dari Siakad" },
       { status: 403 }
     );
   }
@@ -165,8 +175,11 @@ export async function POST(request: Request) {
 
   const sakan = qism.sakan;
 
-  // (d) tiap riwayatId harus dari sakan Qism
-  const targets = await getActiveRiwayatListForAbsen(undefined, sakan);
+  // (d) tiap riwayatId harus dari sakan Qism (santri checkout tidak
+  // boleh diabsen)
+  const targets = (await getActiveRiwayatListForAbsen(undefined, sakan)).filter(
+    (t) => !t.isCheckedOut
+  );
   const allowed = new Set(targets.map((t) => t.riwayatId));
 
   // Validasi semua baris dulu (e, f) sebelum menulis apa pun.

@@ -76,7 +76,7 @@ export async function POST(request: Request) {
   const uniqueSantriIds = [...new Set(santriIds)];
   const santriList = await prisma.santriInternal.findMany({
     where: { id: { in: uniqueSantriIds } },
-    select: { id: true, nama: true, sakan: true, dufahNama: true, isAktif: true },
+    select: { id: true, nama: true, sakan: true, dufahNama: true, isAktif: true, isCheckedOut: true },
   });
   const santriMap = new Map(santriList.map((s) => [s.id, s]));
 
@@ -87,6 +87,9 @@ export async function POST(request: Request) {
     }
     if (!s.isAktif) {
       return NextResponse.json({ error: `${s.nama ?? santriId} bukan santri aktif` }, { status: 400 });
+    }
+    if (s.isCheckedOut) {
+      return NextResponse.json({ error: `${s.nama ?? santriId} sudah checkout dari Siakad` }, { status: 400 });
     }
     if (s.sakan !== sakan) {
       return NextResponse.json(

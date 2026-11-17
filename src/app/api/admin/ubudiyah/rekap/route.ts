@@ -61,7 +61,7 @@ export async function GET(request: Request) {
 
   const santriList = await prisma.santriInternal.findMany({
     where: { id: { in: [...new Set(riwayatList.map((r) => r.santriId))] } },
-    select: { id: true, nama: true, sakan: true, kategori: true },
+    select: { id: true, nama: true, sakan: true, kategori: true, isCheckedOut: true },
   });
   const santriMap = new Map(santriList.map((s) => [s.id, s]));
 
@@ -78,6 +78,12 @@ export async function GET(request: Request) {
   const pencatatMap = new Map(pencatatList.map((s) => [s.id, s]));
 
   const data = hadir
+    // Santri yang sudah checkout tidak tampil di rekap.
+    .filter((h) => {
+      const r = riwayatMap.get(h.riwayatId);
+      const s = r ? santriMap.get(r.santriId) : undefined;
+      return !s?.isCheckedOut;
+    })
     .map((h) => {
       const r = riwayatMap.get(h.riwayatId);
       const s = r ? santriMap.get(r.santriId) : undefined;

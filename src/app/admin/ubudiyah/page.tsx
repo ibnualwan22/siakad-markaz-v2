@@ -16,10 +16,11 @@ export default async function UbudiyahPage() {
   // (pola yang sama seperti tab Peserta Tadrib Funun: daftar santri
   // dioper sebagai props dari page, bukan di-fetch client).
   // getMasterSantriList sudah hanya mengembalikan santri aktif
-  // (isAktif, sakan != "-") terurut nama.
+  // (isAktif, sakan != "-") terurut nama; santri yang sudah checkout
+  // disaring di sini agar tidak bisa dipilih jadi Qism.
   const masterSantri = await getMasterSantriList();
   const santriAktif = masterSantri
-    .filter((s) => s.isAktif)
+    .filter((s) => s.isAktif && !s.isCheckedOut)
     .map((s) => ({ id: s.id, nama: s.nama || "-", sakan: s.sakan || "-" }))
     .sort((a, b) => a.nama.localeCompare(b.nama, "id"));
 

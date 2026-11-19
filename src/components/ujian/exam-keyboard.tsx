@@ -208,8 +208,11 @@ export function ExamTextInput({ value, onValueChange, multiline = false, rows = 
       latest.current.value = next; latest.current.onValueChange(next);
     } });
   };
+  // iOS Safari auto-zoom saat fokus input berfont <16px. text-base (16px) jadi
+  // batas minimum SEMUA kolom jawaban ujian; text-lg di pemakaian lain tetap
+  // menang karena urutan CSS build (text-lg sesudah text-base).
   const props = {
-    id, name, value, placeholder, className, style, "aria-label": label, "data-exam-input": keyboard ? "true" : undefined,
+    id, name, value, placeholder, className: `${className || ""} text-base`.trim(), style, "aria-label": label, "data-exam-input": keyboard ? "true" : undefined,
     dir: "auto" as const, disabled: keyboard?.disabled, readOnly: Boolean(keyboard), inputMode: keyboard ? "none" as const : "text" as const,
     autoComplete: "off", autoCorrect: "off", autoCapitalize: "off", spellCheck: false,
     onFocus: open, onClick: open,

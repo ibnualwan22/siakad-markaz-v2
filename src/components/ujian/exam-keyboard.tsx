@@ -8,7 +8,7 @@ import styles from "./exam-keyboard.module.css";
 
 type Field = HTMLInputElement | HTMLTextAreaElement;
 type Binding = { element: Field; read: () => string; write: (value: string) => void; multiline: boolean };
-type KeyboardContextValue = { activate: (field: Binding) => void; disabled: boolean };
+type KeyboardContextValue = { activate: (field: Binding) => void; disabled: boolean; active: Field | null };
 const KeyboardContext = createContext<KeyboardContextValue | null>(null);
 
 type VariantMenu = { key: string; values: string[]; left: number; top: number };
@@ -157,7 +157,7 @@ export function ExamKeyboardProvider({ children, disabled = false }: { children:
     <Delete size={24} strokeWidth={1.8} aria-hidden="true" style={language === "ar" ? { transform: "scaleX(-1)" } : undefined} />
   </button>;
   const destination = typeof document !== "undefined" ? document.fullscreenElement ?? document.body : null;
-  return <KeyboardContext.Provider value={{ activate, disabled }}>
+  return <KeyboardContext.Provider value={{ activate, disabled, active }}>
     {children}
     {active && !disabled && <div aria-hidden="true" style={{ height }} />}
     {active && !disabled && destination && createPortal(<div ref={panel} className={styles.keyboard} role="region" aria-label="Keyboard ujian" dir="ltr" onContextMenu={e => e.preventDefault()}>
@@ -202,6 +202,28 @@ export function ExamTextInput({ value, onValueChange, multiline = false, rows = 
   const id = useId(), field = useRef<Field | null>(null);
   const latest = useRef({ value, onValueChange });
   useLayoutEffect(() => { latest.current = { value, onValueChange }; }, [value, onValueChange]);
+  // Kursor palsu: input readOnly di iOS tidak menampilkan kursor ketap-ketip,
+  // padahal provider sudah menjaga selection-nya. Overlay cermin ini menggambar
+  // garis kursor sendiri (hanya input satu baris yang aktif) mengikuti posisi
+  // kursor DOM, supaya santri melihat posisi ketiknya.
+  const mirror = useRef<HTMLSpanElement | null>(null);
+  const [cursor, setCursor] = useState(0);
+  const [mirrorStyle, setMirrorStyle] = useState<CSSProperties | null>(null);
+  const isActive = !!keyboard && !keyboard.disabled && keyboard.active === field.current;
+  useLayoutEffect(() => {
+    const el = field.current;
+    if (!el || !isActive) return;
+    const cs = getComputedStyle(el);
+    setMirrorStyle({
+      font: cs.font, letterSpacing: cs.letterSpacing, lineHeight: cs.lineHeight,
+      textAlign: cs.textAlign as CSSProperties["textAlign"], color: cs.color,
+      direction: cs.direction as CSSProperties["direction"],
+      paddingTop: cs.paddingTop, paddingRight: cs.paddingRight,
+      paddingBottom: cs.paddingBottom, paddingLeft: cs.paddingLeft,
+    });
+    setCursor(el.selectionStart ?? value.length);
+    if (mirror.current) mirror.current.scrollLeft = el.scrollLeft;
+  }, [isActive, value]);
   const open = () => {
     if (!field.current || !keyboard) return;
     keyboard.activate({ element: field.current, multiline, read: () => latest.current.value, write: next => {
@@ -216,6 +238,8 @@ export function ExamTextInput({ value, onValueChange, multiline = false, rows = 
     dir: "auto" as const, disabled: keyboard?.disabled, readOnly: Boolean(keyboard), inputMode: keyboard ? "none" as const : "text" as const,
     autoComplete: "off", autoCorrect: "off", autoCapitalize: "off", spellCheck: false,
     onFocus: open, onClick: open,
+    onSelect: (e: React.SyntheticEvent<Field>) => { setCursor(e.currentTarget.selectionStart ?? value.length); },
+    onScroll: () => { if (mirror.current && field.current) mirror.current.scrollLeft = field.current.scrollLeft; },
     onBeforeInput: (e: React.FormEvent<Field>) => { if (keyboard) e.preventDefault(); },
     onInput: (e: React.FormEvent<Field>) => { if (keyboard) e.currentTarget.value = latest.current.value; },
     onChange: (e: React.ChangeEvent<Field>) => { if (!keyboard) onValueChange(e.currentTarget.value); },
@@ -225,5 +249,20 @@ export function ExamTextInput({ value, onValueChange, multiline = false, rows = 
     onContextMenu: (e: React.MouseEvent<Field>) => { if (keyboard) e.preventDefault(); },
     onKeyDown: (e: React.KeyboardEvent<Field>) => { if (keyboard && !["Tab", "Escape"].includes(e.key)) e.preventDefault(); },
   };
-  return multiline ? <textarea {...props} ref={el => { field.current = el; }} rows={rows} /> : <input {...props} ref={el => { field.current = el; }} type="text" />;
+  if (multiline) return <textarea {...props} ref={el => { field.current = el; }} rows={rows} />;
+  if (!keyboard) return <input {...props} ref={el => { field.current = el; }} type="text" />;
+  const inputEl = <input {...props} ref={el => { field.current = el; }} type="text" />;
+  const wide = (className || "").includes("w-full");
+  return (
+    <span className={wide ? "relative block w-full" : "relative inline-block"}>
+      {inputEl}
+      {isActive && mirrorStyle && (
+        <span ref={mirror} aria-hidden="true" dir="auto" style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", whiteSpace: "pre", ...mirrorStyle }}>
+          <span style={{ visibility: "hidden" }}>{value.slice(0, cursor)}</span>
+          <span className={styles.fakeCaret} />
+          <span style={{ visibility: "hidden" }}>{value.slice(cursor)}</span>
+        </span>
+      )}
+    </span>
+  );
 }

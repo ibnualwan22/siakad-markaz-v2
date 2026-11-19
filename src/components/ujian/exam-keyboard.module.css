@@ -23,3 +23,6 @@
 .variants button:hover,.variants button:active{background:#bfdbfe}
 @media(max-height:500px){.keyboard{max-width:600px;padding-top:4px}.heading{padding-bottom:0}.heading small{display:none}.heading button{min-height:24px}.tools button{min-height:25px}.tools,.row,.harakat{margin-bottom:3px}.key,.deleteKey{min-height:30px;font-size:20px!important}.harakat .key{min-height:26px}.bottom{height:32px}.variants button{height:38px}}
 @media(prefers-reduced-motion:reduce){.keyboard *{scroll-behavior:auto}}
+.fakeCaret{display:inline-block;width:2px;height:1.15em;vertical-align:-0.18em;background:currentColor;animation:caretBlink 1.1s step-end infinite}
+@keyframes caretBlink{0%,100%{opacity:1}50%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.fakeCaret{animation:none}}

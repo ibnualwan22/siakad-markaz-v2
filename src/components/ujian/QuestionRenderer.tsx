@@ -884,35 +884,35 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
             <p className="text-sm text-gray-500 mb-2 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
             <p className="text-xs text-amber-600 mb-4 self-start flex items-center gap-1 font-semibold md:hidden">👆 Gunakan tombol zoom (+/−). Geser tabel ke kiri/kanan ↔ jika tidak muat di layar.</p>
             <div className="w-full overflow-x-auto overflow-y-visible pb-[40vh] scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <div className="min-w-[600px]" style={{ transform: `scale(${zoom})`, transformOrigin: 'top right' }}>
+              <div className="min-w-[320px] min-[400px]:min-w-[420px] md:min-w-[600px]" style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: 'top right' }}>
                 <table className="w-full text-center border-collapse text-sm md:text-base border border-amber-200 shadow-sm rounded-xl overflow-hidden" dir="rtl">
                   <thead className="bg-amber-100/80 text-amber-900 border-b border-amber-200">
                     <tr>
                       <th className="p-3"></th>
                       {headers.map((h, i) => (
-                        <th key={i} className="p-3 font-bold border-r border-amber-200/50 min-w-[80px]">{h}</th>
+                        <th key={i} className="p-1.5 min-[400px]:p-2 md:p-3 font-bold border-r border-amber-200/50 min-w-[44px] min-[400px]:min-w-[56px] md:min-w-[80px]">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row, rIdx) => (
                       <tr key={rIdx} className="border-b border-amber-100 last:border-none bg-white hover:bg-amber-50/30 transition-colors">
-                        <td className="p-3 font-bold text-amber-900 border-l border-amber-200/50 bg-amber-50/20">{row.label}</td>
+                        <td className="p-1.5 min-[400px]:p-2 md:p-3 font-bold text-amber-900 border-l border-amber-200/50 bg-amber-50/20">{row.label}</td>
                         {row.cells.map((cell: any, cIdx: number) => {
                           const key = `${rIdx}-${cIdx}`;
                           return (
-                            <td key={cIdx} className="p-2 border-r border-amber-100 align-middle min-w-[100px]">
+                            <td key={cIdx} className="p-1 min-[400px]:p-1.5 md:p-2 border-r border-amber-100 align-middle min-w-[52px] min-[400px]:min-w-[64px] md:min-w-[100px]">
                               {cell.isBlank ? (
                                 <ExamTextInput
                                   name={`tasrif_${rIdx}_${cIdx}`}
                                   label={`Jawaban tasrif ${rIdx + 1}, ${cIdx + 1}`}
                                   value={answers[key] || ""}
                                   onValueChange={value => onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: value } } })}
-                                  className="w-full min-w-[90px] p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner resize-none overflow-hidden"
+                                  className="w-full min-w-[40px] min-[400px]:min-w-[56px] md:min-w-[90px] p-1 min-[400px]:p-1.5 md:p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner resize-none overflow-hidden"
                                   style={{ lineHeight: '1.5' }}
                                 />
                               ) : (
-                                <span className="font-serif text-xl md:text-2xl text-gray-800 py-2 inline-block">{cell.value.split('|')[0].trim()}</span>
+                                <span className="font-serif text-lg min-[400px]:text-xl md:text-2xl text-gray-800 py-1 md:py-2 inline-block">{cell.value.split('|')[0].trim()}</span>
                               )}
                             </td>
                           );

@@ -370,7 +370,7 @@ export default function BankSoalPage() {
     let defaultBulan = 1;
     let defaultUsbu: number | null = null; // default: Belum Masuk Usbu'
 
-    if (activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && activeUsbuTab !== "BELUM") {
+    if (activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED") {
       if (isTempAkbarnas && activeUsbuTab.includes("-")) {
         defaultBulan = Number(activeUsbuTab.split("-")[0]);
         defaultUsbu = Number(activeUsbuTab.split("-")[1]);
@@ -678,7 +678,7 @@ export default function BankSoalPage() {
 
   const handleResetAssign = async () => {
     if (!selectedProgram || !selectedMapel) return toast.error("Pilih Program dan Mapel dahulu");
-    if (!confirm(`Yakin ingin MENGHAPUS SEMUA penugasan soal (dari seluruh Jenis Soal pada Mapel ini) untuk Usbu' ${selectedUsbu}? Soal tidak akan dihapus, hanya checklist-nya saja yang direset.`)) return;
+    if (!confirm(`Yakin ingin MENGHAPUS SEMUA tampilan ujian soal (dari seluruh Jenis Soal pada Mapel ini) untuk Usbu' ${selectedUsbu}? Soal tidak akan dihapus, hanya tampilannya saja yang direset.`)) return;
 
     try {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal/reset-assign`, {
@@ -691,10 +691,10 @@ export default function BankSoalPage() {
         })
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success(`Berhasil mereset penugasan soal untuk Usbu' ${selectedUsbu}`);
+      toast.success(`Berhasil mereset tampilan ujian soal untuk Usbu' ${selectedUsbu}`);
       fetchSoal(true);
     } catch (err: any) {
-      toast.error(err.message || "Gagal mereset penugasan");
+      toast.error(err.message || "Gagal mereset tampilan ujian");
     }
   };
 
@@ -706,8 +706,7 @@ export default function BankSoalPage() {
     if (activeUsbuTab === "ALL") return soalList;
     return soalList.filter(s => {
       if (activeUsbuTab === "UNASSIGNED") return !(s.usbuAssignments?.length > 0);
-      if (activeUsbuTab === "BELUM") return s.usbuKe == null;
-      
+
       if (isAkbarnas && activeUsbuTab.includes("-")) {
         const [b, u] = activeUsbuTab.split("-");
         return s.bulanKe === parseInt(b) && s.usbuKe === parseInt(u);
@@ -742,15 +741,15 @@ export default function BankSoalPage() {
   };
 
   const handleBulkAssign = async (assign: boolean) => {
-    if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED" || activeUsbuTab === "BELUM") {
-        return toast.error("Pilih Usbu' target spesifik terlebih dahulu di tab (bukan ALL / Belum Ditugaskan / Belum Masuk Usbu') untuk melakukan Ceklis Masal!");
+    if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") {
+        return toast.error("Pilih Usbu' target spesifik terlebih dahulu di tab (bukan ALL / Belum Masuk Usbu') untuk menampilkan soal di ujian!");
     }
     const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
     const ids = filteredSoalList.map(s => s.id);
-    if (!ids.length) return toast.error("Tidak ada soal untuk ditugaskan");
+    if (!ids.length) return toast.error("Tidak ada soal untuk ditampilkan di ujian");
 
-    if (assign && !confirm(`Centang (tugaskan) semua ${ids.length} soal ini ke Usbu' ${targetU}?`)) return;
-    if (!assign && !confirm(`HAPUS centang semua ${ids.length} soal ini dari Usbu' ${targetU}?`)) return;
+    if (assign && !confirm(`Tampilkan semua ${ids.length} soal ini di ujian Usbu' ${targetU}?`)) return;
+    if (!assign && !confirm(`Sembunyikan semua ${ids.length} soal ini dari ujian Usbu' ${targetU}?`)) return;
 
     try {
       const url = "/api/admin/ujian-usbu/bank-soal/assign";
@@ -774,7 +773,7 @@ export default function BankSoalPage() {
         body: JSON.stringify({ soalIds: ids, usbuKe: targetU })
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success(assign ? `Berhasil mencentang Usbu' ${targetU} untuk ${ids.length} soal` : `Berhasil menghapus centang Usbu' ${targetU} untuk ${ids.length} soal`);
+      toast.success(assign ? `Berhasil menampilkan ${ids.length} soal di ujian Usbu' ${targetU}` : `Berhasil menyembunyikan ${ids.length} soal dari ujian Usbu' ${targetU}`);
     } catch(err: any) {
        toast.error(err.message);
        fetchSoal(true);
@@ -877,13 +876,9 @@ export default function BankSoalPage() {
       {selectedJenisSoal && (
         <div className="flex flex-wrap gap-2 mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm items-center">
           <span className="text-xs font-bold text-gray-500 uppercase mr-2">Tampilan Usbu':</span>
-          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "BELUM", "UNASSIGNED"].map(tab => {
+          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "UNASSIGNED"].map(tab => {
             let stats = null;
-            if (tab === "BELUM") {
-               const soalInTab = soalList.filter(s => s.usbuKe == null);
-               const totalPoin = soalInTab.reduce((sum, s) => sum + s.bobot, 0);
-               stats = { count: soalInTab.length, points: totalPoin };
-            } else if (tab !== "ALL" && tab !== "UNASSIGNED") {
+            if (tab !== "ALL" && tab !== "UNASSIGNED") {
                const targetU = tab.includes("-") ? Number(tab.split("-")[1]) : Number(tab);
                const targetB = tab.includes("-") ? Number(tab.split("-")[0]) : null;
                
@@ -909,11 +904,11 @@ export default function BankSoalPage() {
               >
                 <div className="flex items-center gap-2">
                   <span>
-                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Ditugaskan" : tab === "BELUM" ? "Belum Masuk Usbu'" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
+                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Masuk Usbu'" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
                   </span>
                   {stats && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${activeUsbuTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {tab === "BELUM" ? `${stats.count} soal` : `${stats.count} ☑️`} • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
+                      {stats.count} ☑️ • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
                     </span>
                   )}
                 </div>
@@ -939,21 +934,21 @@ export default function BankSoalPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {filteredSoalList.length > 0 && activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && activeUsbuTab !== "BELUM" && (
+          {filteredSoalList.length > 0 && activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && (
             <div className="flex items-center gap-2 mr-2">
               <button 
                 onClick={() => handleBulkAssign(true)}
-                title="Centang semua soal di layar ini untuk ditugaskan"
+                title="Tampilkan semua soal di layar ini di ujian"
                 className="px-3 py-1.5 text-xs font-bold bg-green-50 text-green-700 rounded-lg hover:bg-green-100 border border-green-200 transition-colors shadow-sm"
               >
-                Ceklis Semua
+                Tampilkan Semua
               </button>
               <button 
                 onClick={() => handleBulkAssign(false)}
-                title="Hapus centang semua soal di layar ini"
+                title="Sembunyikan semua soal di layar ini dari ujian"
                 className="px-3 py-1.5 text-xs font-bold bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 border border-gray-200 transition-colors shadow-sm"
               >
-                Unceklis Semua
+                Sembunyikan Semua
               </button>
             </div>
           )}
@@ -970,10 +965,10 @@ export default function BankSoalPage() {
               <option value="2">2</option>
               <option value="3">3</option>
             </select>
-            <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition-colors flex gap-1 items-center shadow-sm disabled:opacity-50" title="Lihat pratinjau seluruh soal yang telah ditugaskan ke Usbu ini (Semua Jenis Soal)">
+            <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition-colors flex gap-1 items-center shadow-sm disabled:opacity-50" title="Lihat pratinjau seluruh soal yang tampil di ujian Usbu' ini (Semua Jenis Soal)">
               {previewLoading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Pratinjau
             </button>
-            <button onClick={handleResetAssign} disabled={!selectedProgram} className="font-bold text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 transition-colors flex gap-1 items-center shadow-sm" title="Hapus semua penugasan soal dari mapel ini untuk Usbu yang dipilih">
+            <button onClick={handleResetAssign} disabled={!selectedProgram} className="font-bold text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 transition-colors flex gap-1 items-center shadow-sm" title="Hapus semua tampilan ujian soal dari mapel ini untuk Usbu yang dipilih">
               <Trash2 size={12} /> Reset Pilihan
             </button>
           </div>
@@ -1061,9 +1056,6 @@ export default function BankSoalPage() {
                           <div className="flex gap-3 mb-3 items-center flex-wrap">
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">ID: {soal.id.substring(soal.id.length - 5)}</span>
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {Number.isInteger(soal.bobot) ? soal.bobot : soal.bobot.toFixed(2)} Poin</span>
-                            {!(soal.usbuAssignments?.length > 0) && activeUsbuTab !== "UNASSIGNED" && (
-                              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-700" title="Soal ini belum ditugaskan ke Usbu' mana pun — belum masuk pool ujian Usbu' 1/2/3">Belum Masuk Usbu'</span>
-                            )}
                             {soal.grupSoalId ? (
                               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-600 flex gap-1 items-center" title="Pertanyaan turunan dari bacaan lain">
                                 <Activity size={12} /> Anak Qiro&apos;ah
@@ -1319,10 +1311,10 @@ export default function BankSoalPage() {
                       </div>
                                {/* Checkbox Assignments Footer */}
                     <div className="border-t border-gray-100 px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-center justify-between mt-auto">
-                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-0">Tugaskan ke Pekan (Usbu'):</span>
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-0">Tampilkan di Ujian (Usbu'):</span>
                       <div className="flex gap-4">
                         {([1, 2, 3].filter(u => {
-                          if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED" || activeUsbuTab === "BELUM") return true;
+                          if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") return true;
                           const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
                           return u === targetU;
                         })).map(u => {

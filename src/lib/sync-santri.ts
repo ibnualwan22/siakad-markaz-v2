@@ -118,6 +118,41 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
       };
     }
 
+    // Daftar SEMUA NIS yang dikenal PPDB (aktif + nonaktif). Dipakai langkah 2.5:
+    // santri yang dibuat lokal (mis. Bootcamp Batch 1/2, tanpa NIS, tidak ada di
+    // PPDB sama sekali) TIDAK BOLEH ikut dinonaktifkan — sync hanya berwenang
+    // menonaktifkan santri yang PPDB kenal tapi sudah tidak aktif.
+    // Bila daftar ini gagal diambil, langkah 2.5 dilewati (fail-safe: jangan
+    // menonaktifkan siapa pun bila tidak bisa membedakan keduanya).
+    let allNisInPpdb: Set<string> | null = null;
+    try {
+      const allResponse = await fetch(
+        `${PPDB_URL}/api/santri/siakad?key=${apiKey}&filter=ALL`,
+        {
+          cache: "no-store",
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            "x-api-key": apiKey,
+          },
+        }
+      );
+      if (allResponse.ok) {
+        const allJson = await allResponse.json();
+        const allArray = Array.isArray(allJson) ? allJson : allJson.data;
+        if (Array.isArray(allArray)) {
+          allNisInPpdb = new Set(
+            allArray
+              .filter((s: ApiSantriResponse) => s.nis && s.nis.trim() !== "")
+              .map((s: ApiSantriResponse) => s.nis as string)
+          );
+        }
+      } else {
+        console.warn('[sync-santri] Daftar ALL PPDB gagal (HTTP ' + allResponse.status + '), langkah nonaktif dilewati.');
+      }
+    } catch (allErr: any) {
+      console.warn('[sync-santri] Tidak dapat mengambil daftar ALL PPDB:', allErr?.message, '— langkah nonaktif dilewati.');
+    }
+
     const validSantri = dataArray.filter(
       (s: ApiSantriResponse) => s.nis && s.nis.trim() !== ""
     );
@@ -238,6 +273,9 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
     // ===== 2.5 Deactivate santri yang sudah tidak ada di PPDB (tidak aktif) =====
     // ValidSantri berisi semua santri yang masih aktif di PPDB.
     // Jika ada santri di lokal yang isAktif = true, tapi ID-nya tidak ada di validSantri, berarti dia sudah nonaktif.
+    // PENGECUALIAN: santri yang TIDAK DIKENAL PPDB sama sekali (mis. Bootcamp,
+    // dibuat lokal tanpa NIS) jangan disentuh — mereka bukan urusan sync ini.
+    // Bila daftar ALL gagal diambil (allNisInPpdb null), lewati langkah ini.
     const activeSantriIdsInPpdb = new Set(validSantri.map(s => s.nis as string));
 
     const localActiveSantri = await prisma.santriInternal.findMany({
@@ -245,9 +283,11 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
       select: { id: true }
     });
 
-    const santriToDeactivate = localActiveSantri
-      .filter(s => !activeSantriIdsInPpdb.has(s.id))
-      .map(s => s.id);
+    const santriToDeactivate = allNisInPpdb === null
+      ? []
+      : localActiveSantri
+          .filter(s => !activeSantriIdsInPpdb.has(s.id) && allNisInPpdb.has(s.id))
+          .map(s => s.id);
 
     let deactivatedCount = 0;
     if (santriToDeactivate.length > 0) {

@@ -108,7 +108,7 @@ export async function POST(req: Request) {
         programId,
         jenisSoalId,
         tipeSoal: tipeSoal || "PG",
-        usbuKe: Number(usbuKe) || 1,
+        usbuKe: usbuKe === null || usbuKe === undefined || usbuKe === "" ? null : Number(usbuKe),
         bulanKe: Number(bulanKe) || 1,
         pertanyaan: pertanyaan || "",
         gambarUrl: gambarUrl || null,

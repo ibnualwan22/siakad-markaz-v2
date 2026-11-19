@@ -1046,7 +1046,7 @@ model BankSoalUsbu {
   id          String   @id @default(cuid())
   mapelId     String
   programId   String
-  usbuKe      Int      @default(1)    // Batasan materi target Usbu
+  usbuKe      Int?     // Batasan materi target Usbu — null = Belum Masuk Usbu'
   bulanKe     Int      @default(1)    // Batasan materi target Bulan (Khusus Akbarnas)
   paketSoal   String   @default("A")  // Legacy: will be unused soon
   jenisSoalId String?

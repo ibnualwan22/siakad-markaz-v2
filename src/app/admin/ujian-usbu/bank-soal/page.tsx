@@ -177,7 +177,7 @@ export default function BankSoalPage() {
   const [formData, setFormData] = useState<any>({
     id: "",
     tipeSoal: "PG",
-    usbuKe: 1,
+    usbuKe: null,
     bulanKe: 1,
     pertanyaan: "",
     gambarUrl: "",
@@ -368,9 +368,9 @@ export default function BankSoalPage() {
     const isTempAkbarnas = !!programList.find(p => p.id === selectedProgram)?.nama_indo?.toLowerCase().includes("akbarnas");
 
     let defaultBulan = 1;
-    let defaultUsbu = 1;
+    let defaultUsbu: number | null = null; // default: Belum Masuk Usbu'
 
-    if (activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED") {
+    if (activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && activeUsbuTab !== "BELUM") {
       if (isTempAkbarnas && activeUsbuTab.includes("-")) {
         defaultBulan = Number(activeUsbuTab.split("-")[0]);
         defaultUsbu = Number(activeUsbuTab.split("-")[1]);
@@ -415,7 +415,7 @@ export default function BankSoalPage() {
           id: fullSoal.id,
           tipeSoal: fullSoal.tipeSoal,
           jenisSoalId: selectedJenisSoal,
-          usbuKe: fullSoal.usbuKe || 1,
+          usbuKe: fullSoal.usbuKe ?? null,
           bulanKe: fullSoal.bulanKe || 1,
           pertanyaan: fullSoal.pertanyaan,
           gambarUrl: fullSoal.gambarUrl || "",
@@ -434,7 +434,7 @@ export default function BankSoalPage() {
           id: soal.id,
           tipeSoal: soal.tipeSoal,
           jenisSoalId: selectedJenisSoal,
-          usbuKe: soal.usbuKe || 1,
+          usbuKe: soal.usbuKe ?? null,
           bulanKe: soal.bulanKe || 1,
           pertanyaan: soal.pertanyaan,
           gambarUrl: soal.gambarUrl || "",
@@ -453,7 +453,7 @@ export default function BankSoalPage() {
         id: soal.id,
         tipeSoal: soal.tipeSoal,
         jenisSoalId: selectedJenisSoal,
-        usbuKe: soal.usbuKe || 1,
+        usbuKe: soal.usbuKe ?? null,
         bulanKe: soal.bulanKe || 1,
         pertanyaan: soal.pertanyaan,
         gambarUrl: soal.gambarUrl || "",
@@ -627,7 +627,7 @@ export default function BankSoalPage() {
       formData.append("mapelId", selectedMapel);
       formData.append("programId", selectedProgram);
       formData.append("jenisSoalId", selectedJenisSoal);
-      formData.append("usbuKe", "1"); // legacy fallback
+      formData.append("usbuKe", ""); // soal import baru = Belum Masuk Usbu'
       formData.append("paketSoal", "A"); // legacy fallback
       formData.append("timpaSoal", importTimpa.toString());
 
@@ -706,6 +706,7 @@ export default function BankSoalPage() {
     if (activeUsbuTab === "ALL") return soalList;
     return soalList.filter(s => {
       if (activeUsbuTab === "UNASSIGNED") return !(s.usbuAssignments?.length > 0);
+      if (activeUsbuTab === "BELUM") return s.usbuKe == null;
       
       if (isAkbarnas && activeUsbuTab.includes("-")) {
         const [b, u] = activeUsbuTab.split("-");
@@ -741,8 +742,8 @@ export default function BankSoalPage() {
   };
 
   const handleBulkAssign = async (assign: boolean) => {
-    if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") {
-        return toast.error("Pilih Usbu' target spesifik terlebih dahulu di tab (bukan ALL / Belum Ditugaskan) untuk melakukan Ceklis Masal!");
+    if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED" || activeUsbuTab === "BELUM") {
+        return toast.error("Pilih Usbu' target spesifik terlebih dahulu di tab (bukan ALL / Belum Ditugaskan / Belum Masuk Usbu') untuk melakukan Ceklis Masal!");
     }
     const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
     const ids = filteredSoalList.map(s => s.id);
@@ -876,9 +877,13 @@ export default function BankSoalPage() {
       {selectedJenisSoal && (
         <div className="flex flex-wrap gap-2 mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm items-center">
           <span className="text-xs font-bold text-gray-500 uppercase mr-2">Tampilan Usbu':</span>
-          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "UNASSIGNED"].map(tab => {
+          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "BELUM", "UNASSIGNED"].map(tab => {
             let stats = null;
-            if (tab !== "ALL" && tab !== "UNASSIGNED") {
+            if (tab === "BELUM") {
+               const soalInTab = soalList.filter(s => s.usbuKe == null);
+               const totalPoin = soalInTab.reduce((sum, s) => sum + s.bobot, 0);
+               stats = { count: soalInTab.length, points: totalPoin };
+            } else if (tab !== "ALL" && tab !== "UNASSIGNED") {
                const targetU = tab.includes("-") ? Number(tab.split("-")[1]) : Number(tab);
                const targetB = tab.includes("-") ? Number(tab.split("-")[0]) : null;
                
@@ -904,11 +909,11 @@ export default function BankSoalPage() {
               >
                 <div className="flex items-center gap-2">
                   <span>
-                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Ditugaskan" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
+                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Ditugaskan" : tab === "BELUM" ? "Belum Masuk Usbu'" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
                   </span>
                   {stats && (
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${activeUsbuTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {stats.count} ☑️ • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
+                      {tab === "BELUM" ? `${stats.count} soal` : `${stats.count} ☑️`} • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
                     </span>
                   )}
                 </div>
@@ -934,7 +939,7 @@ export default function BankSoalPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {filteredSoalList.length > 0 && activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && (
+          {filteredSoalList.length > 0 && activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && activeUsbuTab !== "BELUM" && (
             <div className="flex items-center gap-2 mr-2">
               <button 
                 onClick={() => handleBulkAssign(true)}
@@ -1056,6 +1061,9 @@ export default function BankSoalPage() {
                           <div className="flex gap-3 mb-3 items-center flex-wrap">
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">ID: {soal.id.substring(soal.id.length - 5)}</span>
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {Number.isInteger(soal.bobot) ? soal.bobot : soal.bobot.toFixed(2)} Poin</span>
+                            {!(soal.usbuAssignments?.length > 0) && activeUsbuTab !== "UNASSIGNED" && (
+                              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-700" title="Soal ini belum ditugaskan ke Usbu' mana pun — belum masuk pool ujian Usbu' 1/2/3">Belum Masuk Usbu'</span>
+                            )}
                             {soal.grupSoalId ? (
                               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-600 flex gap-1 items-center" title="Pertanyaan turunan dari bacaan lain">
                                 <Activity size={12} /> Anak Qiro&apos;ah
@@ -1314,7 +1322,7 @@ export default function BankSoalPage() {
                       <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-0">Tugaskan ke Pekan (Usbu'):</span>
                       <div className="flex gap-4">
                         {([1, 2, 3].filter(u => {
-                          if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") return true;
+                          if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED" || activeUsbuTab === "BELUM") return true;
                           const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
                           return u === targetU;
                         })).map(u => {
@@ -1392,10 +1400,11 @@ export default function BankSoalPage() {
                 <div className="flex-1 min-w-[200px]">
                   <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Batasan Materi (Usbu')</label>
                   <select
-                    value={formData.usbuKe}
-                    onChange={e => setFormData({ ...formData, usbuKe: Number(e.target.value) })}
+                    value={formData.usbuKe ?? ""}
+                    onChange={e => setFormData({ ...formData, usbuKe: e.target.value === "" ? null : Number(e.target.value) })}
                     className="neu-input w-full p-2.5 text-sm font-semibold cursor-pointer"
                   >
+                    <option value="">Belum Masuk Usbu'</option>
                     {[1, 2, 3].map(u => (
                       <option key={u} value={u}>Usbu' {u}</option>
                     ))}

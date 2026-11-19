@@ -79,7 +79,8 @@ export async function POST(req: Request) {
     const file = formData.get("file") as File;
     const programId = formData.get("programId") as string;
     const mapelId = formData.get("mapelId") as string;
-    const usbuKe = Number(formData.get("usbuKe") || "1");
+    const rawUsbuKe = formData.get("usbuKe");
+    const usbuKe = rawUsbuKe === null || rawUsbuKe === "" ? null : Number(rawUsbuKe);
     const paketSoal = (formData.get("paketSoal") as string) || "A";
     const jenisSoalId = formData.get("jenisSoalId") as string;
     const timpaSoal = formData.get("timpaSoal") === "true";

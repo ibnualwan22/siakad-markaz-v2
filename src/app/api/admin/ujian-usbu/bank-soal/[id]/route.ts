@@ -36,7 +36,7 @@ export async function PUT(
           kunciJawaban: kunciJawaban !== undefined ? (kunciJawaban || null) : undefined,
           dataTambahan: dataTambahan !== undefined ? (dataTambahan || null) : undefined,
           bobot: Number(bobot) || 10,
-          ...(usbuKe !== undefined && { usbuKe: Number(usbuKe) }),
+          ...(usbuKe !== undefined && { usbuKe: usbuKe === null || usbuKe === "" ? null : Number(usbuKe) }),
           ...(bulanKe !== undefined && { bulanKe: Number(bulanKe) }),
           ...(paketSoal !== undefined && { paketSoal }),
           ...(jenisSoalId !== undefined && { jenisSoalId }),

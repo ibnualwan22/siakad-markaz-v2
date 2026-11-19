@@ -1,4 +1,4 @@
-.keyboard{position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:150;width:min(100%,720px);box-sizing:border-box;padding:8px 8px max(8px,env(safe-area-inset-bottom));background:#e8edf4;border:1px solid #cbd5e1;border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px #0f172a1f;color:#17233a;font-family:Arial,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.keyboard{position:fixed;bottom:0;left:0;right:0;margin-inline:auto;z-index:150;max-width:720px;box-sizing:border-box;padding:8px 8px max(8px,env(safe-area-inset-bottom));background:#e8edf4;border:1px solid #cbd5e1;border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -6px 24px #0f172a1f;color:#17233a;font-family:Arial,sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .keyboard button{font:inherit;cursor:pointer;border:0;outline-offset:2px;-webkit-tap-highlight-color:transparent;touch-action:none}
 .keyboard button:focus-visible{outline:3px solid #2563eb}
 .heading{display:flex;align-items:center;justify-content:space-between;padding:0 4px 5px;font-size:12px;font-weight:700}
@@ -21,5 +21,5 @@
 .variants{position:absolute;z-index:2;display:flex;gap:2px;padding:6px;max-width:calc(100% - 16px);box-sizing:border-box;background:#1e40af;border-radius:10px;box-shadow:0 4px 16px #0f172a40;touch-action:none}
 .variants button{width:42px;min-width:0;flex-shrink:1;height:46px;border-radius:6px;background:white;color:#17233a;font-size:25px}
 .variants button:hover,.variants button:active{background:#bfdbfe}
-@media(max-height:500px){.keyboard{width:min(100%,600px);padding-top:4px}.heading{padding-bottom:0}.heading small{display:none}.heading button{min-height:24px}.tools button{min-height:25px}.tools,.row,.harakat{margin-bottom:3px}.key,.deleteKey{min-height:30px;font-size:20px!important}.harakat .key{min-height:26px}.bottom{height:32px}.variants button{height:38px}}
+@media(max-height:500px){.keyboard{max-width:600px;padding-top:4px}.heading{padding-bottom:0}.heading small{display:none}.heading button{min-height:24px}.tools button{min-height:25px}.tools,.row,.harakat{margin-bottom:3px}.key,.deleteKey{min-height:30px;font-size:20px!important}.harakat .key{min-height:26px}.bottom{height:32px}.variants button{height:38px}}
 @media(prefers-reduced-motion:reduce){.keyboard *{scroll-behavior:auto}}

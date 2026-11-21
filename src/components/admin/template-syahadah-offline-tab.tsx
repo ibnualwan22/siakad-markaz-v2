@@ -3,21 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import {
+  OFFLINE_DEFAULT_FONT_FAMILY,
   OFFLINE_FIELD_KEYS,
   OFFLINE_FIELD_LABEL,
   OFFLINE_FIELD_SAMPLE,
-  OFFLINE_QR_MM,
+  OFFLINE_STAGE_H_MM,
   OFFLINE_STAGE_W_MM,
+  OFFLINE_STAGE_W_PX,
   defaultFieldPositionsOffline,
 } from "@/lib/syahadah-offline";
+import SyahadahOfflineStage from "@/components/cetak/SyahadahOfflineStage";
 
 // Tab "Template Offline" syahadah A4 portrait (kertas pre-printed).
-// Cermin tab Template Nadi/Lajnah, dengan perbedaan:
-// - panggung portrait 210 x 297 mm (bukan landscape 330 x 215);
-// - font tersimpan dalam PT (bukan px-di-1600);
-// - 15 item drag: 11 teks + QR + 3 baris nilai;
-// - pemetaan baris tabel -> mapel, kunci template, offset global X/Y (mm)
-//   untuk kalibrasi printer.
+// Preview editor memakai komponen panggung yang SAMA PERSIS dengan
+// halaman cetak (SyahadahOfflineStage) — jadi atur layout = print preview:
+// panggung 210 x 297 mm, font pt, posisi % -> mm, font default Amiri.
+// Field ditampilkan sebagai teks asli (bukan kotak kuning) dan bisa
+// di-drag; field terpilih diberi outline. Zoom + offset printer bisa
+// ditampilkan langsung di preview.
 export default function TemplateSyahadahOfflineTab({
   programKey,
   apiBase,
@@ -37,8 +40,11 @@ export default function TemplateSyahadahOfflineTab({
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<"fit" | 50 | 75 | 100>("fit");
+  const [showOffset, setShowOffset] = useState(true);
+  const [fitScale, setFitScale] = useState(1);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<any>(null);
 
   const load = async () => {
     const res = await fetch(`${apiBase}?programKey=${programKey}`);
@@ -52,6 +58,19 @@ export default function TemplateSyahadahOfflineTab({
     setOffsetY(Number(tpl.offsetY) || 0);
   };
   useEffect(() => { load(); }, [programKey]);
+
+  // Skala "Pas": panggung 210mm menyesuaikan lebar wadah, maksimal 100%
+  // (ukuran sebenarnya). Zoom 50/75/100% memakai skala tetap.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      setFitScale(Math.min(1, el.clientWidth / OFFLINE_STAGE_W_PX));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const scale = zoom === "fit" ? fitScale : zoom / 100;
 
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,25 +134,6 @@ export default function TemplateSyahadahOfflineTab({
     }
   };
 
-  const onChipDown = (e: React.PointerEvent, key: string) => {
-    if (!canEdit || locked || !wrapRef.current) return;
-    const rect = wrapRef.current.getBoundingClientRect();
-    dragRef.current = {
-      key, startX: e.clientX, startY: e.clientY,
-      origX: positions[key]?.x ?? 50, origY: positions[key]?.y ?? 50,
-      w: rect.width, h: rect.height,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onMove = (e: React.PointerEvent) => {
-    const d = dragRef.current;
-    if (!d) return;
-    const nx = Math.min(100, Math.max(0, d.origX + ((e.clientX - d.startX) / d.w) * 100));
-    const ny = Math.min(100, Math.max(0, d.origY + ((e.clientY - d.startY) / d.h) * 100));
-    setPositions((p: any) => ({ ...p, [d.key]: { ...p[d.key], x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10 } }));
-  };
-  const onUp = () => { dragRef.current = null; };
-
   const setField = (key: string, patch: any) =>
     setPositions((p: any) => ({ ...p, [key]: { ...p[key], ...patch } }));
 
@@ -171,7 +171,7 @@ export default function TemplateSyahadahOfflineTab({
       <div className="bg-white rounded-2xl border p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-bold">
-            Atur Posisi Field {editable && <span className="font-normal text-sm text-[var(--color-text-muted)]">(geser label di atas desain)</span>}
+            Atur Posisi Field {editable && <span className="font-normal text-sm text-[var(--color-text-muted)]">(geser teks di atas desain — tampilannya sama persis dengan hasil print)</span>}
           </h3>
           {canEdit && (
             <button onClick={toggleLock} disabled={locking}
@@ -184,41 +184,72 @@ export default function TemplateSyahadahOfflineTab({
           <p className="text-sm text-[var(--color-text-muted)]">Upload background terlebih dahulu.</p>
         ) : (
           <>
-            <div
-              ref={wrapRef}
-              className="relative w-full max-w-xl mx-auto border rounded-xl overflow-hidden select-none touch-none"
-              onPointerMove={onMove}
-              onPointerUp={onUp}
-              onPointerCancel={onUp}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={bg} alt="Template" className="w-full block" draggable={false} />
-              {OFFLINE_FIELD_KEYS.map((key) => {
-                const cfg = positions[key] || { x: 50, y: 50 };
-                return (
-                  <div
-                    key={key}
-                    onPointerDown={(e) => onChipDown(e, key)}
-                    className={`absolute px-2 py-1 rounded text-xs font-bold border-2 whitespace-nowrap ${
-                      editable ? "cursor-move bg-yellow-300/90 border-yellow-600" : "bg-white/80 border-slate-400"
-                    }`}
-                    style={{
-                      left: `${cfg.x}%`, top: `${cfg.y}%`, transform: "translate(-50%, -50%)",
-                      fontFamily: cfg.fontFamily || undefined, color: cfg.color || undefined,
-                    }}
-                  >
-                    {OFFLINE_FIELD_SAMPLE[key]}
-                  </div>
-                );
-              })}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold">Zoom:</span>
+              {(["fit", 50, 75, 100] as const).map((z) => (
+                <button
+                  key={String(z)}
+                  onClick={() => setZoom(z)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                    zoom === z ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-slate-700 border-slate-300"
+                  }`}
+                >
+                  {z === "fit" ? "Pas" : `${z}%`}
+                </button>
+              ))}
+              <label className="ml-auto flex items-center gap-1.5 text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showOffset}
+                  onChange={(e) => setShowOffset(e.target.checked)}
+                />
+                Tampilkan offset printer di preview
+              </label>
             </div>
+
+            <div ref={wrapRef} className="overflow-x-auto border rounded-xl bg-slate-100 p-2">
+              <div
+                className="relative mx-auto"
+                style={{
+                  width: `${OFFLINE_STAGE_W_MM}mm`,
+                  height: `${OFFLINE_STAGE_H_MM}mm`,
+                  transform: `scale(${scale})`,
+                  transformOrigin: "top left",
+                  marginBottom: `${-OFFLINE_STAGE_H_MM * (1 - scale)}mm`,
+                }}
+              >
+                <SyahadahOfflineStage
+                  texts={OFFLINE_FIELD_SAMPLE}
+                  qrDataUrl={null}
+                  template={{ backgroundUrl: bg, fieldPositions: positions, offsetX, offsetY }}
+                  showBackground
+                  hideBackgroundOnPrint={false}
+                  applyOffset={showOffset}
+                  showQrPlaceholder
+                  editable={editable}
+                  selectedKey={selectedKey}
+                  onSelectKey={setSelectedKey}
+                  onFieldMove={(key, x, y) => setField(key, { x, y })}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Klik teks untuk memilih, geser untuk memindah. Ukuran font di preview ini
+              sudah memakai nilai pt yang tersimpan (font default {OFFLINE_DEFAULT_FONT_FAMILY}).
+              Zoom 100% = ukuran sebenarnya di kertas A4.
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {OFFLINE_FIELD_KEYS.map((key) => {
                 const cfg = positions[key] || {};
                 const isQr = key === "qr";
+                const isSelected = selectedKey === key;
                 return (
-                  <div key={key} className="border rounded-xl p-3 space-y-2">
+                  <div
+                    key={key}
+                    onClick={() => setSelectedKey(key)}
+                    className={`border rounded-xl p-3 space-y-2 cursor-pointer ${isSelected ? "ring-2 ring-emerald-500" : ""}`}
+                  >
                     <p className="font-bold text-sm">{OFFLINE_FIELD_LABEL[key]}</p>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <label>X (%)
@@ -252,9 +283,9 @@ export default function TemplateSyahadahOfflineTab({
                       </label>
                       {!isQr && (
                         <>
-                          <label className="col-span-2">Font (nama family, diatur lewat web)
+                          <label className="col-span-2">Font (nama family, kosong = {OFFLINE_DEFAULT_FONT_FAMILY})
                             <input type="text" value={cfg.fontFamily ?? ""}
-                              placeholder="cth: The Season / Poppins"
+                              placeholder={`${OFFLINE_DEFAULT_FONT_FAMILY} (default)`}
                               onChange={(e) => setField(key, { fontFamily: e.target.value })}
                               disabled={!editable} className="w-full px-2 py-1 border rounded" />
                           </label>
@@ -306,8 +337,9 @@ export default function TemplateSyahadahOfflineTab({
               <h4 className="font-bold text-sm">Offset Printer (kalibrasi)</h4>
               <p className="text-xs text-[var(--color-text-muted)]">
                 Geser SELURUH isi cetakan bila hasil print meleset dari garis kertas
-                (mis. printer menarik kertas sedikit miring/bergeser). Diterapkan saat
-                mencetak admin, bukan di preview ini. Setelah kalibrasi selesai,
+                (mis. printer menarik kertas sedikit miring/bergeser). Aktifkan
+                &ldquo;Tampilkan offset printer di preview&rdquo; di atas untuk melihat
+                geserannya langsung di panggung. Setelah kalibrasi selesai,
                 kunci template.
               </p>
               <div className="grid grid-cols-2 gap-3 text-xs max-w-sm">

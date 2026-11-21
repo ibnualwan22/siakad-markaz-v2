@@ -346,20 +346,12 @@ export function SyahadahClient({
                           Cetak Syahadah MC
                         </Link>
                       ) : santri.canPrintSyahadah ? (
-                        <>
-                          <Link
-                            href={`/cetak/${santri.id}`}
-                            className="rounded-full bg-[var(--color-warning)] px-4 py-2 text-xs font-bold text-white transition hover:bg-[var(--color-warning)]"
-                          >
-                            Cetak Syahadah
-                          </Link>
-                          <Link
-                            href={`/cetak-offline/${santri.id}`}
-                            className="rounded-full bg-emerald-100 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-200"
-                          >
-                            Cetak Offline
-                          </Link>
-                        </>
+                        <Link
+                          href={`/cetak-offline/${santri.id}`}
+                          className="rounded-full bg-emerald-100 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-200"
+                        >
+                          Cetak Offline
+                        </Link>
                       ) : (
                         <span className="rounded-full bg-[var(--color-surface-dark)] px-4 py-2 text-xs font-bold text-[var(--color-text-muted)]">
                           Cetak Terkunci

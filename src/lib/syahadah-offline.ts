@@ -23,6 +23,13 @@ export const OFFLINE_QR_MM = 22;
 
 export const OFFLINE_PROGRAM_KEY_PREFIX = "syahadah-offline-";
 
+// Font default semua field teks offline: "Amiri" (naskh, sudah dimuat
+// layout root via Google Fonts). Lotus Linotype Light yang dipakai desain
+// Canva TIDAK bisa dipakai di web — font komersial, hanya ada di Canva,
+// tidak ada file-nya untuk diunduh. Bila suatu saat file Lotus didapat,
+// ganti konstanta ini + @font-face-nya, tanpa mengubah komponen lain.
+export const OFFLINE_DEFAULT_FONT_FAMILY = "Amiri";
+
 /** "I'dad Awal" -> "idad-awal". Satu fungsi dipakai editor, halaman cetak,
  *  dan santri-overview supaya programKey selalu sama. */
 export function slugifyProgram(namaIndo: string): string {

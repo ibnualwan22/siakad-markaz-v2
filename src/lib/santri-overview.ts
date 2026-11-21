@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { calcMapelNilaiAkhir, calcMapelNilaiAkhirUsbuain2, calcAkumulatif, calcAkbarnasGabungan, calcAkbarnasMapelAverage, applyNilaiTambahan } from '@/lib/grade-calculator';
 import { getPredikat } from '@/lib/formatters';
 import { calculateStatus } from '@/lib/kelulusan';
+import { slugifyProgram, OFFLINE_PROGRAM_KEY_PREFIX } from "@/lib/syahadah-offline";
 
 const programInclude = {
   programMapels: {
@@ -147,6 +148,16 @@ export async function getSantriOverview(santriId:string) {
       });
     }
 
+    // Template syahadah offline yang aktif, per program (untuk tombol
+    // "Unduh Syahadah Baru" di riwayat portal).
+    const offlineTemplates = await prisma.templateCetak.findMany({
+      where: { programKey: { startsWith: OFFLINE_PROGRAM_KEY_PREFIX }, isActive: true },
+      select: { programKey: true },
+    });
+    const offlineSlugs = new Set(
+      offlineTemplates.map((t) => t.programKey.slice(OFFLINE_PROGRAM_KEY_PREFIX.length)),
+    );
+
     const riwayatResult = santri.riwayatRecords.map((riwayat) => {
       const program = riwayat.program;
       const isAkbarnas = program?.nama_indo.toLowerCase().includes('akbarnas') ?? false;
@@ -255,6 +266,8 @@ export async function getSantriOverview(santriId:string) {
         isTasmi: riwayat.is_tasmi,
         statusKelulusan: status,
         canDownloadSyahadah,
+        canDownloadSyahadahOffline:
+          canDownloadSyahadah && offlineSlugs.has(slugifyProgram(program?.nama_indo ?? "")),
         riwayatId: riwayat.id,
         usbuainMode: effectiveUsbuainMode,
 

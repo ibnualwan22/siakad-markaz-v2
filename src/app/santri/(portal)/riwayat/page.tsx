@@ -38,6 +38,7 @@ type RiwayatData = {
   isTasmi: boolean;
   statusKelulusan: string;
   canDownloadSyahadah: boolean;
+  canDownloadSyahadahOffline: boolean;
   riwayatId: string;
   average: number;
   averagePredikat: { indo: string; arab: string };
@@ -298,6 +299,23 @@ export default function SantriRiwayatPage() {
                     >
                       <Download size={14} />
                       Lihat Syahadah
+                    </Link>
+                  )}
+
+                  {/* Unduh Syahadah Baru (desain offline A4, penuh + isi) */}
+                  {r.canDownloadSyahadahOffline && (
+                    <Link
+                      href={`/santri/syahadah-offline/${r.riwayatId}`}
+                      target="_blank"
+                      className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold transition-all"
+                      style={{
+                        background: "var(--color-surface-light)",
+                        color: "var(--color-primary)",
+                        border: "1px solid var(--color-primary-100)",
+                      }}
+                    >
+                      <Download size={14} />
+                      Unduh Syahadah Baru
                     </Link>
                   )}
                 </div>

@@ -1841,6 +1841,11 @@ model TemplateCetak {
   backgroundId   String?
   fieldPositions Json     @default("{}")
   isActive       Boolean  @default(true)
+  // Syahadah offline (A4 portrait): kunci setelah kalibrasi + offset
+  // global printer (mm) untuk menggeser isi cetakan admin.
+  locked         Boolean  @default(false)
+  offsetX        Float    @default(0)
+  offsetY        Float    @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

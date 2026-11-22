@@ -14,7 +14,8 @@ import {
 // - preview editor admin (/admin/syahadah-offline).
 // Editor memakai komponen yang SAMA PERSIS dengan halaman cetak, jadi
 // "atur layout" = print preview secara harfiah: panggung 210 x 297 mm,
-// posisi % -> mm, font pt, anchor tengah, lebar maks, auto-fit nama.
+// posisi % -> mm, font pt, anchor tengah, lebar maks, auto-fit
+// nama/periode/tempatLahir.
 // Yang membedakan hanya mode editor: field bisa di-drag (pointer),
 // field terpilih diberi outline, background selalu tampil, dan offset
 // printer bisa ditampilkan di preview.
@@ -25,8 +26,10 @@ export type OfflineStageTemplate = {
   offsetY: number;
 };
 
-/** Nama satu baris yang font-nya mengecil otomatis bila kepanjangan
- *  (diukur canvas dalam pt, dirender dalam pt — sebangun dengan panggung). */
+/** Field satu baris (nama, periode, tempatLahir) yang font-nya mengecil
+ *  otomatis bila kepanjangan (diukur canvas dalam pt, dirender dalam pt
+ *  — sebangun dengan panggung). Tanpa ini teks panjang wrap ke baris 2
+ *  (mis. tahun lahir jatuh ke bawah). */
 function AutoFitTextPt({
   text,
   basePt,
@@ -258,7 +261,9 @@ export default function SyahadahOfflineStage({
           className: "cursor-move",
         }
       : {};
-    if (key === "nama") {
+    // nama + periode + tempatLahir selalu 1 baris (auto-fit); field lain
+    // boleh wrap di lebar maksnya.
+    if (key === "nama" || key === "periode" || key === "tempatLahir") {
       return (
         <AutoFitTextPt
           key={key}
@@ -266,7 +271,7 @@ export default function SyahadahOfflineStage({
           basePt={fontPt}
           maxWidthMm={maxWMm}
           fontFamily={family}
-          style={{ ...posStyle, fontWeight: 700 }}
+          style={{ ...posStyle, ...(key === "nama" ? { fontWeight: 700 } : {}) }}
           dragProps={dragProps}
         />
       );

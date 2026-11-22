@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { checkPermission } from "@/lib/permission";
 import { defaultFieldPositionsOffline } from "@/lib/syahadah-offline";
+import { getDummyPrintData } from "@/lib/syahadah-offline-data";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,12 @@ export async function GET(request: Request) {
       },
     });
   }
-  return NextResponse.json(tpl);
+  // Teks dummy untuk preview editor — SAMA dengan yang dipakai halaman
+  // cetak tes (getDummyPrintData: Ahmad Ibnu Alwan, nilai ٩٥, nama program
+  // asli). Bila programKey tidak cocok program mana pun, null — tab
+  // memakai OFFLINE_FIELD_SAMPLE sebagai fallback.
+  const dummy = await getDummyPrintData(programKey);
+  return NextResponse.json({ ...tpl, dummyTexts: dummy?.texts ?? null });
 }
 
 // PUT { programKey, nama?, backgroundUrl?, backgroundId?, fieldPositions?,

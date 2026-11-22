@@ -18,6 +18,8 @@ import SyahadahOfflineStage from "@/components/cetak/SyahadahOfflineStage";
 // Preview editor memakai komponen panggung yang SAMA PERSIS dengan
 // halaman cetak (SyahadahOfflineStage) — jadi atur layout = print preview:
 // panggung 210 x 297 mm, font pt, posisi % -> mm, font default Amiri.
+// Teks preview = teks dummy cetak tes (Ahmad Ibnu Alwan, nilai ٩٥) —
+// bukan sample generik — supaya yang diatur di editor persis yang tercetak.
 // Field ditampilkan sebagai teks asli (bukan kotak kuning) dan bisa
 // di-drag; field terpilih diberi outline. Zoom + offset printer bisa
 // ditampilkan langsung di preview.
@@ -46,6 +48,10 @@ export default function TemplateSyahadahOfflineTab({
   const [zoom, setZoom] = useState<"fit" | 50 | 75 | 100>("fit");
   const [showOffset, setShowOffset] = useState(true);
   const [fitScale, setFitScale] = useState(1);
+  // Teks dummy untuk preview — SAMA dengan halaman cetak tes
+  // (GET template mengembalikan dummyTexts dari getDummyPrintData).
+  // Fallback OFFLINE_FIELD_SAMPLE bila fetch gagal / program tak cocok.
+  const [dummyTexts, setDummyTexts] = useState<Record<string, string> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -58,6 +64,7 @@ export default function TemplateSyahadahOfflineTab({
     setLocked(tpl.locked === true);
     setOffsetX(Number(tpl.offsetX) || 0);
     setOffsetY(Number(tpl.offsetY) || 0);
+    setDummyTexts((tpl as any).dummyTexts ?? null);
   };
   useEffect(() => { load(); }, [programKey]);
 
@@ -214,7 +221,7 @@ export default function TemplateSyahadahOfflineTab({
                 }}
               >
                 <SyahadahOfflineStage
-                  texts={OFFLINE_FIELD_SAMPLE}
+                  texts={dummyTexts ?? OFFLINE_FIELD_SAMPLE}
                   qrDataUrl={null}
                   template={{ backgroundUrl: bg, fieldPositions: positions, offsetX, offsetY }}
                   showBackground

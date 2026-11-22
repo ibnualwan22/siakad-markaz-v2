@@ -9,8 +9,21 @@ export type OfflineProgramOption = {
   nama_indo: string;
   nama_arab: string;
   kategori?: string;
-  programMapels: Array<{
-    mapel: { id: string; nama_indo: string; nama_arab: string; tampil_di_syahadah: boolean };
+  // Bentuk terserialisasi dari getProgramCatalog() / serializeProgram()
+  // (src/lib/app-data.ts): mapelList diratakan, TANPA `.mapel` bersarang.
+  // Jangan pakai `programMapels` — field itu tidak ada di katalog ini.
+  mapelList: Array<{
+    id: string;
+    nama_indo: string;
+    nama_arab: string;
+    urutan: number;
+    jumlah_tes: number;
+    tampil_di_syahadah: boolean;
+    masuk_akumulasi: boolean;
+    bobot: number;
+    bobot_usbu: number;
+    bulan_aktif: number;
+    jumlah_tes_b2: number | null;
   }>;
 };
 
@@ -33,8 +46,8 @@ export default function SyahadahOfflineClient({
   // Jumlah slot nilai = jumlah mapel tampil program terpilih (I'dad Awal:
   // 5, Shifr: 7, Akbarnas: 12) — editor hanya menampilkan slot itu.
   const tampilCount = program
-    ? program.programMapels.filter(
-        (pm) => pm.mapel.tampil_di_syahadah !== false,
+    ? (program.mapelList ?? []).filter(
+        (m) => m.tampil_di_syahadah !== false,
       ).length
     : 12;
 

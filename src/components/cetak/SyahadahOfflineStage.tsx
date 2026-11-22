@@ -87,6 +87,7 @@ export default function SyahadahOfflineStage({
   hideBackgroundOnPrint = false,
   applyOffset = false,
   showQrPlaceholder = false,
+  slotCount = 12,
   editable = false,
   selectedKey = null,
   onSelectKey,
@@ -99,6 +100,11 @@ export default function SyahadahOfflineStage({
   hideBackgroundOnPrint?: boolean;
   applyOffset?: boolean;
   showQrPlaceholder?: boolean;
+  // Jumlah slot nilai yang dirender (nilaiSlot1..slotCount). Program
+  // dengan mapel tampil lebih sedikit (mis. I'dad Awal: 5) hanya
+  // menampilkan slotnya — slot sisanya tetap tersimpan posisinya, hanya
+  // tidak dirender. Default 12 = maksimum (Akbarnas).
+  slotCount?: number;
   editable?: boolean;
   selectedKey?: string | null;
   onSelectKey?: (key: string | null) => void;
@@ -148,6 +154,12 @@ export default function SyahadahOfflineStage({
   };
 
   const renderField = (key: string) => {
+    // Slot nilai di atas jumlah tampil program tidak dirender (mis.
+    // I'dad Awal hanya 5 slot) — posisinya tetap tersimpan di template.
+    if (key.startsWith("nilaiSlot")) {
+      const n = parseInt(key.slice("nilaiSlot".length), 10);
+      if (Number.isNaN(n) || n > slotCount) return null;
+    }
     const cfg = fields[key];
     if (!cfg) return null;
     const xMm = ((cfg.x ?? 50) / 100) * OFFLINE_STAGE_W_MM;

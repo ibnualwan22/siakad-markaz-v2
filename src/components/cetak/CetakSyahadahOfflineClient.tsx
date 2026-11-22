@@ -14,7 +14,9 @@ import SyahadahOfflineStage from "@/components/cetak/SyahadahOfflineStage";
 // dengan preview editor, supaya atur layout = print preview (WYSIWYG).
 // Beda mode:
 // - admin: background tampil di preview, DISEMBUNYIKAN saat print; offset
-//   printer diterapkan ke field; tombol Cetak / PDF.
+//   printer diterapkan ke field; tombol Cetak / PDF. Toggle "Sertakan
+//   desain saat cetak" (default MATI) hanya untuk tes di kertas polos —
+//   perilaku produksi (kertas pre-printed) tidak berubah.
 // - santri: background ikut tercetak & ikut di PNG; tanpa offset; tombol
 //   Unduh PNG + Cetak / PDF.
 type OfflineTemplate = {
@@ -36,6 +38,8 @@ export default function CetakSyahadahOfflineClient({
     texts: Record<string, string>;
     qrDataUrl: string | null;
     template: OfflineTemplate | null;
+    // Jumlah slot nilai yang dirender (1..12); default 12 bila tak ada.
+    slotCount?: number;
   };
   mode: "admin" | "santri";
 }) {
@@ -44,6 +48,9 @@ export default function CetakSyahadahOfflineClient({
   const [scale, setScale] = useState(1);
   const [pngDownloading, setPngDownloading] = useState(false);
   const [pngError, setPngError] = useState("");
+  // Admin saja: sertakan desain saat cetak (tes kertas polos). Default
+  // MATI — kertas pre-printed, background tidak tercetak.
+  const [cetakDenganDesain, setCetakDenganDesain] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -114,7 +121,9 @@ export default function CetakSyahadahOfflineClient({
           <p className="text-sm text-slate-500">{data.nama}</p>
           {mode === "admin" && (
             <p className="text-xs text-slate-500">
-              Cetak di kertas pre-printed (desain tidak ikut tercetak). Pastikan skala print 100%.
+              {cetakDenganDesain
+                ? "Desain ikut tercetak (tes kertas polos). Matikan lagi untuk kertas pre-printed."
+                : "Cetak di kertas pre-printed (desain tidak ikut tercetak). Pastikan skala print 100%."}
             </p>
           )}
           {mode === "santri" && (
@@ -124,7 +133,17 @@ export default function CetakSyahadahOfflineClient({
           )}
           {pngError && <p className="text-sm text-red-600 mt-1">{pngError}</p>}
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 shrink-0 items-center">
+          {mode === "admin" && (
+            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={cetakDenganDesain}
+                onChange={(e) => setCetakDenganDesain(e.target.checked)}
+              />
+              Sertakan desain saat cetak (tes kertas polos)
+            </label>
+          )}
           {mode === "santri" && (
             <button
               onClick={downloadPng}
@@ -157,9 +176,10 @@ export default function CetakSyahadahOfflineClient({
           <SyahadahOfflineStage
             {...stageProps}
             showBackground
-            hideBackgroundOnPrint={mode === "admin"}
+            hideBackgroundOnPrint={mode === "admin" && !cetakDenganDesain}
             applyOffset={mode === "admin"}
             showQrPlaceholder={mode === "admin"}
+            slotCount={data.slotCount ?? 12}
           />
         </div>
       </div>
@@ -184,6 +204,7 @@ export default function CetakSyahadahOfflineClient({
             hideBackgroundOnPrint={false}
             applyOffset={false}
             showQrPlaceholder={false}
+            slotCount={data.slotCount ?? 12}
           />
         </div>
       )}

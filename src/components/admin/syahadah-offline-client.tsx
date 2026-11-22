@@ -30,6 +30,13 @@ export default function SyahadahOfflineClient({
   );
 
   const programKey = program ? offlineProgramKey(program.nama_indo) : "";
+  // Jumlah slot nilai = jumlah mapel tampil program terpilih (I'dad Awal:
+  // 5, Shifr: 7, Akbarnas: 12) — editor hanya menampilkan slot itu.
+  const tampilCount = program
+    ? program.programMapels.filter(
+        (pm) => pm.mapel.tampil_di_syahadah !== false,
+      ).length
+    : 12;
 
   return (
     <div className="space-y-6">
@@ -56,20 +63,21 @@ export default function SyahadahOfflineClient({
             Template key: <code>{programKey}</code>
           </p>
         )}
-        {/* Cetak tes dengan data santri contoh (Takhossus Tsani, Duf'ah 95).
-            Template program Takhossus Tsani harus sudah dibuat di editor ini
-            dulu (pilih programnya, upload desain, simpan) supaya isi tercetak. */}
+        {/* Cetak tes DUMMY untuk program yang dipilih: nama selalu
+            "Ahmad Ibnu Alwan" di semua program, nilai ٩٥ semua (bukan data
+            santri asli). Template program harus sudah dibuat di editor ini
+            dulu (upload desain, simpan) supaya desain tampil di preview. */}
         <a
-          href="/cetak-offline/cmw55m1l80044rhbchu753xyf"
+          href={`/cetak-offline/tes/${programKey}`}
           target="_blank"
           rel="noreferrer"
           className="inline-block px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
         >
-          Cetak Tes — Ahmad Ibnu Alwan
+          Cetak Tes (dummy Ahmad Ibnu Alwan)
         </a>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Membuka halaman cetak syahadah santri contoh (Takhossus Tsani, Duf&apos;ah 95)
-          di tab baru — untuk mengetes posisi field di kertas pre-printed.
+          Membuka contoh cetak dummy untuk program {program?.nama_indo} di tab baru
+          — untuk mengetes posisi field + desain di kertas pre-printed.
         </p>
       </div>
 
@@ -79,6 +87,7 @@ export default function SyahadahOfflineClient({
           programKey={programKey}
           apiBase="/api/admin/syahadah-offline/template"
           canEdit
+          slotCount={tampilCount}
         />
       )}
     </div>

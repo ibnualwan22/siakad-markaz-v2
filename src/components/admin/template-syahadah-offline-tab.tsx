@@ -25,10 +25,14 @@ export default function TemplateSyahadahOfflineTab({
   programKey,
   apiBase,
   canEdit,
+  slotCount = 12,
 }: {
   programKey: string;
   apiBase: string;
   canEdit: boolean;
+  // Jumlah slot nilai yang ditampilkan = jumlah mapel tampil program ini
+  // (I'dad Awal: 5, Shifr: 7, Akbarnas: 12). Default 12 = maksimum.
+  slotCount?: number;
 }) {
   const [bg, setBg] = useState<string | null>(null);
   const [positions, setPositions] = useState<Record<string, any>>({});
@@ -217,6 +221,7 @@ export default function TemplateSyahadahOfflineTab({
                   hideBackgroundOnPrint={false}
                   applyOffset={showOffset}
                   showQrPlaceholder
+                  slotCount={slotCount}
                   editable={editable}
                   selectedKey={selectedKey}
                   onSelectKey={setSelectedKey}
@@ -231,7 +236,13 @@ export default function TemplateSyahadahOfflineTab({
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {OFFLINE_FIELD_KEYS.map((key) => {
+              {/* Slot nilai di atas jumlah tampil program tidak ditampilkan
+                  (posisinya tetap tersimpan, hanya tidak dirender). */}
+              {OFFLINE_FIELD_KEYS.filter((key) => {
+                if (!key.startsWith("nilaiSlot")) return true;
+                const n = parseInt(key.slice("nilaiSlot".length), 10);
+                return Number.isNaN(n) || n <= slotCount;
+              }).map((key) => {
                 const cfg = positions[key] || {};
                 const isQr = key === "qr";
                 const isSelected = selectedKey === key;
@@ -303,10 +314,10 @@ export default function TemplateSyahadahOfflineTab({
               <h4 className="font-bold text-sm">Tabel Nilai — mengikuti settingan syahadah</h4>
               <p className="text-xs text-[var(--color-text-muted)]">
                 Nama mapel sudah tercetak di kertas; web hanya mengisi kolom nilainya.
-                Slot 1–12 otomatis terisi dari mapel yang tampil di syahadah
-                (pengaturan tampil di syahadah di pengelola mapel program), dengan
-                urutan yang sama — tanpa pemetaan manual. Geser posisi tiap slot
-                (Nilai Slot 1–12) seperti field lain di atas.
+                Slot 1–{slotCount} otomatis terisi dari mapel yang tampil di syahadah
+                program ini (pengaturan tampil di syahadah di pengelola mapel program),
+                dengan urutan yang sama — tanpa pemetaan manual. Geser posisi tiap slot
+                (Nilai Slot 1–{slotCount}) seperti field lain di atas.
               </p>
             </div>
 

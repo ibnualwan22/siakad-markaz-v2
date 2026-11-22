@@ -54,8 +54,10 @@ export type OfflineFieldCfg = {
   color?: string;
 };
 
-// 11 field teks + QR + 3 baris nilai (nilai = field teks biasa yang
-// isinya angka; pemetaan baris -> mapel disimpan di `tabelMapel`).
+// 11 field teks + QR + 12 slot nilai (nilai = field teks biasa yang
+// isinya angka; slot ke-i = mapel tampil ke-i dari nilaiRows — sudah
+// terfilter tampil_di_syahadah + urutan urutan di getCertificateData —
+// jadi isi + urutan kolom nilai SELALU sama dengan settingan syahadah).
 export const OFFLINE_FIELD_KEYS = [
   "nama",
   "tempatLahir",
@@ -69,9 +71,18 @@ export const OFFLINE_FIELD_KEYS = [
   "tglCetakHijriyah",
   "tglCetakMiladiyah",
   "qr",
-  "nilaiBaris1",
-  "nilaiBaris2",
-  "nilaiBaris3",
+  "nilaiSlot1",
+  "nilaiSlot2",
+  "nilaiSlot3",
+  "nilaiSlot4",
+  "nilaiSlot5",
+  "nilaiSlot6",
+  "nilaiSlot7",
+  "nilaiSlot8",
+  "nilaiSlot9",
+  "nilaiSlot10",
+  "nilaiSlot11",
+  "nilaiSlot12",
 ] as const;
 
 export const OFFLINE_FIELD_LABEL: Record<string, string> = {
@@ -87,34 +98,56 @@ export const OFFLINE_FIELD_LABEL: Record<string, string> = {
   tglCetakHijriyah: "Tgl Cetak Hijriyah",
   tglCetakMiladiyah: "Tgl Cetak Masehi",
   qr: "QR Verifikasi",
-  nilaiBaris1: "Nilai Baris 1",
-  nilaiBaris2: "Nilai Baris 2",
-  nilaiBaris3: "Nilai Baris 3",
+  nilaiSlot1: "Nilai Slot 1 (kanan, baris 1)",
+  nilaiSlot2: "Nilai Slot 2 (kanan, baris 2)",
+  nilaiSlot3: "Nilai Slot 3 (kanan, baris 3)",
+  nilaiSlot4: "Nilai Slot 4 (kanan, baris 4)",
+  nilaiSlot5: "Nilai Slot 5 (kiri, baris 1)",
+  nilaiSlot6: "Nilai Slot 6 (kiri, baris 2)",
+  nilaiSlot7: "Nilai Slot 7 (kiri, baris 3)",
+  nilaiSlot8: "Nilai Slot 8 (kiri, baris 4)",
+  nilaiSlot9: "Nilai Slot 9 (kanan, baris 5)",
+  nilaiSlot10: "Nilai Slot 10 (kiri, baris 5)",
+  nilaiSlot11: "Nilai Slot 11 (kanan, baris 6)",
+  nilaiSlot12: "Nilai Slot 12 (kiri, baris 6)",
 };
 
 // Contoh isi untuk preview editor (teks Arab seperti di sertifikat).
 export const OFFLINE_FIELD_SAMPLE: Record<string, string> = {
   nama: "أحمد محمد علي",
-  tempatLahir: "جاكرتا",
+  tempatLahir: "جاكرتا، ٠٥ – ١١ – ٢٠٠٠",
   program: "إعداد أول",
   dufah: "٩٥",
-  periode: "١١ أكتوبر ٢٠٢٦ – ٥ نوفمبر ٢٠٢٦",
+  periode: "١١ أكتوبر إلى ٥ نوفمبر ٢٠٢٦",
   tahunHijriyah: "١٤٤٨",
   tahunMiladiyah: "٢٠٢٦",
   muaddal: "٩٠",
   taqdir: "ممتاز",
-  tglCetakHijriyah: "٣ جمادى الآخرة ١٤٤٨",
-  tglCetakMiladiyah: "٢١ نوفمبر ٢٠٢٦",
+  tglCetakHijriyah: "١٤٤٨",
+  tglCetakMiladiyah: "٢٠٢٦",
   qr: "QR",
-  nilaiBaris1: "٩٠",
-  nilaiBaris2: "٨٥",
-  nilaiBaris3: "٩٥",
+  nilaiSlot1: "٩٠",
+  nilaiSlot2: "٨٥",
+  nilaiSlot3: "٩٥",
+  nilaiSlot4: "٨٨",
+  nilaiSlot5: "٩٢",
+  nilaiSlot6: "٩٠",
+  nilaiSlot7: "٨٧",
+  nilaiSlot8: "٩٥",
+  nilaiSlot9: "٩٠",
+  nilaiSlot10: "٨٥",
+  nilaiSlot11: "٩٢",
+  nilaiSlot12: "٨٨",
 };
 
 // Posisi awal (tengah field, % dari 210 x 297 mm) — diukur 15 Nov 2026 dari
 // ekspor JPG Canva 1131 x 1600 px. Font default: nama 20pt, lainnya 13pt.
-// Kolom nilai: X default 81% (tengah kolom kanan area tabel) — admin
-// mengkalibrasi lewat drag di editor (pembagi kolom belum terukur pasti).
+// Slot nilai: baris 1–3 y-nya SAMA dengan seed lama (66,3/68,9/71,4 —
+// sesuai peta ukur); baris 4–6 mengikuti jarak baris ±2,6% (±7,6 mm).
+// Posisi X kolom skor (kanan 69,7% / kiri 34,0%) adalah ESTIMASI —
+// pembagi kolom di dalam tiap paruh tabel belum terukur pasti (hanya
+// pembagi tengah X ±138,6 mm yang diketahui); admin WAJIB kalibrasi
+// lewat drag di editor sebelum cetak massal.
 export function defaultFieldPositionsOffline(): Record<string, any> {
   return {
     nama: { x: 41.1, y: 36.2, fontSize: 20, maxWidth: 23.4 },
@@ -134,11 +167,18 @@ export function defaultFieldPositionsOffline(): Record<string, any> {
       fontSize: 13,
       maxWidth: (OFFLINE_QR_MM / OFFLINE_STAGE_W_MM) * 100,
     },
-    nilaiBaris1: { x: 81.0, y: 66.3, fontSize: 13, maxWidth: 14.3 },
-    nilaiBaris2: { x: 81.0, y: 68.9, fontSize: 13, maxWidth: 14.3 },
-    nilaiBaris3: { x: 81.0, y: 71.4, fontSize: 13, maxWidth: 14.3 },
-    // Pemetaan baris tabel -> mapelId (diisi admin di editor).
-    tabelMapel: { baris1: null, baris2: null, baris3: null },
+    nilaiSlot1: { x: 69.7, y: 66.3, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot2: { x: 69.7, y: 68.9, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot3: { x: 69.7, y: 71.4, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot4: { x: 69.7, y: 73.9, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot5: { x: 34.0, y: 66.3, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot6: { x: 34.0, y: 68.9, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot7: { x: 34.0, y: 71.4, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot8: { x: 34.0, y: 73.9, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot9: { x: 69.7, y: 76.4, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot10: { x: 34.0, y: 76.4, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot11: { x: 69.7, y: 79.0, fontSize: 13, maxWidth: 14.3 },
+    nilaiSlot12: { x: 34.0, y: 79.0, fontSize: 13, maxWidth: 14.3 },
   };
 }
 
@@ -224,6 +264,40 @@ export function tahunHijriDari(tanggal: Date): number {
     timeZone: "Asia/Jakarta",
   }).formatToParts(tanggal);
   return Number(parts.find((p) => p.type === "year")?.value || 0);
+}
+
+/** Tahun Masehi dari sebuah tanggal (zona Asia/Jakarta). */
+export function tahunMiladiDari(tanggal: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).formatToParts(tanggal);
+  return Number(parts.find((p) => p.type === "year")?.value || 0);
+}
+
+/** "05 – 11 – 2000" (angka Arab, DD – MM – YYYY, hari/bulan 2 digit) —
+ *  tanggal lahir seperti di contoh Canva (angka saja, dipisah strip).
+ *  Zona Asia/Jakarta. "" bila tanggal invalid. */
+export function formatTanggalLahirArab(tanggal: Date): string {
+  if (Number.isNaN(tanggal.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).formatToParts(tanggal);
+  const ambil = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value || 0);
+  const dd = String(ambil("day")).padStart(2, "0");
+  const mm = String(ambil("month")).padStart(2, "0");
+  const yyyy = String(ambil("year"));
+  return `${toArabDigits(dd)} – ${toArabDigits(mm)} – ${toArabDigits(yyyy)}`;
+}
+
+/** "١١ أكتوبر ٢٠٢٦" -> "١١ أكتوبر" (buang token angka terakhir = tahun).
+ *  Dipakai periode: tahun hanya ditulis sekali di tanggal selesai. */
+export function tanpaTahunAkhir(s: string): string {
+  return (s || "").trim().replace(/\s+[٠-٩0-9]+$/, "");
 }
 
 const BULAN_INDO: Record<string, number> = {

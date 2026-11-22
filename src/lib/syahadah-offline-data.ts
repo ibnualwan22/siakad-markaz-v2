@@ -7,12 +7,14 @@ import { getCertificateData } from "@/lib/app-data";
 import { getBaseUrl } from "@/lib/base-url";
 import { toArabDigits } from "@/lib/munaqosah-hufadz";
 import {
+  defaultFieldPositionsOffline,
   formatAngkaArab,
-  formatTanggalHijriArab,
-  formatTanggalMasehiArab,
+  formatTanggalLahirArab,
   offlineProgramKey,
   parseTanggalIndo,
   tahunHijriDari,
+  tahunMiladiDari,
+  tanpaTahunAkhir,
 } from "@/lib/syahadah-offline";
 
 export type OfflinePrintData = {
@@ -68,9 +70,11 @@ export async function getOfflinePrintData(
   });
 
   const tpl = cert.template || {};
+  // Periode: tahun hanya ditulis sekali di tanggal selesai
+  // ("١١ أكتوبر إلى ٥ نوفمبر ٢٠٢٦") — seperti contoh Canva.
   const periode =
     tpl.tgl_mulai_arab && tpl.tgl_selesai_arab
-      ? `${tpl.tgl_mulai_arab} – ${tpl.tgl_selesai_arab}`
+      ? `${tanpaTahunAkhir(tpl.tgl_mulai_arab)} إلى ${tpl.tgl_selesai_arab}`
       : "........";
 
   // Tahun pembelajaran: dari tanggal mulai periode (Masehi + Hijri).
@@ -81,29 +85,43 @@ export async function getOfflinePrintData(
   const tahunMiladiyah = toArabDigits(tglMulai.getFullYear());
   const tahunHijriyah = toArabDigits(tahunHijriDari(tglMulai));
 
-  // Tanggal cetak = HARI CETAK (bukan tgl_cetak tersimpan), zona WIB.
+  // Tanggal cetak = HARI CETAK (bukan tgl_cetak tersimpan), zona WIB —
+  // garis تحريرا hanya berisi TAHUN (keputusan user 22 Nov 2026).
   const hariIni = new Date();
+  const tglCetakHijriyah = toArabDigits(tahunHijriDari(hariIni));
+  const tglCetakMiladiyah = toArabDigits(tahunMiladiDari(hariIni));
 
   // Duf'ah sebagai angka ("Duf'ah 95" -> "٩٥").
   const dufahMatch = String(cert.riwayatSantri.dufahNama || "").match(/\d+/);
   const dufah = dufahMatch ? toArabDigits(dufahMatch[0]) : "";
 
-  // Nilai tabel: baris 1/2/3 = mapel yang dipetakan di template.
-  const tabelMapel = (template?.fieldPositions as any)?.tabelMapel || {};
-  const nilaiPerMapel = new Map<string, number | null>();
-  for (const row of cert.nilaiRows || []) {
-    nilaiPerMapel.set(row.mapelId, row.skor ?? null);
+  // Tempat + tanggal lahir ("Wonosobo، ٠٥ – ١١ – ٢٠٠٠") — bila tanggal
+  // lahir kosong/invalid, tempat saja.
+  const tempat = (cert.masterSantri?.tempatLahir || "").trim();
+  const tglLahirRaw = cert.masterSantri?.tanggalLahir;
+  const tglLahir = tglLahirRaw ? new Date(tglLahirRaw) : null;
+  const tglLahirStr =
+    tglLahir && !Number.isNaN(tglLahir.getTime())
+      ? formatTanggalLahirArab(tglLahir)
+      : "";
+  let tempatLahir = "-";
+  if (tempat && tglLahirStr) tempatLahir = `${tempat}، ${tglLahirStr}`;
+  else if (tempat) tempatLahir = tempat;
+  else if (tglLahirStr) tempatLahir = tglLahirStr;
+
+  // Nilai tabel DINAMIS: slot ke-i = mapel tampil ke-i dari nilaiRows
+  // (sudah terfilter tampil_di_syahadah + urutan urutan di
+  // getCertificateData) — tanpa pemetaan manual di template.
+  const nilaiSlot: Record<string, string> = {};
+  for (let i = 1; i <= 12; i++) {
+    const skor = (cert.nilaiRows || [])[i - 1]?.skor ?? null;
+    nilaiSlot[`nilaiSlot${i}`] =
+      skor === null || skor === undefined ? "" : formatAngkaArab(skor);
   }
-  const nilaiBaris = (key: string) => {
-    const mapelId = tabelMapel[key];
-    if (!mapelId) return "";
-    const skor = nilaiPerMapel.get(mapelId);
-    return skor === null || skor === undefined ? "" : formatAngkaArab(skor);
-  };
 
   const texts: Record<string, string> = {
     nama: cert.masterSantri?.nama || "-",
-    tempatLahir: (cert.masterSantri?.tempatLahir || "").trim() || "-",
+    tempatLahir,
     program: cert.program.nama_arab || programNamaIndo,
     dufah,
     periode,
@@ -111,11 +129,9 @@ export async function getOfflinePrintData(
     tahunMiladiyah,
     muaddal: formatAngkaArab(cert.average),
     taqdir: cert.averagePredikat?.arab || "",
-    tglCetakHijriyah: formatTanggalHijriArab(hariIni),
-    tglCetakMiladiyah: formatTanggalMasehiArab(hariIni),
-    nilaiBaris1: nilaiBaris("baris1"),
-    nilaiBaris2: nilaiBaris("baris2"),
-    nilaiBaris3: nilaiBaris("baris3"),
+    tglCetakHijriyah,
+    tglCetakMiladiyah,
+    ...nilaiSlot,
   };
 
   const baseUrl = await getBaseUrl();
@@ -131,7 +147,14 @@ export async function getOfflinePrintData(
     template: template
       ? {
           backgroundUrl: template.backgroundUrl,
-          fieldPositions: (template.fieldPositions as any) || {},
+          // Posisi default sebagai alas: template yang tersimpan sebelum
+          // revisi slot dinamis belum punya kunci nilaiSlot1..12 — tanpa
+          // alas ini nilainya tidak terender sampai admin buka + simpan
+          // ulang editor (editor sendiri sudah menggabung seed saat load).
+          fieldPositions: {
+            ...defaultFieldPositionsOffline(),
+            ...((template.fieldPositions as any) || {}),
+          },
           locked: (template as any).locked ?? false,
           offsetX: (template as any).offsetX ?? 0,
           offsetY: (template as any).offsetY ?? 0,

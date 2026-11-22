@@ -25,12 +25,10 @@ export default function TemplateSyahadahOfflineTab({
   programKey,
   apiBase,
   canEdit,
-  mapels,
 }: {
   programKey: string;
   apiBase: string;
   canEdit: boolean;
-  mapels: Array<{ id: string; nama_indo: string; nama_arab: string }>;
 }) {
   const [bg, setBg] = useState<string | null>(null);
   const [positions, setPositions] = useState<Record<string, any>>({});
@@ -137,14 +135,7 @@ export default function TemplateSyahadahOfflineTab({
   const setField = (key: string, patch: any) =>
     setPositions((p: any) => ({ ...p, [key]: { ...p[key], ...patch } }));
 
-  const setTabelMapel = (baris: string, mapelId: string) =>
-    setPositions((p: any) => ({
-      ...p,
-      tabelMapel: { ...(p.tabelMapel || {}), [baris]: mapelId || null },
-    }));
-
   const editable = canEdit && !locked;
-  const tabelMapel = positions.tabelMapel || {};
 
   return (
     <div className="space-y-6">
@@ -308,29 +299,15 @@ export default function TemplateSyahadahOfflineTab({
               })}
             </div>
 
-            <div className="border rounded-xl p-4 space-y-3">
-              <h4 className="font-bold text-sm">Tabel Nilai — mapel tiap baris</h4>
+            <div className="border rounded-xl p-4 space-y-2">
+              <h4 className="font-bold text-sm">Tabel Nilai — mengikuti settingan syahadah</h4>
               <p className="text-xs text-[var(--color-text-muted)]">
                 Nama mapel sudah tercetak di kertas; web hanya mengisi kolom nilainya.
-                Pilih mapel untuk tiap baris (kosongkan bila baris tidak dipakai).
+                Slot 1–12 otomatis terisi dari mapel yang tampil di syahadah
+                (pengaturan tampil di syahadah di pengelola mapel program), dengan
+                urutan yang sama — tanpa pemetaan manual. Geser posisi tiap slot
+                (Nilai Slot 1–12) seperti field lain di atas.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                {(["baris1", "baris2", "baris3"] as const).map((baris, i) => (
-                  <label key={baris}>Baris {i + 1}
-                    <select
-                      value={tabelMapel[baris] || ""}
-                      onChange={(e) => setTabelMapel(baris, e.target.value)}
-                      disabled={!editable}
-                      className="w-full px-2 py-1 border rounded"
-                    >
-                      <option value="">— tidak dipakai —</option>
-                      {mapels.map((m) => (
-                        <option key={m.id} value={m.id}>{m.nama_indo}</option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
             </div>
 
             <div className="border rounded-xl p-4 space-y-3">

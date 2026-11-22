@@ -19,9 +19,9 @@ export default async function SyahadahOfflinePage() {
         <h1 className="text-3xl font-black md:text-4xl">Template Syahadah Offline</h1>
         <p className="text-sm text-[var(--color-text-muted)] max-w-2xl">
           Atur template syahadah A4 portrait untuk kertas pre-printed: upload desain
-          Canva per program, geser posisi field, petakan baris tabel nilai ke mapel,
-          lalu kalibrasi offset printer dan kunci template. Desain lama (yang tampil
-          di riwayat santri) tidak berubah.
+          Canva per program, geser posisi field (kolom nilai mengikuti mapel yang
+          tampil di syahadah), lalu kalibrasi offset printer dan kunci template.
+          Desain lama (yang tampil di riwayat santri) tidak berubah.
         </p>
       </div>
 

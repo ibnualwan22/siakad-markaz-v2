@@ -30,13 +30,6 @@ export default function SyahadahOfflineClient({
   );
 
   const programKey = program ? offlineProgramKey(program.nama_indo) : "";
-  const mapels = useMemo(
-    () =>
-      (program?.programMapels || [])
-        .filter((pm) => pm.mapel.tampil_di_syahadah !== false)
-        .map((pm) => pm.mapel),
-    [program],
-  );
 
   return (
     <div className="space-y-6">
@@ -63,6 +56,21 @@ export default function SyahadahOfflineClient({
             Template key: <code>{programKey}</code>
           </p>
         )}
+        {/* Cetak tes dengan data santri contoh (Takhossus Tsani, Duf'ah 95).
+            Template program Takhossus Tsani harus sudah dibuat di editor ini
+            dulu (pilih programnya, upload desain, simpan) supaya isi tercetak. */}
+        <a
+          href="/cetak-offline/cmw55m1l80044rhbchu753xyf"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
+        >
+          Cetak Tes — Ahmad Ibnu Alwan
+        </a>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Membuka halaman cetak syahadah santri contoh (Takhossus Tsani, Duf&apos;ah 95)
+          di tab baru — untuk mengetes posisi field di kertas pre-printed.
+        </p>
       </div>
 
       {program && (
@@ -71,7 +79,6 @@ export default function SyahadahOfflineClient({
           programKey={programKey}
           apiBase="/api/admin/syahadah-offline/template"
           canEdit
-          mapels={mapels}
         />
       )}
     </div>

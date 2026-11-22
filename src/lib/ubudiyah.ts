@@ -339,7 +339,11 @@ function formatSeksiLaporan(
  * kemarin untuk laporan ini (Arabiyah: Maghrib, Isya, Halaqoh;
  * Turats+Hufadz 06:00: Dzuhur, Ashar, Maghrib, Isya, Halaqoh;
  * Turats+Hufadz 15:30: Maghrib, Isya, Halaqoh) — dipakai untuk
- * subjudul dan pembagian baris; kegiatan hari ini = sisanya.
+ * subjudul dan pembagian baris. `kegiatanHariIni` = daftar kegiatan
+ * jendela hari ini (Arabiyah + Turats 06:00: Subuh; Turats 15:30:
+ * Subuh, Dzuhur, Ashar) — dipakai untuk subjudul hari ini; WAJIB
+ * diisi eksplisit karena TIDAK sama dengan "sisanya" (Arabiyah
+ * tidak punya Dzuhur/Ashar sama sekali).
  *
  * Contoh output:
  * ```
@@ -374,6 +378,7 @@ export function formatUbudiyahReport(
   masbuq: UbudiyahReportMasbuqRow[],
   ghoib: UbudiyahReportGhoibRow[],
   kegiatanKemarin: UbudiyahKegiatan[],
+  kegiatanHariIni: UbudiyahKegiatan[] = [UbudiyahKegiatan.SUBUH],
   opts: {
     /** Ada baris absen sama sekali di jendela laporan (kemarin + hari
      * ini). Bila false -> libur. Bila tidak diisi, libur mengikuti
@@ -434,11 +439,13 @@ export function formatUbudiyahReport(
     .map((k) => UBUDIYAH_KEGIATAN_LABEL_KECIL[k])
     .join(", ")} tadi malam`;
 
-  // Subjudul "hari ini" dinamis ikut jendela: jendela lama hanya Subuh
-  // ("Subuh hari ini"), jendela 15:30 Subuh + Dzuhur + Ashar.
-  const subtitleHariIni = `${UBUDIYAH_KEGIATAN_ORDER.filter(
-    (k) => !kegiatanKemarin.includes(k)
-  )
+  // Subjudul "hari ini" ikut kegiatanHariIni (eksplisit — bukan
+  // "sisanya", karena Arabiyah tidak punya Dzuhur/Ashar).
+  const subtitleHariIni = `${[...kegiatanHariIni]
+    .sort(
+      (a, b) =>
+        UBUDIYAH_KEGIATAN_ORDER.indexOf(a) - UBUDIYAH_KEGIATAN_ORDER.indexOf(b)
+    )
     .map((k) => UBUDIYAH_KEGIATAN_LABEL[k])
     .join(", ")} hari ini`;
 
@@ -489,8 +496,8 @@ export type UbudiyahReportLainnyaRow = {
  * ada entri Lainnya. Berbeda dengan laporan utama, pesan ini MENAMPILKAN
  * keterangan tiap baris (alasan "lainnya"-nya justru yang perlu dibaca).
  * Sama seperti laporan utama: SATU pesan dengan DUA judul tanggal
- * (kemarin ikut `kegiatanKemarin`, hari ini sisanya); jendela yang
- * kosong tidak ditampilkan.
+ * (kemarin ikut `kegiatanKemarin`, hari ini ikut `kegiatanHariIni`);
+ * jendela yang kosong tidak ditampilkan.
  *
  * Contoh output:
  * ```
@@ -512,7 +519,8 @@ export function formatUbudiyahReportLainnya(
   tanggalKemarin: Date,
   tanggalHariIni: Date,
   lainnya: UbudiyahReportLainnyaRow[],
-  kegiatanKemarin: UbudiyahKegiatan[]
+  kegiatanKemarin: UbudiyahKegiatan[],
+  kegiatanHariIni: UbudiyahKegiatan[] = [UbudiyahKegiatan.SUBUH]
 ): string {
   const headerKemarin = `📿 ${formatTanggalWa(toTanggalWaString(tanggalKemarin))}`;
   const headerHariIni = `📿 ${formatTanggalWa(toTanggalWaString(tanggalHariIni))}`;
@@ -524,10 +532,12 @@ export function formatUbudiyahReportLainnya(
     .map((k) => UBUDIYAH_KEGIATAN_LABEL_KECIL[k])
     .join(", ")} tadi malam`;
 
-  // Subjudul "hari ini" dinamis ikut jendela (lihat formatUbudiyahReport).
-  const subtitleHariIni = `${UBUDIYAH_KEGIATAN_ORDER.filter(
-    (k) => !kegiatanKemarin.includes(k)
-  )
+  // Subjudul "hari ini" ikut kegiatanHariIni (lihat formatUbudiyahReport).
+  const subtitleHariIni = `${[...kegiatanHariIni]
+    .sort(
+      (a, b) =>
+        UBUDIYAH_KEGIATAN_ORDER.indexOf(a) - UBUDIYAH_KEGIATAN_ORDER.indexOf(b)
+    )
     .map((k) => UBUDIYAH_KEGIATAN_LABEL[k])
     .join(", ")} hari ini`;
 

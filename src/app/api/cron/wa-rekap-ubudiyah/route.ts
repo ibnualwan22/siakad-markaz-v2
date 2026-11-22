@@ -483,6 +483,12 @@ export async function GET(request: NextRequest) {
     const kegiatanKemarinTurats = turatsJendelaBaru
       ? UBUDIYAH_KEGIATAN_KEMARIN_1530
       : UBUDIYAH_KEGIATAN_KEMARIN;
+    // Kegiatan hari ini per kelompok (eksplisit — Arabiyah hanya Subuh,
+    // bukan "sisa" dari kemarin).
+    const kegiatanHariIniArabiyah = [UbudiyahKegiatan.SUBUH];
+    const kegiatanHariIniTurats = turatsJendelaBaru
+      ? UBUDIYAH_KEGIATAN_HARI_INI_1530
+      : [UbudiyahKegiatan.SUBUH];
     const messageArabiyah = jalanArabiyah
       ? formatUbudiyahReport(
           yesterdayLocal,
@@ -490,6 +496,7 @@ export async function GET(request: NextRequest) {
           lapArabiyah.masbuq,
           lapArabiyah.ghoib,
           kegiatanKemarinArabiyah,
+          kegiatanHariIniArabiyah,
           {
             adaAbsen: adaBarisArabiyah,
             belumAbsen: belumAbsenArabiyah,
@@ -504,6 +511,7 @@ export async function GET(request: NextRequest) {
           lapTuratsHufadz.masbuq,
           lapTuratsHufadz.ghoib,
           kegiatanKemarinTurats,
+          kegiatanHariIniTurats,
           {
             adaAbsen: adaBarisTuratsHufadz,
             belumAbsen: belumAbsenTuratsHufadz,
@@ -517,7 +525,8 @@ export async function GET(request: NextRequest) {
             yesterdayLocal,
             todayLocal,
             lapArabiyah.lainnya,
-            kegiatanKemarinArabiyah
+            kegiatanKemarinArabiyah,
+            kegiatanHariIniArabiyah
           )
         : null;
     const messageLainnyaTuratsHufadz =
@@ -526,7 +535,8 @@ export async function GET(request: NextRequest) {
             yesterdayLocal,
             todayLocal,
             lapTuratsHufadz.lainnya,
-            kegiatanKemarinTurats
+            kegiatanKemarinTurats,
+            kegiatanHariIniTurats
           )
         : null;
 

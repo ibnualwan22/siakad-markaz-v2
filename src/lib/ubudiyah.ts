@@ -5,8 +5,9 @@ import type { LembagaId } from "./lembaga";
 /**
  * Ubudiyah — absensi kegiatan wajib berjamaah per sakan. Qism Ubudiyah
  * yang ditunjuk admin mengisi absen lewat portal santri; laporan harian
- * masbuq + ghoib dikirim WA tiap 06:00 ke penanggung jawab Ubudiyah,
- * plus pesan kedua khusus "Lainnya" (bila ada) ke nomor yang sama.
+ * masbuq + ghoib dikirim WA ke penanggung jawab Ubudiyah — Arabiyah
+ * tiap 06:00, Turats + Hufadz tiap 15:30 — plus pesan kedua khusus
+ * "Lainnya" (bila ada) ke nomor yang sama.
  *
  * Kegiatan: Subuh, Maghrib, Isya, Halaqoh untuk semua lembaga, DITAMBAH
  * Dzuhur & Ashar khusus Turats dan Hufadz (sama-sama 4 rakaat, opsi
@@ -25,13 +26,32 @@ export const UBUDIYAH_KEGIATAN_ORDER: UbudiyahKegiatan[] = [
   UbudiyahKegiatan.HALAQOH,
 ];
 
-/** Kegiatan yang masuk jendela "kemarin" di laporan (selain Subuh). */
+/** Kegiatan yang masuk jendela "kemarin" di laporan lama 06:00 (selain
+ * Subuh). Jendela 15:30 Turats+Hufadz memakai
+ * UBUDIYAH_KEGIATAN_KEMARIN_1530. */
 export const UBUDIYAH_KEGIATAN_KEMARIN: UbudiyahKegiatan[] = [
   UbudiyahKegiatan.DZUHUR,
   UbudiyahKegiatan.ASHAR,
   UbudiyahKegiatan.MAGHRIB,
   UbudiyahKegiatan.ISYA,
   UbudiyahKegiatan.HALAQOH,
+];
+
+/**
+ * Jendela laporan Turats + Hufadz 15:30: Maghrib, Isya, Halaqoh kemarin
+ * + Subuh, Dzuhur, Ashar hari ini.
+ */
+export const UBUDIYAH_KEGIATAN_KEMARIN_1530: UbudiyahKegiatan[] = [
+  UbudiyahKegiatan.MAGHRIB,
+  UbudiyahKegiatan.ISYA,
+  UbudiyahKegiatan.HALAQOH,
+];
+
+/** Kegiatan jendela "hari ini" di laporan 15:30. */
+export const UBUDIYAH_KEGIATAN_HARI_INI_1530: UbudiyahKegiatan[] = [
+  UbudiyahKegiatan.SUBUH,
+  UbudiyahKegiatan.DZUHUR,
+  UbudiyahKegiatan.ASHAR,
 ];
 
 /**
@@ -226,14 +246,16 @@ function toTanggalWaString(tanggal: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/** Bagi satu baris laporan (masbuq/ghoib) ke jendela kemarin vs hari ini:
- * Subuh masuk jendela hari ini, kegiatan lain masuk jendela kemarin.
- * Satu baris bisa terbelah dua (mis. masbuq subuh + maghrib). */
+/** Bagi satu baris laporan (masbuq/ghoib/belum absen) ke jendela kemarin
+ * vs hari ini ikut `kegiatanKemarin` (default: jendela lama — Subuh
+ * masuk hari ini, kegiatan lain masuk kemarin). Satu baris bisa
+ * terbelah dua (mis. masbuq subuh + maghrib). */
 function bagiBarisPerJendela<T extends { kegiatan: UbudiyahKegiatan[] }>(
-  row: T
+  row: T,
+  kegiatanKemarin: UbudiyahKegiatan[] = UBUDIYAH_KEGIATAN_KEMARIN
 ): { kemarin: T | null; hariIni: T | null } {
-  const kegKemarin = row.kegiatan.filter((k) => k !== UbudiyahKegiatan.SUBUH);
-  const kegHariIni = row.kegiatan.filter((k) => k === UbudiyahKegiatan.SUBUH);
+  const kegKemarin = row.kegiatan.filter((k) => kegiatanKemarin.includes(k));
+  const kegHariIni = row.kegiatan.filter((k) => !kegiatanKemarin.includes(k));
   return {
     kemarin: kegKemarin.length > 0 ? { ...row, kegiatan: kegKemarin } : null,
     hariIni: kegHariIni.length > 0 ? { ...row, kegiatan: kegHariIni } : null,
@@ -297,10 +319,10 @@ function formatSeksiLaporan(
 
 /**
  * Format laporan harian Ubudiyah menjadi SATU pesan WhatsApp dengan DUA
- * judul tanggal: kegiatan kemarin (Dzuhur, Ashar, Maghrib, Isya,
- * Halaqoh) memakai tanggal kemarin, Subuh memakai judul baru dengan
- * tanggal hari ini. Kedua jendela selalu ditampilkan bila bukan libur;
- * jendela yang kosong berisi baris "Tidak ada santri masbuq/ghoib."
+ * judul tanggal: kegiatan kemarin memakai tanggal kemarin, kegiatan
+ * hari ini memakai judul baru dengan tanggal hari ini. Kedua jendela
+ * selalu ditampilkan bila bukan libur; jendela yang kosong berisi
+ * baris "Tidak ada santri masbuq/ghoib."
  *
  * `opts.adaAbsen` = ada baris absen sama sekali di jendela laporan.
  * Libur HANYA bila tidak ada satu pun baris absen (tidak ada sakan
@@ -310,12 +332,14 @@ function formatSeksiLaporan(
  * yang Qism-nya perlu segera diganti (tampil sebagai seksi peringatan
  * di akhir pesan).
  *
- * Isi laporan = Subuh hari ini + kegiatan kemarin (Subuh kemarin sudah
- * masuk rekap kemarin). Halaqoh yang tidak hadir masuk seksi Ghoib;
- * di laporan Ghoib cukup tampil jenis kegiatan. TIDAK ADA keterangan
- * di pesan. `kegiatanKemarin` = daftar kegiatan jendela kemarin untuk
- * laporan ini (Arabiyah: Maghrib, Isya, Halaqoh; Turats+Hufadz:
- * Dzuhur, Ashar, Maghrib, Isya, Halaqoh) — dipakai untuk subjudul.
+ * Isi laporan = kegiatan hari ini + kegiatan kemarin (Subuh kemarin
+ * sudah masuk rekap kemarin). Halaqoh yang tidak hadir masuk seksi
+ * Ghoib; di laporan Ghoib cukup tampil jenis kegiatan. TIDAK ADA
+ * keterangan di pesan. `kegiatanKemarin` = daftar kegiatan jendela
+ * kemarin untuk laporan ini (Arabiyah: Maghrib, Isya, Halaqoh;
+ * Turats+Hufadz 06:00: Dzuhur, Ashar, Maghrib, Isya, Halaqoh;
+ * Turats+Hufadz 15:30: Maghrib, Isya, Halaqoh) — dipakai untuk
+ * subjudul dan pembagian baris; kegiatan hari ini = sisanya.
  *
  * Contoh output:
  * ```
@@ -351,8 +375,8 @@ export function formatUbudiyahReport(
   ghoib: UbudiyahReportGhoibRow[],
   kegiatanKemarin: UbudiyahKegiatan[],
   opts: {
-    /** Ada baris absen sama sekali di jendela laporan (kemarin + Subuh
-     * hari ini). Bila false -> libur. Bila tidak diisi, libur mengikuti
+    /** Ada baris absen sama sekali di jendela laporan (kemarin + hari
+     * ini). Bila false -> libur. Bila tidak diisi, libur mengikuti
      * aturan lama: masbuq/ghoib/belumAbsen/qismDiganti semuanya kosong. */
     adaAbsen?: boolean;
     /** Sakan yang tidak mengisi absen (per sakan + kegiatan). */
@@ -381,17 +405,17 @@ export function formatUbudiyahReport(
   const bKemarin: UbudiyahReportBelumAbsenRow[] = [];
   const bHariIni: UbudiyahReportBelumAbsenRow[] = [];
   for (const row of masbuq) {
-    const { kemarin, hariIni } = bagiBarisPerJendela(row);
+    const { kemarin, hariIni } = bagiBarisPerJendela(row, kegiatanKemarin);
     if (kemarin) mKemarin.push(kemarin);
     if (hariIni) mHariIni.push(hariIni);
   }
   for (const row of ghoib) {
-    const { kemarin, hariIni } = bagiBarisPerJendela(row);
+    const { kemarin, hariIni } = bagiBarisPerJendela(row, kegiatanKemarin);
     if (kemarin) gKemarin.push(kemarin);
     if (hariIni) gHariIni.push(hariIni);
   }
   for (const row of belumAbsen) {
-    const { kemarin, hariIni } = bagiBarisPerJendela(row);
+    const { kemarin, hariIni } = bagiBarisPerJendela(row, kegiatanKemarin);
     if (kemarin) bKemarin.push(kemarin);
     if (hariIni) bHariIni.push(hariIni);
   }
@@ -410,6 +434,14 @@ export function formatUbudiyahReport(
     .map((k) => UBUDIYAH_KEGIATAN_LABEL_KECIL[k])
     .join(", ")} tadi malam`;
 
+  // Subjudul "hari ini" dinamis ikut jendela: jendela lama hanya Subuh
+  // ("Subuh hari ini"), jendela 15:30 Subuh + Dzuhur + Ashar.
+  const subtitleHariIni = `${UBUDIYAH_KEGIATAN_ORDER.filter(
+    (k) => !kegiatanKemarin.includes(k)
+  )
+    .map((k) => UBUDIYAH_KEGIATAN_LABEL[k])
+    .join(", ")} hari ini`;
+
   const sections: string[] = [];
   sections.push(
     formatSeksiLaporan(
@@ -424,7 +456,7 @@ export function formatUbudiyahReport(
   sections.push(
     formatSeksiLaporan(
       headerHariIni,
-      "Subuh hari ini",
+      subtitleHariIni,
       mHariIni,
       gHariIni,
       bHariIni,
@@ -457,8 +489,8 @@ export type UbudiyahReportLainnyaRow = {
  * ada entri Lainnya. Berbeda dengan laporan utama, pesan ini MENAMPILKAN
  * keterangan tiap baris (alasan "lainnya"-nya justru yang perlu dibaca).
  * Sama seperti laporan utama: SATU pesan dengan DUA judul tanggal
- * (kemarin untuk Dzuhur/Ashar/Maghrib/Isya/Halaqoh, hari ini untuk
- * Subuh); jendela yang kosong tidak ditampilkan.
+ * (kemarin ikut `kegiatanKemarin`, hari ini sisanya); jendela yang
+ * kosong tidak ditampilkan.
  *
  * Contoh output:
  * ```
@@ -492,6 +524,13 @@ export function formatUbudiyahReportLainnya(
     .map((k) => UBUDIYAH_KEGIATAN_LABEL_KECIL[k])
     .join(", ")} tadi malam`;
 
+  // Subjudul "hari ini" dinamis ikut jendela (lihat formatUbudiyahReport).
+  const subtitleHariIni = `${UBUDIYAH_KEGIATAN_ORDER.filter(
+    (k) => !kegiatanKemarin.includes(k)
+  )
+    .map((k) => UBUDIYAH_KEGIATAN_LABEL[k])
+    .join(", ")} hari ini`;
+
   const urutLainnya = (rows: UbudiyahReportLainnyaRow[]) =>
     [...rows].sort(
       (a, b) =>
@@ -514,15 +553,15 @@ export function formatUbudiyahReportLainnya(
     return lines.join("\n");
   };
 
-  const lKemarin = lainnya.filter((r) => r.kegiatan !== UbudiyahKegiatan.SUBUH);
-  const lHariIni = lainnya.filter((r) => r.kegiatan === UbudiyahKegiatan.SUBUH);
+  const lKemarin = lainnya.filter((r) => kegiatanKemarin.includes(r.kegiatan));
+  const lHariIni = lainnya.filter((r) => !kegiatanKemarin.includes(r.kegiatan));
 
   const sections: string[] = [];
   if (lKemarin.length > 0) {
     sections.push(formatSeksiLainnya(headerKemarin, subtitleKemarin, lKemarin));
   }
   if (lHariIni.length > 0) {
-    sections.push(formatSeksiLainnya(headerHariIni, "Subuh hari ini", lHariIni));
+    sections.push(formatSeksiLainnya(headerHariIni, subtitleHariIni, lHariIni));
   }
   return sections.join("\n\n");
 }

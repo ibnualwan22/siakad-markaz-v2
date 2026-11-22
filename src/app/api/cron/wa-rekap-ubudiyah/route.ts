@@ -4,7 +4,9 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import prisma from "@/lib/prisma";
 import { getActiveDufahName } from "@/lib/absensi";
 import {
+  UBUDIYAH_KEGIATAN_HARI_INI_1530,
   UBUDIYAH_KEGIATAN_KEMARIN,
+  UBUDIYAH_KEGIATAN_KEMARIN_1530,
   UBUDIYAH_KEGIATAN_ORDER,
   formatUbudiyahReport,
   formatUbudiyahReportLainnya,
@@ -18,24 +20,30 @@ import { lembagaFromProgramKategori } from "@/lib/lembaga";
 
 export const dynamic = "force-dynamic";
 
-// Cron laporan harian Ubudiyah — dipanggil tiap 06:00 dari VPS.
+// Cron laporan harian Ubudiyah — dipanggil dari VPS, DUA jadwal:
+// 06:00 (?scope=arabiyah) dan 15:30 (?scope=turats). Tanpa scope:
+// kedua kelompok dengan jendela lama (untuk back-compat / testing).
 // Auth sama seperti cron lain (kirim-notifikasi): Bearer CRON_SECRET
 // atau ?secret=CRON_SECRET. Tanpa secret yang benar -> 401
 // (kecuali development).
-// Isi laporan = Subuh hari ini + Dzuhur, Ashar, Maghrib, Isya, Halaqoh
+// Isi laporan Arabiyah (06:00) = Subuh hari ini + Dzuhur, Ashar,
+// Maghrib, Isya, Halaqoh tadi malam. Isi laporan Turats + Hufadz
+// (15:30) = Subuh, Dzuhur, Ashar hari ini + Maghrib, Isya, Halaqoh
 // tadi malam (Subuh kemarin sudah masuk rekap kemarin). Laporan
 // dipisah per lembaga: Arabiyah -> penanggung jawab Ubudiyah
 // (6282338545762), Turats + Hufadz (gabungan, SATU pesan) ->
 // 6285856262057. Judul tanggal mengikuti harinya: kegiatan kemarin
-// pakai tanggal kemarin, Subuh pakai judul baru dengan tanggal hari
-// ini — SATU pesan dengan dua judul. Bila nihil (tidak ada
-// masbuq/ghoib) tetap dikirim sebagai pesan libur. Pesan KEDUA (khusus
-// "Lainnya", dengan keterangan) dikirim ke nomor yang sama HANYA bila
-// ada entrinya; bila kosong dilewati. Tambahan: santri yang sudah
-// checkout tidak tampil di laporan; Qism aktif yang santrinya sudah
-// checkout DINONAKTIFKAN dan sakannya masuk seksi peringatan "Qism
-// perlu segera diganti"; sakan yang tidak mengisi absen sama sekali
-// pada suatu kegiatan masuk seksi peringatan "Belum absen" (Arabiyah
+// pakai tanggal kemarin, kegiatan hari ini pakai judul baru dengan
+// tanggal hari ini — SATU pesan dengan dua judul. Bila nihil (tidak
+// ada masbuq/ghoib) tetap dikirim sebagai pesan libur. Pesan KEDUA
+// (khusus "Lainnya", dengan keterangan) dikirim ke nomor yang sama
+// HANYA bila ada entrinya; bila kosong dilewati. Tambahan: santri
+// yang sudah checkout tidak tampil di laporan; Qism aktif yang
+// santrinya sudah checkout DINONAKTIFKAN dan sakannya masuk seksi
+// peringatan "Qism perlu segera diganti" — penonaktifan + peringatan
+// ini ikut scope (06:00 menangani Arabiyah, 15:30 menangani
+// Turats+Hufadz); sakan yang tidak mengisi absen sama sekali pada
+// suatu kegiatan masuk seksi peringatan "Belum absen" (Arabiyah
 // TIDAK diharapkan mengisi Dzuhur/Ashar karena memang tidak ada
 // jamaah di waktu tersebut). Libur HANYA bila tidak ada satu pun
 // baris absen untuk lembaga itu di seluruh jendela.
@@ -56,6 +64,20 @@ export async function GET(request: NextRequest) {
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
+
+  // Scope laporan: "arabiyah" (06:00) atau "turats" (15:30); tanpa
+  // scope kedua kelompok jalan dengan jendela lama. Jendela baru
+  // (Dzuhur/Ashar hari ini) hanya berlaku untuk scope turats.
+  const scopeParam = request.nextUrl.searchParams.get("scope");
+  const scope: "arabiyah" | "turats" | "semua" =
+    scopeParam === "arabiyah"
+      ? "arabiyah"
+      : scopeParam === "turats"
+        ? "turats"
+        : "semua";
+  const jalanArabiyah = scope !== "turats";
+  const jalanTurats = scope !== "arabiyah";
+  const turatsJendelaBaru = scope === "turats";
 
   try {
     // Hari ini (WIB = waktu lokal server).
@@ -81,14 +103,25 @@ export async function GET(request: NextRequest) {
     const todayDate = new Date(`${todayStr}T00:00:00Z`);
     const yesterdayDate = new Date(`${yesterdayStr}T00:00:00Z`);
 
+    // Jendela records ikut scope: arabiyah = Subuh hari ini + Dzuhur/
+    // Ashar/Maghrib/Isya/Halaqoh kemarin; turats (15:30) = Subuh/
+    // Dzuhur/Ashar hari ini + Maghrib/Isya/Halaqoh kemarin.
+    const kegiatanHariIniQuery =
+      scope === "turats"
+        ? UBUDIYAH_KEGIATAN_HARI_INI_1530
+        : [UbudiyahKegiatan.SUBUH];
+    const kegiatanKemarinQuery =
+      scope === "turats"
+        ? UBUDIYAH_KEGIATAN_KEMARIN_1530
+        : UBUDIYAH_KEGIATAN_KEMARIN;
     const records = await prisma.ubudiyahHadir.findMany({
       where: {
         OR: [
-          { tanggal: todayDate, kegiatan: UbudiyahKegiatan.SUBUH },
+          { tanggal: todayDate, kegiatan: { in: kegiatanHariIniQuery } },
           {
             tanggal: yesterdayDate,
             kegiatan: {
-              in: UBUDIYAH_KEGIATAN_KEMARIN,
+              in: kegiatanKemarinQuery,
             },
           },
         ],
@@ -167,6 +200,9 @@ export async function GET(request: NextRequest) {
           ? (kategoriByProgramId.get(riwayat.programId) ?? null)
           : null
       );
+      // Scope: lewati santri kelompok yang tidak dijalankan.
+      if (lembaga === "ARABIYAH" && !jalanArabiyah) continue;
+      if (lembaga !== "ARABIYAH" && !jalanTurats) continue;
       const acc = lembaga === "ARABIYAH" ? accArabiyah : accTuratsHufadz;
       if (lembaga === "ARABIYAH") adaBarisArabiyah = true;
       else adaBarisTuratsHufadz = true;
@@ -291,7 +327,6 @@ export async function GET(request: NextRequest) {
       const qismCheckoutIds: string[] = [];
       for (const q of qismAktif) {
         if (!qismSantriById.get(q.santriId)?.isCheckedOut) continue;
-        qismCheckoutIds.push(q.id);
         const riwayat = qismRiwayatBySantriId.get(q.santriId);
         const programId = riwayat?.programId ?? null;
         const lembaga = lembagaFromProgramKategori(
@@ -299,6 +334,11 @@ export async function GET(request: NextRequest) {
             ? (qismKategoriByProgramId.get(programId) ?? null)
             : null
         );
+        // Scope: Qism kelompok lain ditangani jadwalnya sendiri
+        // (tidak dinonaktifkan di sini, tidak masuk peringatan).
+        if (lembaga === "ARABIYAH" && !jalanArabiyah) continue;
+        if (lembaga !== "ARABIYAH" && !jalanTurats) continue;
+        qismCheckoutIds.push(q.id);
         (lembaga === "ARABIYAH"
           ? qismDigantiArabiyah
           : qismDigantiTuratsHufadz
@@ -370,14 +410,16 @@ export async function GET(request: NextRequest) {
       // Pasangan (sakan, tanggal, kegiatan) yang terisi: ada baris
       // UbudiyahHadir apa pun — yang diukur adalah Qism sudah mengisi
       // formulir atau belum, jadi baris KSU/checkout tetap dihitung.
+      // Tanggal diambil dari barisnya sendiri (@db.Date -> Date
+      // tengah malam UTC), bukan ditebak dari kegiatan: di jendela
+      // 15:30 Dzuhur/Ashar itu hari ini, di jendela lama kemarin.
       const terisi = new Set<string>();
       for (const r of records) {
         const riwayat = riwayatById.get(r.riwayatId);
         if (!riwayat) continue;
         const santri = santriById.get(riwayat.santriId);
         if (!santri?.sakan) continue;
-        const tanggalStr =
-          r.kegiatan === UbudiyahKegiatan.SUBUH ? todayStr : yesterdayStr;
+        const tanggalStr = r.tanggal.toISOString().slice(0, 10);
         terisi.add(`${santri.sakan}|${tanggalStr}|${r.kegiatan}`);
       }
       const kegiatanArabiyah = [
@@ -386,17 +428,36 @@ export async function GET(request: NextRequest) {
         UbudiyahKegiatan.ISYA,
         UbudiyahKegiatan.HALAQOH,
       ];
+      // Tanggal yang diharapkan per kegiatan ikut jendela kelompok itu:
+      // jendela 15:30 Turats+Hufadz = Subuh/Dzuhur/Ashar hari ini,
+      // Maghrib/Isya/Halaqoh kemarin; jendela lama = hanya Subuh hari
+      // ini, sisanya kemarin.
+      const tanggalUntukKegiatan = (
+        lembaga: "ARABIYAH" | "TURATS_HUFADZ",
+        k: UbudiyahKegiatan
+      ): string => {
+        if (lembaga === "TURATS_HUFADZ" && turatsJendelaBaru) {
+          return k === UbudiyahKegiatan.SUBUH ||
+            k === UbudiyahKegiatan.DZUHUR ||
+            k === UbudiyahKegiatan.ASHAR
+            ? todayStr
+            : yesterdayStr;
+        }
+        return k === UbudiyahKegiatan.SUBUH ? todayStr : yesterdayStr;
+      };
       for (const [sakan, lembaga] of [...lembagaBySakan.entries()].sort(
         (a, b) => a[0].localeCompare(b[0], "id")
       )) {
+        // Scope: sakan kelompok lain diperiksa jadwalnya sendiri.
+        if (lembaga === "ARABIYAH" && !jalanArabiyah) continue;
+        if (lembaga === "TURATS_HUFADZ" && !jalanTurats) continue;
         const kegiatanDiharapkan =
           lembaga === "ARABIYAH"
             ? kegiatanArabiyah
             : UBUDIYAH_KEGIATAN_ORDER;
         const hilang: UbudiyahKegiatan[] = [];
         for (const k of kegiatanDiharapkan) {
-          const tanggalStr =
-            k === UbudiyahKegiatan.SUBUH ? todayStr : yesterdayStr;
+          const tanggalStr = tanggalUntukKegiatan(lembaga, k);
           if (!terisi.has(`${sakan}|${tanggalStr}|${k}`)) hilang.push(k);
         }
         if (hilang.length > 0) {
@@ -409,40 +470,49 @@ export async function GET(request: NextRequest) {
     }
 
     // Judul tanggal mengikuti harinya: kegiatan kemarin pakai tanggal
-    // kemarin, Subuh pakai judul baru tanggal hari ini (satu pesan).
-    // Arabiyah tidak punya Dzuhur/Ashar, jadi subjudul kemarinnya
-    // hanya Maghrib, Isya, Halaqoh.
+    // kemarin, kegiatan hari ini pakai judul baru tanggal hari ini
+    // (satu pesan). Arabiyah tidak punya Dzuhur/Ashar, jadi subjudul
+    // kemarinnya hanya Maghrib, Isya, Halaqoh. Turats 15:30: kemarin
+    // hanya Maghrib/Isya/Halaqoh, Dzuhur/Ashar pindah ke hari ini.
+    // Pesan kelompok yang tidak dijalankan = null (tidak dikirim).
     const kegiatanKemarinArabiyah = [
       UbudiyahKegiatan.MAGHRIB,
       UbudiyahKegiatan.ISYA,
       UbudiyahKegiatan.HALAQOH,
     ];
-    const messageArabiyah = formatUbudiyahReport(
-      yesterdayLocal,
-      todayLocal,
-      lapArabiyah.masbuq,
-      lapArabiyah.ghoib,
-      kegiatanKemarinArabiyah,
-      {
-        adaAbsen: adaBarisArabiyah,
-        belumAbsen: belumAbsenArabiyah,
-        qismDiganti: qismDigantiArabiyah,
-      }
-    );
-    const messageTuratsHufadz = formatUbudiyahReport(
-      yesterdayLocal,
-      todayLocal,
-      lapTuratsHufadz.masbuq,
-      lapTuratsHufadz.ghoib,
-      UBUDIYAH_KEGIATAN_KEMARIN,
-      {
-        adaAbsen: adaBarisTuratsHufadz,
-        belumAbsen: belumAbsenTuratsHufadz,
-        qismDiganti: qismDigantiTuratsHufadz,
-      }
-    );
+    const kegiatanKemarinTurats = turatsJendelaBaru
+      ? UBUDIYAH_KEGIATAN_KEMARIN_1530
+      : UBUDIYAH_KEGIATAN_KEMARIN;
+    const messageArabiyah = jalanArabiyah
+      ? formatUbudiyahReport(
+          yesterdayLocal,
+          todayLocal,
+          lapArabiyah.masbuq,
+          lapArabiyah.ghoib,
+          kegiatanKemarinArabiyah,
+          {
+            adaAbsen: adaBarisArabiyah,
+            belumAbsen: belumAbsenArabiyah,
+            qismDiganti: qismDigantiArabiyah,
+          }
+        )
+      : null;
+    const messageTuratsHufadz = jalanTurats
+      ? formatUbudiyahReport(
+          yesterdayLocal,
+          todayLocal,
+          lapTuratsHufadz.masbuq,
+          lapTuratsHufadz.ghoib,
+          kegiatanKemarinTurats,
+          {
+            adaAbsen: adaBarisTuratsHufadz,
+            belumAbsen: belumAbsenTuratsHufadz,
+            qismDiganti: qismDigantiTuratsHufadz,
+          }
+        )
+      : null;
     const messageLainnyaArabiyah =
-      lapArabiyah.lainnya.length > 0
+      jalanArabiyah && lapArabiyah.lainnya.length > 0
         ? formatUbudiyahReportLainnya(
             yesterdayLocal,
             todayLocal,
@@ -451,12 +521,12 @@ export async function GET(request: NextRequest) {
           )
         : null;
     const messageLainnyaTuratsHufadz =
-      lapTuratsHufadz.lainnya.length > 0
+      jalanTurats && lapTuratsHufadz.lainnya.length > 0
         ? formatUbudiyahReportLainnya(
             yesterdayLocal,
             todayLocal,
             lapTuratsHufadz.lainnya,
-            UBUDIYAH_KEGIATAN_KEMARIN
+            kegiatanKemarinTurats
           )
         : null;
 
@@ -471,8 +541,12 @@ export async function GET(request: NextRequest) {
     let terkirimArabiyah = false;
     let terkirimTuratsHufadz = false;
     if (!dryRun) {
-      terkirimArabiyah = await kirim("6282338545762", messageArabiyah);
-      terkirimTuratsHufadz = await kirim("6285856262057", messageTuratsHufadz);
+      if (messageArabiyah) {
+        terkirimArabiyah = await kirim("6282338545762", messageArabiyah);
+      }
+      if (messageTuratsHufadz) {
+        terkirimTuratsHufadz = await kirim("6285856262057", messageTuratsHufadz);
+      }
     }
 
     // Pesan kedua (Lainnya) hanya bila ada entrinya; bila kosong dilewati.
@@ -498,12 +572,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      scope,
       tanggal: yesterdayStr,
       masbuq: lapArabiyah.masbuq.length,
       ghoib: lapArabiyah.ghoib.length,
       lainnya: lapArabiyah.lainnya.length,
       belumAbsen: belumAbsenArabiyah.length,
       qismDiganti: qismDigantiArabiyah,
+      dilewatiArabiyah: !jalanArabiyah,
       terkirim: terkirimArabiyah,
       pesanLainnya: pesanLainnyaArabiyah,
       turatsHufadz: {
@@ -512,6 +588,7 @@ export async function GET(request: NextRequest) {
         lainnya: lapTuratsHufadz.lainnya.length,
         belumAbsen: belumAbsenTuratsHufadz.length,
         qismDiganti: qismDigantiTuratsHufadz,
+        dilewati: !jalanTurats,
         terkirim: terkirimTuratsHufadz,
         pesanLainnya: pesanLainnyaTuratsHufadz,
       },

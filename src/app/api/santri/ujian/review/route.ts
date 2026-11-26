@@ -28,7 +28,9 @@ export async function GET(req: Request) {
                 soal: {
                   include: {
                     opsiList: true,
-                    mapel: true
+                    mapel: true,
+                    jenisSoal: { select: { instruksi: true } },
+                    grupInduk: { select: { id: true, pertanyaan: true, gambarUrl: true } },
                   }
                 }
               },
@@ -141,6 +143,8 @@ export async function GET(req: Request) {
         nomor: tGroup.soalList.length + 1, // Akan direset ulang nanti agar penomoran per mapel berurutan
         pertanyaan: soal.pertanyaan,
         gambarUrl: soal.gambarUrl,
+        perintah: soal.jenisSoal?.instruksi || soal.perintah || null,
+        grupInduk: soal.grupInduk || null,
         bobot: soal.bobot,
         tipeSoal: soal.tipeSoal,
         // Jawaban Santri

@@ -1,89 +1,132 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, CheckCircle, CheckCircle2, XCircle, Clock, X, Brain, Edit3, Save, AlertCircle, ChevronDown, ChevronRight, Activity, BookOpen, Layers } from "lucide-react";
+import {
+  CheckCircle,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  X,
+  Brain,
+  Edit3,
+  Save,
+  AlertCircle,
+  ChevronDown,
+  Activity,
+  BookOpen,
+  Layers,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import Swal from "sweetalert2";
 import { normalizeAnswerText } from "@/lib/arabic-utils";
+import SoalText from "@/components/soal-text";
+import {
+  ReviewSoalDetail,
+  ReviewKunciJawaban,
+  ReviewJawabanSantri,
+} from "@/components/ujian/ReviewQuestionBlocks";
+
+// Tipe yang memiliki nilai pasti sehingga cocok pakai tombol Benarkan/Salahkan
+const EXACT_TYPES = [
+  "PG",
+  "BENAR_SALAH",
+  "MUFRODAT",
+  "ISIAN_SAMPING",
+  "ISIAN_BAWAH",
+  "PG_MULTI",
+];
 
 export default function ReviewJawabanPage() {
   const [paketList, setPaketList] = useState<any[]>([]);
   const [kelasList, setKelasList] = useState<any[]>([]);
-  
+
   const [selectedPaket, setSelectedPaket] = useState("");
   const [selectedKelas, setSelectedKelas] = useState("");
-  
+
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  
+
   const [expandedSoalId, setExpandedSoalId] = useState<string | null>(null);
   const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
   const [editingJawabanId, setEditingJawabanId] = useState<string | null>(null);
   const [editScore, setEditScore] = useState<number | string>(0);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isAIGrading, setIsAIGrading] = useState<string | null>(null); // soal.id basis
-  
+  const [isAIGrading, setIsAIGrading] = useState<string | null>(null);
+
   const [activeMapel, setActiveMapel] = useState<string>("");
   const [viewMode, setViewMode] = useState<"SOAL" | "SANTRI">("SOAL");
   const [santriLimits, setSantriLimits] = useState<Record<string, number>>({});
-  
+
   const getLimit = (soalId: string) => santriLimits[soalId] || 20;
 
   // Load Initial Data (Paket & Kelas)
   useEffect(() => {
     Promise.all([
-      fetch("/api/admin/ujian-usbu/sesi").then(r => r.json()),
-      fetch("/api/admin/kelas").then(r => r.json())
-    ]).then(([pakets, kelass]) => {
-      if (Array.isArray(pakets) && pakets.length > 0) {
-        setPaketList(pakets);
-        // Default select active or first
-        const active = pakets.find((p: any) => p.isActive);
-        setSelectedPaket(active ? active.id : pakets[0].id);
-      }
-      
-      if (Array.isArray(kelass) && kelass.length > 0) {
-        setKelasList(kelass);
-        setSelectedKelas(kelass[0].id);
-      }
-      setIsInitialLoad(false);
-    }).catch((err) => {
-      console.error(err);
-      toast.error("Gagal memuat filter!");
-      setIsInitialLoad(false);
-    });
+      fetch("/api/admin/ujian-usbu/sesi").then((r) => r.json()),
+      fetch("/api/admin/kelas").then((r) => r.json()),
+    ])
+      .then(([pakets, kelass]) => {
+        if (Array.isArray(pakets) && pakets.length > 0) {
+          setPaketList(pakets);
+          const active = pakets.find((p: any) => p.isActive);
+          setSelectedPaket(active ? active.id : pakets[0].id);
+        }
+
+        if (Array.isArray(kelass) && kelass.length > 0) {
+          setKelasList(kelass);
+          setSelectedKelas(kelass[0].id);
+        }
+        setIsInitialLoad(false);
+      })
+      .catch((err) => {
+        console.error(err);
+        toast.error("Gagal memuat filter!");
+        setIsInitialLoad(false);
+      });
   }, []);
 
-  const fetchData = useCallback(async (silent = false) => {
-    if (!selectedPaket || !selectedKelas) return;
-    
-    if (!silent) setIsLoading(true);
-    try {
-      const res = await fetch(`/api/admin/ujian-usbu/review-jawaban?sesiGlobalId=${selectedPaket}&kelasId=${selectedKelas}`);
-      if (!res.ok) throw new Error("Gagal mengambil data");
-      
-      const json = await res.json();
-      setData(json);
-    } catch (err: any) {
-      toast.error(err.message || "Terjadi kesalahan sistem");
-      setData([]);
-    } finally {
-      if (!silent) setIsLoading(false);
-    }
-  }, [selectedPaket, selectedKelas]);
+  const fetchData = useCallback(
+    async (silent = false) => {
+      if (!selectedPaket || !selectedKelas) return;
+
+      if (!silent) setIsLoading(true);
+      try {
+        const res = await fetch(
+          `/api/admin/ujian-usbu/review-jawaban?sesiGlobalId=${selectedPaket}&kelasId=${selectedKelas}`,
+        );
+        if (!res.ok) throw new Error("Gagal mengambil data");
+
+        const json = await res.json();
+        setData(json);
+      } catch (err: any) {
+        toast.error(err.message || "Terjadi kesalahan sistem");
+        setData([]);
+      } finally {
+        if (!silent) setIsLoading(false);
+      }
+    },
+    [selectedPaket, selectedKelas],
+  );
 
   // Automatically adjust selectedKelas when selectedPaket changes
   useEffect(() => {
     if (!selectedPaket || kelasList.length === 0) return;
-    
-    const currentPaket = paketList.find(p => p.id === selectedPaket);
-    const validProgramIds = currentPaket ? currentPaket.paketUjianList.map((p: any) => p.programId) : [];
-    const validClasses = currentPaket?.isSimulasi 
-      ? kelasList 
-      : kelasList.filter(k => k.programId && validProgramIds.includes(k.programId));
-      
-    if (validClasses.length > 0 && !validClasses.find(k => k.id === selectedKelas)) {
+
+    const currentPaket = paketList.find((p) => p.id === selectedPaket);
+    const validProgramIds = currentPaket
+      ? currentPaket.paketUjianList.map((p: any) => p.programId)
+      : [];
+    const validClasses = currentPaket?.isSimulasi
+      ? kelasList
+      : kelasList.filter(
+          (k) => k.programId && validProgramIds.includes(k.programId),
+        );
+
+    if (
+      validClasses.length > 0 &&
+      !validClasses.find((k) => k.id === selectedKelas)
+    ) {
       setSelectedKelas(validClasses[0].id);
     }
   }, [selectedPaket, kelasList, paketList, selectedKelas]);
@@ -95,22 +138,29 @@ export default function ReviewJawabanPage() {
     }
   }, [fetchData, isInitialLoad]);
 
-  const handleUpdateNilai = async (jawabanId: string, overrideVal?: number | null) => {
+  const handleUpdateNilai = async (
+    jawabanId: string,
+    overrideVal?: number | null,
+  ) => {
     setIsUpdating(true);
     try {
-      const val = overrideVal !== undefined ? overrideVal : (editScore === "" ? 0 : Number(editScore));
+      const val =
+        overrideVal !== undefined
+          ? overrideVal
+          : editScore === ""
+            ? 0
+            : Number(editScore);
       const res = await fetch("/api/admin/ujian-usbu/review-jawaban", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jawabanId, nilaiManual: val })
+        body: JSON.stringify({ jawabanId, nilaiManual: val }),
       });
       if (!res.ok) throw new Error("Gagal update nilai");
-      
+
       toast.success("Skor berhasil direvisi. Total dihitung ulang otomatis.");
       setEditingJawabanId(null);
-      // Reload table to get the latest scores immediately
       fetchData(true);
-    } catch (err) {
+    } catch {
       toast.error("Gagal mengupdate nilai");
     } finally {
       setIsUpdating(false);
@@ -118,562 +168,308 @@ export default function ReviewJawabanPage() {
   };
 
   const handleAIGradeSoal = async (soalId: string, jawabanSantri: any[]) => {
-    // Kumpulkan semua ID jawaban yang belum dinilai
     const pendingIds = jawabanSantri
-       .filter(j => j.id && j.nilaiManual === null && !j.aiGraded)
-       .map(j => j.id);
+      .filter((j) => j.id && j.nilaiManual === null && !j.aiGraded)
+      .map((j) => j.id);
 
     if (pendingIds.length === 0) {
-       toast.error("Semua jawaban sudah dinilai!");
-       return;
+      toast.error("Semua jawaban sudah dinilai!");
+      return;
     }
 
     setIsAIGrading(soalId);
     let successCount = 0;
-    
-    toast.loading(`Memulai penilaian AI untuk ${pendingIds.length} jawaban...`, { id: "ai-grade" });
-    
+
+    toast.loading(
+      `Memulai penilaian AI untuk ${pendingIds.length} jawaban...`,
+      { id: "ai-grade" },
+    );
+
     try {
-       // Kita batch per 5 supaya tidak limit
-       const batchSize = 5;
-       for (let i = 0; i < pendingIds.length; i += batchSize) {
-         const batch = pendingIds.slice(i, i + batchSize);
-         
-         const res = await fetch("/api/admin/ujian-usbu/ai-grade", {
-           method: "POST",
-           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({ jawabanIds: batch })
-         });
-         
-         if (res.ok) {
-           const json = await res.json();
-           if (json.processed) successCount += json.processed;
-         }
-         
-         // Jeda 2.5 detik antar batch (Gemini rate-limit prevention)
-         if (i + batchSize < pendingIds.length) {
-           await new Promise(resolve => setTimeout(resolve, 2500));
-         }
-       }
-       
-       toast.success(`Selesai! ${successCount} jawaban berhasil dinilai AI.`, { id: "ai-grade" });
-       fetchData(true); // reload
-    } catch (err) {
-       toast.error("Terjadi kesalahan saat menghubungi server AI.", { id: "ai-grade" });
+      const batchSize = 5;
+      for (let i = 0; i < pendingIds.length; i += batchSize) {
+        const batch = pendingIds.slice(i, i + batchSize);
+
+        const res = await fetch("/api/admin/ujian-usbu/ai-grade", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jawabanIds: batch }),
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          if (json.processed) successCount += json.processed;
+        }
+
+        if (i + batchSize < pendingIds.length) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        }
+      }
+
+      toast.success(`Selesai! ${successCount} jawaban berhasil dinilai AI.`, {
+        id: "ai-grade",
+      });
+      fetchData(true);
+    } catch {
+      toast.error("Terjadi kesalahan saat menghubungi server AI.", {
+        id: "ai-grade",
+      });
     } finally {
-       setIsAIGrading(null);
+      setIsAIGrading(null);
     }
   };
 
   const handleBulkAiGrade = async () => {
     if (!selectedPaket) {
-       toast.error("Pesan: Paket Ujian harus dipilih!");
-       return;
+      toast.error("Pesan: Paket Ujian harus dipilih!");
+      return;
     }
-    
+
     const confirm = await Swal.fire({
       title: "Auto-Grade Seluruh Kelas?",
       text: "Sistem akan menilai SEMUA jawaban essay yang masih berstatus kosong untuk seluruh kelas di paket ini secara berjalan di belakang layar.",
       icon: "question",
       showCancelButton: true,
       confirmButtonText: "Ya, Mulai Penilaian AI (Background)",
-      cancelButtonText: "Batal"
+      cancelButtonText: "Batal",
     });
 
     if (confirm.isConfirmed) {
-       toast.loading("Mengirim perintah ke server...", { id: "bulk-ai" });
-       try {
-         const res = await fetch("/api/admin/ujian-usbu/start-bulk-ai-grade", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paketId: selectedPaket })
-         });
-         
-         const json = await res.json();
-         if (!res.ok) throw new Error(json.error || "Gagal memulai background task");
-         
-         toast.dismiss("bulk-ai");
-         
-         Swal.fire({
-            title: "Proses Diluncurkan!",
-            text: "Nilai AI sedang berproses di sistem server (Background mode). Anda bebas untuk beralih halaman, menutup browser, atau mematikan laptop tanpa menghentikan proses ini.",
-            icon: "success"
-         });
-       } catch (err: any) {
-         toast.error(err.message, { id: "bulk-ai" });
-       }
+      toast.loading("Mengirim perintah ke server...", { id: "bulk-ai" });
+      try {
+        const res = await fetch("/api/admin/ujian-usbu/start-bulk-ai-grade", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paketId: selectedPaket }),
+        });
+
+        const json = await res.json();
+        if (!res.ok)
+          throw new Error(json.error || "Gagal memulai background task");
+
+        toast.dismiss("bulk-ai");
+
+        Swal.fire({
+          title: "Proses Diluncurkan!",
+          text: "Nilai AI sedang berproses di sistem server (Background mode). Anda bebas untuk beralih halaman, menutup browser, atau mematikan laptop tanpa menghentikan proses ini.",
+          icon: "success",
+        });
+      } catch (err: any) {
+        toast.error(err.message, { id: "bulk-ai" });
+      }
     }
   };
 
-  // Tipe yang memiliki nilai pasti sehingga lebih cocok pakai tombol Benarkan/Salahkan
-  const EXACT_TYPES = ["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH", "PG_MULTI"];
-
   const renderStatus = (jaw: any, soal: any) => {
-    if (!jaw.id) return <span className="text-gray-400 text-xs italic">Kosong</span>;
+    if (!jaw.id) {
+      return <span className="text-gray-400 text-xs italic">Kosong</span>;
+    }
 
-    // Jika nilaiManual sudah terisi (berlaku untuk essay DAN structured types)
     if (jaw.nilaiManual !== null && jaw.nilaiManual !== undefined) {
-      const pct = soal.bobot > 0 ? Math.round((jaw.nilaiManual / soal.bobot) * 100) : 0;
-      const color = pct >= 70 ? 'green' : pct >= 40 ? 'orange' : 'rose';
+      const pct =
+        soal.bobot > 0 ? Math.round((jaw.nilaiManual / soal.bobot) * 100) : 0;
+      const badgeCls =
+        pct >= 70
+          ? "text-green-700 bg-green-50 border border-green-200"
+          : pct >= 40
+            ? "text-orange-700 bg-orange-50 border border-orange-200"
+            : "text-rose-700 bg-rose-50 border border-rose-200";
       return (
         <span className="inline-flex flex-col items-center gap-0.5">
-          <span className={`inline-flex items-center gap-1 text-${color}-700 font-bold bg-${color}-50 px-2 py-0.5 rounded text-xs`}>
-            {pct >= 70 ? <CheckCircle size={14}/> : <AlertCircle size={14}/>}
+          <span
+            className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md text-xs whitespace-nowrap ${badgeCls}`}
+          >
+            {pct >= 70 ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
             {Number(jaw.nilaiManual.toFixed(1))}/{soal.bobot}
           </span>
-          {jaw.aiGraded && <span className="text-[10px] text-purple-600 flex items-center gap-0.5"><Brain size={10}/> AI</span>}
+          {jaw.aiGraded && (
+            <span className="text-[10px] text-purple-600 flex items-center gap-0.5 font-semibold">
+              <Brain size={10} /> AI
+            </span>
+          )}
         </span>
       );
     }
 
-    // Essay tanpa nilaiManual
     if (soal.tipeSoal.startsWith("ESSAY")) {
       if (jaw.jawabanTeks) {
         return (
-          <span className="inline-flex items-center gap-1 text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded text-xs">
-            <Clock size={14}/> Menunggu
+          <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+            <Clock size={13} /> Menunggu
           </span>
         );
       }
       return <span className="text-gray-400 text-xs italic">Kosong</span>;
     }
 
-    // PG / Benar Salah / Isian (exact match)
-    if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH", "PG_MULTI"].includes(soal.tipeSoal)) {
+    if (EXACT_TYPES.includes(soal.tipeSoal)) {
       let isBenar = false;
-      
+
       if (soal.tipeSoal === "PG_MULTI") {
-        const correctIds = soal.opsiList?.filter((o: any) => o.isCorrect).map((o: any) => o.id) || [];
+        const correctIds =
+          soal.opsiList
+            ?.filter((o: any) => o.isCorrect)
+            .map((o: any) => o.id) || [];
         const selectedIds = jaw.jawabanData?.selectedIds || [];
-        if (correctIds.length > 0 && correctIds.length === selectedIds.length && selectedIds.every((id: string) => correctIds.includes(id))) {
+        if (
+          correctIds.length > 0 &&
+          correctIds.length === selectedIds.length &&
+          selectedIds.every((id: string) => correctIds.includes(id))
+        ) {
           isBenar = true;
         }
       } else {
         const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
         if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
-        else if (jaw.jawabanTeks && soal.kunciJawaban && normalizeAnswerText(jaw.jawabanTeks) === normalizeAnswerText(soal.kunciJawaban)) isBenar = true;
+        else if (
+          jaw.jawabanTeks &&
+          soal.kunciJawaban &&
+          normalizeAnswerText(jaw.jawabanTeks) ===
+            normalizeAnswerText(soal.kunciJawaban)
+        ) {
+          isBenar = true;
+        }
       }
-      
+
       return isBenar ? (
-        <span className="inline-flex items-center gap-1 text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded text-xs"><CheckCircle size={14}/> Benar</span>
+        <span className="inline-flex items-center gap-1 text-green-700 font-bold bg-green-50 border border-green-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+          <CheckCircle size={13} /> Benar
+        </span>
       ) : (
-        <span className="inline-flex items-center gap-1 text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded text-xs"><X size={14}/> Salah</span>
+        <span className="inline-flex items-center gap-1 text-rose-700 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+          <X size={13} /> Salah
+        </span>
       );
     }
 
-    // Structured types yang belum ada nilaiManual → menunggu submit / belum dihitung
     return (
-      <span className="inline-flex items-center gap-1 text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded text-xs">
-        <Clock size={14}/> Belum Dihitung
+      <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+        <Clock size={13} /> Belum Dihitung
       </span>
     );
   };
 
-  // ======== RENDER KUNCI JAWABAN ========
-  const renderKunciJawaban = (soal: any) => {
-    // PG / Benar Salah
-    if (soal.tipeSoal === "PG" || soal.tipeSoal === "BENAR_SALAH" || soal.tipeSoal === "MUFRODAT") {
-      const opsiBenar = soal.opsiList?.filter((o:any) => o.isCorrect);
-      if (opsiBenar?.length > 0) {
-         return (
-           <div className="space-y-1">
-             {opsiBenar.map((o: any) => (
-               <div key={o.id} className="text-sm font-medium text-green-800 bg-green-50 p-2 rounded border border-green-100">{o.teks}</div>
-             ))}
-           </div>
-         );
-      }
-      return <div className="text-xs text-gray-400 italic">Tidak ditandai kunci</div>;
-    }
-
-    // PG Multi
-    if (soal.tipeSoal === "PG_MULTI") {
-      const opsiBenar = soal.opsiList?.filter((o:any) => o.isCorrect);
-      if (opsiBenar?.length > 0) {
-         return (
-           <div className="flex flex-wrap gap-1">
-             {opsiBenar.map((o: any) => (
-               <span key={o.id} className="text-xs font-medium text-green-800 bg-green-50 px-2 py-1 rounded border border-green-100">{o.teks}</span>
-             ))}
-           </div>
-         );
-      }
-    }
-
-    // Essay / Isian
-    if (soal.kunciJawaban) {
-      return <div className="text-sm font-medium text-green-800 bg-green-50 p-2 rounded border border-green-100 whitespace-pre-wrap">{soal.kunciJawaban}</div>;
-    }
-
-    // TABEL TASRIF
-    if (soal.tipeSoal === "TABEL_TASRIF" && soal.dataTambahan?.rows) {
+  const renderAksiRevisi = (jaw: any, soal: any, compact = false) => {
+    if (editingJawabanId === (jaw.id || "dummy")) {
       return (
-        <div className="overflow-x-auto">
-          <table className="text-xs border border-green-200 rounded">
-            <tbody>
-              {soal.dataTambahan.rows.map((row: any, rIdx: number) => (
-                <tr key={rIdx} className="border-b border-green-100">
-                  {(row.cells || []).map((cell: any, cIdx: number) => (
-                    <td key={cIdx} className={`px-2 py-1 border-r border-green-100 ${cell.isBlank ? 'bg-green-50 font-bold text-green-800' : 'bg-white text-gray-700'}`}>
-                      {cell.isBlank ? `✎ ${cell.value}` : cell.value}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="text-[10px] text-gray-400 mt-1">Sel ✎ = kosong yang harus diisi santri. Nilai di sampingnya = jawaban benar.</div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <input
+            type="number"
+            max={soal.bobot}
+            min={0}
+            value={editScore}
+            onChange={(e) =>
+              setEditScore(e.target.value === "" ? "" : Number(e.target.value))
+            }
+            className="neu-input w-20 py-1.5 px-2 text-center text-sm font-bold border rounded-lg focus:ring focus:ring-blue-200"
+          />
+          <button
+            onClick={() => handleUpdateNilai(jaw.id)}
+            disabled={isUpdating}
+            className="px-2.5 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 disabled:opacity-50 inline-flex items-center gap-1"
+          >
+            <Save size={13} /> Simpan
+          </button>
+          <button
+            onClick={() => setEditingJawabanId(null)}
+            className="px-2 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300 inline-flex items-center gap-1"
+          >
+            <X size={13} />
+          </button>
         </div>
       );
     }
 
-    // MENJODOHKAN
-    if (soal.tipeSoal === "MENJODOHKAN" && soal.dataTambahan?.lefts && soal.dataTambahan?.rights) {
+    if (!jaw.id) {
       return (
-        <div className="space-y-1">
-          {soal.dataTambahan.lefts.map((left: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-xs">
-              <span className="bg-green-50 text-green-800 px-2 py-1 rounded border border-green-100 font-medium">{left}</span>
-              <span className="text-gray-400">→</span>
-              <span className="bg-green-50 text-green-800 px-2 py-1 rounded border border-green-100 font-medium">{soal.dataTambahan.rights[i]}</span>
-            </div>
-          ))}
+        <span className="text-gray-300 text-[10px] font-bold uppercase">-</span>
+      );
+    }
+
+    if (EXACT_TYPES.includes(soal.tipeSoal)) {
+      return (
+        <div
+          className={`flex flex-wrap gap-1.5 items-center ${
+            compact ? "justify-start sm:justify-end" : "justify-end"
+          }`}
+        >
+          <button
+            disabled={isUpdating}
+            onClick={() => {
+              setEditingJawabanId(jaw.id);
+              setEditScore(soal.bobot);
+              setTimeout(() => handleUpdateNilai(jaw.id, soal.bobot), 0);
+            }}
+            className="px-2.5 py-1.5 bg-green-50 text-green-700 border border-green-200 font-bold rounded-lg hover:bg-green-100 inline-flex items-center gap-1 text-xs transition-colors"
+          >
+            <CheckCircle2 size={13} /> Benarkan
+          </button>
+          <button
+            disabled={isUpdating}
+            onClick={() => {
+              setEditingJawabanId(jaw.id);
+              setEditScore(0);
+              setTimeout(() => handleUpdateNilai(jaw.id, 0), 0);
+            }}
+            className="px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 font-bold rounded-lg hover:bg-rose-100 inline-flex items-center gap-1 text-xs transition-colors"
+          >
+            <XCircle size={13} /> Salahkan
+          </button>
+          {jaw.nilaiManual !== null && (
+            <button
+              disabled={isUpdating}
+              onClick={() => {
+                setEditingJawabanId(jaw.id);
+                setEditScore(-1);
+                setTimeout(() => handleUpdateNilai(jaw.id, null), 0);
+              }}
+              className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium px-1"
+            >
+              Reset Auto
+            </button>
+          )}
         </div>
       );
     }
 
-    // MENGURUTKAN
-    if (soal.tipeSoal === "MENGURUTKAN" && soal.dataTambahan?.items) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          {soal.dataTambahan.items.map((item: any, i: number) => (
-            <span key={i} className="text-xs font-medium text-green-800 bg-green-50 px-2 py-1 rounded border border-green-100">{i+1}. {item}</span>
-          ))}
-        </div>
-      );
-    }
-
-    // DRAG KATEGORI
-    if (soal.tipeSoal === "DRAG_KATEGORI" && soal.dataTambahan?.items) {
-      const grouped: Record<string, string[]> = {};
-      soal.dataTambahan.items.forEach((d: any) => {
-        if (!grouped[d.category]) grouped[d.category] = [];
-        grouped[d.category].push(d.text);
-      });
-      return (
-        <div className="space-y-1">
-          {Object.entries(grouped).map(([cat, items]) => (
-            <div key={cat} className="text-xs">
-              <span className="font-bold text-green-700">{cat}:</span>{" "}
-              <span className="text-green-800">{items.join(", ")}</span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    // DRAG TO BLANK / PARAGRAF RUMPANG
-    if ((soal.tipeSoal === "DRAG_TO_BLANK" || soal.tipeSoal === "PARAGRAF_RUMPANG") && soal.dataTambahan?.blanks) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          {soal.dataTambahan.blanks.map((b: any, i: number) => (
-            <span key={i} className="text-xs font-medium text-green-800 bg-green-50 px-2 py-1 rounded border border-green-100">Blank {b.index+1}: {b.jawaban}</span>
-          ))}
-        </div>
-      );
-    }
-
-    // STABILO SYNTAX
-    if (soal.tipeSoal === "STABILO_SYNTAX" && soal.dataTambahan?.words && soal.dataTambahan?.answers) {
-      return (
-        <div className="flex flex-wrap gap-2 text-xs">
-          {soal.dataTambahan.words.map((w: any, i: number) => {
-            const wordStr = typeof w === 'string' ? w : w.text;
-            const cat = soal.dataTambahan.answers[String(i)];
-            if (!cat) return <span key={i} className="text-gray-600">{wordStr}</span>;
-            return (
-              <span key={i} className="inline-flex flex-col items-center">
-                <span className="font-bold text-gray-800">{wordStr}</span>
-                <span className="bg-green-100 text-green-800 px-1.5 py-0.5 rounded-[4px] text-[10px] mt-0.5">{cat}</span>
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // JARING RELASI
-    if (soal.tipeSoal === "JARING_RELASI" && soal.dataTambahan?.connections) {
-      return (
-        <div className="space-y-1">
-          {soal.dataTambahan.connections.map((c: any, i: number) => (
-            <div key={i} className="flex flex-wrap items-center gap-1 text-xs">
-              <span className="bg-green-50 text-green-800 px-2 py-1 rounded font-medium">{soal.dataTambahan.lefts?.[c.left] || `L${c.left}`}</span>
-              <span className="text-gray-400">→</span>
-              {(c.right || []).map((r: number) => (
-                <span key={r} className="bg-green-50 text-green-800 px-2 py-1 rounded font-medium">{soal.dataTambahan.rights?.[r] || `R${r}`}</span>
-              ))}
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    // SUSUN HURUF
-    if (soal.tipeSoal === "SUSUN_HURUF" && soal.dataTambahan?.hurufAcak) {
-      return (
-        <div className="text-sm font-medium text-green-800 bg-green-50 p-2 rounded border border-green-100">
-          {soal.kunciJawaban || soal.dataTambahan.jawaban || soal.dataTambahan.hurufAcak.join('')}
-        </div>
-      );
-    }
-
-    if (soal.dataTambahan) {
-       return <div className="text-xs text-gray-500 italic p-2 bg-gray-50 border rounded">Kunci tersimpan di dataTambahan (tipe: {soal.tipeSoal})</div>;
-    }
-
-    return <div className="text-xs text-gray-400 italic">Tidak ada referensi kunci</div>;
-  };
-
-  // ======== RENDER JAWABAN SANTRI ========
-  const renderJawabanSantri = (jaw: any, soal: any) => {
-    if (!jaw.id) return <span className="text-gray-400 italic text-sm">Tidak menjawab</span>;
-
-    // PG / Benar Salah
-    if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH"].includes(soal.tipeSoal)) {
-      const selected = soal.opsiList?.find((o:any) => o.id === jaw.opsiId);
-      const isCorrect = selected?.isCorrect;
-      return (
-        <div className={`text-sm font-medium p-2 rounded border ${isCorrect ? 'text-green-800 bg-green-50/50 border-green-100' : 'text-rose-800 bg-rose-50/50 border-rose-100'}`}>
-          {selected?.teks || jaw.jawabanTeks || "-"}
-        </div>
-      );
-    }
-
-    // Essay types
-    if (soal.tipeSoal.startsWith("ESSAY") && jaw.jawabanTeks) {
-      return <div className="text-sm font-medium text-blue-900 bg-blue-50/50 p-2 rounded border border-blue-100 whitespace-pre-wrap">{jaw.jawabanTeks}</div>;
-    }
-
-    // TABEL TASRIF
-    if (soal.tipeSoal === "TABEL_TASRIF" && jaw.jawabanData?.cells && soal.dataTambahan?.rows) {
-      const cells = jaw.jawabanData.cells;
-      return (
-        <div className="overflow-x-auto">
-          <table className="text-xs border border-blue-200 rounded">
-            <tbody>
-              {soal.dataTambahan.rows.map((row: any, rIdx: number) => (
-                <tr key={rIdx} className="border-b border-blue-100">
-                  {(row.cells || []).map((cell: any, cIdx: number) => {
-                    if (!cell.isBlank) {
-                      return <td key={cIdx} className="px-2 py-1 border-r border-gray-100 bg-white text-gray-600">{cell.value}</td>;
-                    }
-                    const key = `${rIdx}-${cIdx}`;
-                    const rawStudentAns = cells[key] || "";
-                    const studentAns = normalizeAnswerText(rawStudentAns);
-                    const possibleAnswers = (cell.value || "").split("|").map((k: string) => normalizeAnswerText(k));
-                    const isCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
-                    return (
-                      <td key={cIdx} className={`px-2 py-1 border-r font-bold ${isCorrect ? 'bg-green-50 text-green-800 border-green-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
-                        {rawStudentAns || <span className="text-gray-300 italic">—</span>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    // MENJODOHKAN
-    if (soal.tipeSoal === "MENJODOHKAN" && jaw.jawabanData?.pairs && soal.dataTambahan?.lefts) {
-      return (
-        <div className="space-y-1">
-          {jaw.jawabanData.pairs.map((jp: any, i: number) => {
-            const trueIdx = soal.dataTambahan.lefts.indexOf(jp.left);
-            const isCorrect = trueIdx !== -1 && soal.dataTambahan.rights[trueIdx] === jp.right;
-            return (
-              <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${isCorrect ? 'bg-green-50 border border-green-100' : 'bg-rose-50 border border-rose-100'}`}>
-                <span className="font-medium">{jp.left}</span>
-                <span className="text-gray-400">→</span>
-                <span className="font-medium">{jp.right}</span>
-                {isCorrect ? <CheckCircle size={12} className="text-green-600 ml-auto"/> : <X size={12} className="text-rose-600 ml-auto"/>}
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // SUSUN HURUF
-    if (soal.tipeSoal === "SUSUN_HURUF" && jaw.jawabanData?.susunanIndices && soal.dataTambahan?.hurufAcak) {
-      const studentAnsText = jaw.jawabanData.susunanIndices.map((i: number) => soal.dataTambahan.hurufAcak[i]).join('');
-      let targetAnsText = '';
-      if (soal.kunciJawaban || soal.dataTambahan.jawaban) {
-        targetAnsText = (soal.kunciJawaban || soal.dataTambahan.jawaban).replace(/\s+/g, '');
-      } else {
-        targetAnsText = soal.dataTambahan.hurufAcak.join('').replace(/\s+/g, '');
-      }
-      const isCorrect = studentAnsText.replace(/\s+/g, '') === targetAnsText;
-      return (
-        <div className={`text-sm font-medium p-2 rounded border flex justify-between items-center ${isCorrect ? 'text-green-800 bg-green-50/50 border-green-100' : 'text-rose-800 bg-rose-50/50 border-rose-100'}`}>
-          <span>{studentAnsText}</span>
-          {isCorrect ? <CheckCircle size={14} className="text-green-600"/> : <X size={14} className="text-rose-600"/>}
-        </div>
-      );
-    }
-
-    // DRAG TO BLANK / PARAGRAF RUMPANG
-    if ((soal.tipeSoal === "DRAG_TO_BLANK" || soal.tipeSoal === "PARAGRAF_RUMPANG") && jaw.jawabanData?.answers && soal.dataTambahan?.blanks) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          {soal.dataTambahan.blanks.map((b: any, i: number) => {
-            const rawStudentAns = (jaw.jawabanData.answers[b.index] || "").trim();
-            const studentAns = normalizeAnswerText(rawStudentAns);
-            const possibleAnswers = (b.jawaban || "").split("|").map((k: string) => normalizeAnswerText(k));
-            const isCorrect = studentAns !== "" && possibleAnswers.includes(studentAns);
-            return (
-              <span key={i} className={`text-xs font-medium px-2 py-1 flex items-center gap-1 inline-block rounded border ${isCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                B{b.index+1}: {rawStudentAns || <span className="text-gray-400 italic">kosong</span>} {isCorrect ? <CheckCircle size={10} className="text-green-600"/> : <X size={10} className="text-rose-600"/>}
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // DRAG KATEGORI
-    if (soal.tipeSoal === "DRAG_KATEGORI" && jaw.jawabanData?.items && soal.dataTambahan?.items) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          {jaw.jawabanData.items.map((jitem: any, i: number) => {
-            const found = soal.dataTambahan.items.find((d: any) => d.text === jitem.text);
-            const isCorrect = found && found.category === jitem.category;
-            return (
-              <span key={i} className={`text-xs font-medium px-2 flex items-center gap-1 py-1 rounded border ${isCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                {jitem.text} <span className="opacity-70">({jitem.category})</span> {isCorrect ? <CheckCircle size={10} className="text-green-600"/> : <X size={10} className="text-rose-600"/>}
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // IDENTIFIKASI KESALAHAN
-    if (soal.tipeSoal === "IDENTIFIKASI_KESALAHAN" && jaw.jawabanData) {
-      if (soal.dataTambahan?.correctIndex !== undefined) {
-        const sIdx = jaw.jawabanData.selectedIndex ?? (jaw.jawabanData.selectedIndices ? jaw.jawabanData.selectedIndices[0] : -1);
-        const isCorrect = sIdx === soal.dataTambahan.correctIndex;
-        const words = soal.dataTambahan.words || [];
-        return (
-          <div className={`text-sm font-medium flex justify-between p-2 rounded border ${isCorrect ? 'text-green-800 bg-green-50/50 border-green-100' : 'text-rose-800 bg-rose-50/50 border-rose-100'}`}>
-            <span>Pilihan: {words[sIdx] || `Kata ke-${sIdx+1}`}</span>
-            {isCorrect ? <CheckCircle size={14} className="text-green-600"/> : <X size={14} className="text-rose-600"/>}
-          </div>
-        );
-      }
-    }
-
-    // STABILO SYNTAX
-    if (soal.tipeSoal === "STABILO_SYNTAX" && jaw.jawabanData?.assignments && soal.dataTambahan?.words) {
-      const trueAnswers = soal.dataTambahan.answers || {};
-      return (
-        <div className="flex flex-wrap gap-2 text-xs">
-          {soal.dataTambahan.words.map((w: any, i: number) => {
-            const wordStr = typeof w === 'string' ? w : w.text;
-            const assignedCat = jaw.jawabanData.assignments[String(i)] || jaw.jawabanData.assignments[i];
-            const trueCat = trueAnswers[String(i)];
-            if (!assignedCat) return <span key={i} className="text-gray-400">{wordStr}</span>;
-            const isCorrect = assignedCat === trueCat;
-            return (
-              <span key={i} className={`inline-flex flex-col items-center border rounded px-1.5 py-1 ${isCorrect ? 'bg-green-50 border-green-200' : 'bg-rose-50 border-rose-200'}`}>
-                <span className="font-bold text-gray-800">{wordStr}</span>
-                <span className={`px-1 rounded-[4px] text-[10px] mt-0.5 font-bold ${isCorrect ? 'text-green-700' : 'text-rose-700'}`}>{assignedCat}</span>
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-    
-    // JARING RELASI
-    if (soal.tipeSoal === "JARING_RELASI" && jaw.jawabanData?.connections) {
-      const trueGraph = new Map<number, number[]>();
-      (soal.dataTambahan?.connections || []).forEach((c: any) => trueGraph.set(c.left, c.right || []));
-      
-      return (
-        <div className="space-y-1">
-          {jaw.jawabanData.connections.map((c: any, i: number) => {
-             const trueRights = trueGraph.get(c.left) || [];
-             return (
-               <div key={i} className="flex flex-wrap items-center gap-1 text-xs p-1 border rounded bg-gray-50">
-                  <span className="font-medium bg-white px-2 py-0.5 rounded shadow-sm">{soal.dataTambahan?.lefts?.[c.left] || `L${c.left}`}</span>
-                  <span className="text-gray-400">→</span>
-                  {(c.right || []).map((r: number) => {
-                    const isCorrect = trueRights.includes(r);
-                    return <span key={r} className={`px-2 flex items-center gap-0.5 py-0.5 rounded border border-transparent font-medium ${isCorrect ? 'bg-green-100 text-green-800 border-green-200' : 'bg-rose-100 text-rose-800 border-rose-200'}`}>{soal.dataTambahan?.rights?.[r] || `R${r}`} {isCorrect?<CheckCircle size={10}/>:<X size={10}/>}</span>;
-                  })}
-               </div>
-             );
-          })}
-        </div>
-      );
-    }
-
-    // MENGURUTKAN
-    if (soal.tipeSoal === "MENGURUTKAN" && jaw.jawabanData?.items && soal.dataTambahan?.items) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          {jaw.jawabanData.items.map((item: any, i: number) => {
-            const isCorrect = item === soal.dataTambahan.items[i];
-            return (
-              <span key={i} className={`text-xs font-medium px-2 py-1 rounded border ${isCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                {i+1}. {item}
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // PG MULTI
-    if (soal.tipeSoal === "PG_MULTI" && jaw.jawabanData?.selectedIds) {
-      const correctIds = soal.opsiList?.filter((o: any) => o.isCorrect).map((o: any) => o.id) || [];
-      return (
-        <div className="flex flex-wrap gap-1">
-          {jaw.jawabanData.selectedIds.map((selId: string, i: number) => {
-            const opsi = soal.opsiList?.find((o: any) => o.id === selId);
-            const isCorrect = correctIds.includes(selId);
-            return (
-              <span key={i} className={`text-xs font-medium px-2 py-1 rounded border ${isCorrect ? 'text-green-800 bg-green-50 border-green-100' : 'text-rose-800 bg-rose-50 border-rose-100'}`}>
-                {opsi?.teks || selId}
-              </span>
-            );
-          })}
-        </div>
-      );
-    }
-
-    // Generic fallback for other structured types with jawabanData
-    if (jaw.jawabanData) {
-      return <div className="text-xs text-blue-800 p-2 bg-blue-50 border border-blue-100 rounded overflow-x-auto max-w-full">Jawaban terstruktur tersedia (lihat skor)</div>;
-    }
-
-    if (jaw.jawabanTeks) {
-      return <div className="text-sm font-medium text-blue-900 bg-blue-50/50 p-2 rounded border border-blue-100 whitespace-pre-wrap">{jaw.jawabanTeks}</div>;
-    }
-
-    return <span className="text-gray-400 italic">Tidak menjawab</span>;
+    return (
+      <div
+        className={`flex flex-wrap gap-2 items-center ${
+          compact ? "justify-start sm:justify-end" : "justify-end"
+        }`}
+      >
+        {jaw.nilaiManual !== null && (
+          <button
+            disabled={isUpdating}
+            onClick={() => {
+              setEditingJawabanId(jaw.id);
+              setEditScore(-1);
+              setTimeout(() => handleUpdateNilai(jaw.id, null), 0);
+            }}
+            className="text-[11px] text-gray-500 hover:text-gray-800 underline font-medium"
+          >
+            Reset Auto
+          </button>
+        )}
+        <button
+          onClick={() => {
+            setEditingJawabanId(jaw.id);
+            setEditScore(jaw.nilaiManual !== null ? jaw.nilaiManual : 0);
+          }}
+          className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 inline-flex items-center gap-1.5 text-xs shadow-sm"
+        >
+          <Edit3 size={13} /> {jaw.nilaiManual !== null ? "Revisi Nilai" : "Beri Nilai"}
+        </button>
+      </div>
+    );
   };
 
   // Grouping by Mapel and TipeSoal (View SOAL)
   const groupedData: Record<string, Record<string, any[]>> = {};
   if (!isLoading && data && data.length > 0) {
     data.forEach((soal: any) => {
-      const mn = soal.mapelNama || 'Tanpa Mapel';
-      const ts = soal.tipeSoal || 'UNDEFINED';
+      const mn = soal.mapelNama || "Tanpa Mapel";
+      const ts = soal.tipeSoal || "UNDEFINED";
       if (!groupedData[mn]) groupedData[mn] = {};
       if (!groupedData[mn][ts]) groupedData[mn][ts] = [];
       groupedData[mn][ts].push(soal);
@@ -683,556 +479,783 @@ export default function ReviewJawabanPage() {
   // Grouping by Santri (View SANTRI)
   const groupedBySantri = useMemo(() => {
     const santriMap: Record<string, any> = {};
-    
     if (!data || data.length === 0) return [];
 
     data.forEach((soal: any) => {
-      const mapel = soal.mapelNama || 'Tanpa Mapel';
-      const tipeSoal = soal.tipeSoal || 'UNDEFINED';
-      
+      const mapel = soal.mapelNama || "Tanpa Mapel";
+      const tipeSoal = soal.tipeSoal || "UNDEFINED";
+
       soal.jawabanSantri.forEach((jaw: any) => {
-        const sNama = jaw.santriNama || 'Tanpa Nama';
+        const sNama = jaw.santriNama || "Tanpa Nama";
         if (!santriMap[sNama]) {
-           santriMap[sNama] = {
-              nama: sNama,
-              totalNilai: 0,
-              mapels: {},
-              sesiStatus: jaw.sesiStatus
-           };
-        }
-        
-        if (!santriMap[sNama].mapels[mapel]) {
-           santriMap[sNama].mapels[mapel] = {
-              nama: mapel,
-              totalNilaiMapel: 0,
-              jawabanList: [],
-              tipeSoalScores: {}
-           };
-        }
-        
-        if (!santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal]) {
-           santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal] = 0;
+          santriMap[sNama] = {
+            nama: sNama,
+            totalNilai: 0,
+            mapels: {},
+            sesiStatus: jaw.sesiStatus,
+          };
         }
 
-        // Calculate score for this question (either manual/AI, or auto-exact match)
+        if (!santriMap[sNama].mapels[mapel]) {
+          santriMap[sNama].mapels[mapel] = {
+            nama: mapel,
+            totalNilaiMapel: 0,
+            jawabanList: [],
+            tipeSoalScores: {},
+          };
+        }
+
+        if (!santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal]) {
+          santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal] = 0;
+        }
+
         let poin = 0;
         if (jaw.nilaiManual !== null && jaw.nilaiManual !== undefined) {
-           poin = jaw.nilaiManual;
-        } else {
-           // Structured EXACT type auto-grading
-           if (["PG", "BENAR_SALAH", "MUFRODAT", "ISIAN_SAMPING", "ISIAN_BAWAH", "PG_MULTI"].includes(tipeSoal)) {
-              let isBenar = false;
-              if (tipeSoal === "PG_MULTI") {
-                const correctIds = soal.opsiList?.filter((o: any) => o.isCorrect).map((o: any) => o.id) || [];
-                const selectedIds = jaw.jawabanData?.selectedIds || [];
-                if (correctIds.length > 0 && correctIds.length === selectedIds.length && selectedIds.every((id: string) => correctIds.includes(id))) {
-                  isBenar = true;
-                }
-              } else {
-                const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
-                if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
-                else if (jaw.jawabanTeks && soal.kunciJawaban && normalizeAnswerText(jaw.jawabanTeks) === normalizeAnswerText(soal.kunciJawaban)) isBenar = true;
-              }
-              if (isBenar) poin = soal.bobot;
-           }
+          poin = jaw.nilaiManual;
+        } else if (EXACT_TYPES.includes(tipeSoal)) {
+          let isBenar = false;
+          if (tipeSoal === "PG_MULTI") {
+            const correctIds =
+              soal.opsiList
+                ?.filter((o: any) => o.isCorrect)
+                .map((o: any) => o.id) || [];
+            const selectedIds = jaw.jawabanData?.selectedIds || [];
+            if (
+              correctIds.length > 0 &&
+              correctIds.length === selectedIds.length &&
+              selectedIds.every((id: string) => correctIds.includes(id))
+            ) {
+              isBenar = true;
+            }
+          } else {
+            const opsiBenar = soal.opsiList?.find((o: any) => o.isCorrect)?.id;
+            if (jaw.opsiId && jaw.opsiId === opsiBenar) isBenar = true;
+            else if (
+              jaw.jawabanTeks &&
+              soal.kunciJawaban &&
+              normalizeAnswerText(jaw.jawabanTeks) ===
+                normalizeAnswerText(soal.kunciJawaban)
+            ) {
+              isBenar = true;
+            }
+          }
+          if (isBenar) poin = soal.bobot;
         }
 
         santriMap[sNama].totalNilai += poin;
         santriMap[sNama].mapels[mapel].totalNilaiMapel += poin;
         santriMap[sNama].mapels[mapel].tipeSoalScores[tipeSoal] += poin;
-        
+
         santriMap[sNama].mapels[mapel].jawabanList.push({
-           soal,
-           jawaban: jaw
+          soal,
+          jawaban: jaw,
         });
       });
     });
-    
-    return Object.values(santriMap).sort((a, b) => a.nama.localeCompare(b.nama));
+
+    return Object.values(santriMap).sort((a, b) =>
+      a.nama.localeCompare(b.nama),
+    );
   }, [data]);
 
   if (isInitialLoad) {
-    return <div className="p-8 text-center text-gray-500 font-medium">Memuat data awal...</div>;
+    return (
+      <div className="p-8 text-center text-gray-500 font-medium">
+        Memuat data awal...
+      </div>
+    );
   }
 
-  // Derived filtered class list to only show classes belonging to programs active in this session
-  const currentPaket = paketList.find(p => p.id === selectedPaket);
-  const validProgramIds = currentPaket ? currentPaket.paketUjianList.map((p: any) => p.programId) : [];
-  const filteredKelasList = currentPaket?.isSimulasi 
-    ? kelasList 
-    : kelasList.filter(k => k.programId && validProgramIds.includes(k.programId));
+  const currentPaket = paketList.find((p) => p.id === selectedPaket);
+  const validProgramIds = currentPaket
+    ? currentPaket.paketUjianList.map((p: any) => p.programId)
+    : [];
+  const filteredKelasList = currentPaket?.isSimulasi
+    ? kelasList
+    : kelasList.filter(
+        (k) => k.programId && validProgramIds.includes(k.programId),
+      );
 
   return (
-    <div className="pb-20 md:pb-8">
-      {/* HEADER & FILTER */}
-      <div className="bg-white p-4 md:p-6 mb-6 rounded-b-2xl shadow-sm sticky top-0 md:static z-20" style={{ borderBottom: "1px solid var(--color-surface-dark)" }}>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
-          <div>
-            <h1 className="text-2xl font-bold font-display flex items-center gap-2 text-gray-800">
-               <Layers className="text-blue-500"/> Review Jawaban Santri
+    <div className="pb-20 md:pb-8 min-w-0">
+      {/* HEADER & FILTER — non-sticky di HP agar tidak menutupi soal pada layar kecil memanjang */}
+      <div
+        className="bg-white p-3.5 sm:p-4 md:p-6 mb-4 sm:mb-6 rounded-2xl shadow-sm"
+        style={{ border: "1px solid var(--color-surface-dark)" }}
+      >
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold font-display flex items-center gap-2 text-gray-800">
+              <Layers className="text-blue-500 shrink-0" size={22} />
+              <span className="break-words">Review Jawaban Santri</span>
             </h1>
-            <p className="text-sm text-gray-500 mt-1">Lakukan komparasi dan koreksi penilaian untuk setiap soal dari seluruh santri di kelas tertentu.</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">
+              Baca soal, opsi jawaban, kunci, serta koreksi penilaian santri per soal atau per santri.
+            </p>
           </div>
-          
-          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3">
-             <div className="w-full sm:w-48">
-               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Paket Ujian</label>
-               <select className="neu-input w-full p-2 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring focus:ring-blue-100 rounded-lg" value={selectedPaket} onChange={e => setSelectedPaket(e.target.value)}>
-                  {paketList.map(p => (
-                    <option key={p.id} value={p.id}>{p.nama} {p.isActive ? "(AKTIF)" : ""}</option>
-                  ))}
-               </select>
-             </div>
-             
-             <div className="w-full sm:w-48">
-               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Kelas</label>
-               <select className="neu-input w-full p-2 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring focus:ring-blue-100 rounded-lg" value={selectedKelas} onChange={e => setSelectedKelas(e.target.value)}>
-                  {filteredKelasList.map(k => (
-                    <option key={k.id} value={k.id}>{k.nama}</option>
-                  ))}
-               </select>
-             </div>
-             
-             <div className="w-full md:w-auto self-end mt-2 md:mt-0 md:ml-4">
-               <button 
-                 onClick={handleBulkAiGrade}
-                 disabled={!selectedPaket}
-                 className="w-full md:w-auto bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm whitespace-nowrap disabled:opacity-50"
-               >
-                 <Brain size={18} /> 
-                 <span>Auto-Grade Seluruh Kelas (Background)</span>
-               </button>
-             </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex w-full lg:w-auto gap-2.5 sm:gap-3">
+            <div className="w-full lg:w-48">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">
+                Paket Ujian
+              </label>
+              <select
+                className="neu-input w-full p-2 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring focus:ring-blue-100 rounded-lg"
+                value={selectedPaket}
+                onChange={(e) => setSelectedPaket(e.target.value)}
+              >
+                {paketList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nama} {p.isActive ? "(AKTIF)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full lg:w-44">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">
+                Kelas
+              </label>
+              <select
+                className="neu-input w-full p-2 text-sm font-bold text-gray-700 bg-gray-50 border border-gray-200 focus:border-blue-400 focus:ring focus:ring-blue-100 rounded-lg"
+                value={selectedKelas}
+                onChange={(e) => setSelectedKelas(e.target.value)}
+              >
+                {filteredKelasList.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sm:col-span-2 lg:self-end">
+              <button
+                onClick={handleBulkAiGrade}
+                disabled={!selectedPaket}
+                className="w-full lg:w-auto bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm text-xs sm:text-sm disabled:opacity-50"
+              >
+                <Brain size={16} className="shrink-0" />
+                <span>Auto-Grade Seluruh Kelas</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-      
-      {/* CONTENT AREA */}
-      <div className="px-4 md:px-6">
-        {isLoading && <div className="text-center p-12 text-gray-500"><Activity className="animate-spin mx-auto mb-3 text-blue-400"/> Mengambil data ujian...</div>}
-        
-        {!isLoading && data.length === 0 && (
-           <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-12 text-center shadow-sm">
-              <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4"/>
-              <h3 className="text-lg font-bold text-gray-700 mb-1">Soal Kosong</h3>
-              <p className="text-sm text-gray-500">Tidak ada soal atau santri yang mengerjakan paket ini di kelas yang dipilih.</p>
-           </div>
-        )}
-        
-        {!isLoading && data.length > 0 && (
-           <div className="space-y-6">
-              
-              <div className="flex bg-gray-100 p-1 rounded-lg w-fit mb-4">
-                <button 
-                  onClick={() => setViewMode("SOAL")}
-                  className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === "SOAL" ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Berdasarkan Soal
-                </button>
-                <button 
-                  onClick={() => setViewMode("SANTRI")}
-                  className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${viewMode === "SANTRI" ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Berdasarkan Santri
-                </button>
-              </div>
 
-              {/* MAPEL TABS */}
-              <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2">
-                {Object.keys(groupedData).map((mapelName, i) => {
-                  const isActive = activeMapel ? activeMapel === mapelName : i === 0;
-                  return (
+      {/* CONTENT AREA */}
+      <div className="min-w-0">
+        {isLoading && (
+          <div className="text-center p-12 text-gray-500">
+            <Activity className="animate-spin mx-auto mb-3 text-blue-400" />{" "}
+            Mengambil data ujian...
+          </div>
+        )}
+
+        {!isLoading && data.length === 0 && (
+          <div className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-8 sm:p-12 text-center shadow-sm">
+            <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-700 mb-1">
+              Soal Kosong
+            </h3>
+            <p className="text-sm text-gray-500">
+              Tidak ada soal atau santri yang mengerjakan paket ini di kelas yang
+              dipilih.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && data.length > 0 && (
+          <div className="space-y-5">
+            {/* Mode Switch */}
+            <div className="flex bg-gray-100 p-1 rounded-xl w-full sm:w-fit">
+              <button
+                onClick={() => setViewMode("SOAL")}
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  viewMode === "SOAL"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Berdasarkan Soal
+              </button>
+              <button
+                onClick={() => setViewMode("SANTRI")}
+                className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+                  viewMode === "SANTRI"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Berdasarkan Santri
+              </button>
+            </div>
+
+            {/* MAPEL TABS */}
+            <div className="flex overflow-x-auto gap-2 pb-1">
+              {Object.keys(groupedData).map((mapelName, i) => {
+                const isActive = activeMapel
+                  ? activeMapel === mapelName
+                  : i === 0;
+                return (
                   <button
                     key={mapelName}
                     onClick={() => setActiveMapel(mapelName)}
-                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-colors border ${isActive ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                    className={`shrink-0 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-colors border ${
+                      isActive
+                        ? "bg-blue-600 text-white border-blue-600 shadow-md"
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    }`}
                   >
-                     {mapelName}
+                    {mapelName}
                   </button>
-                )})}
-              </div>
+                );
+              })}
+            </div>
 
-              {viewMode === "SOAL" ? (
-                <>
-                  <div className="space-y-12 mt-6">
-                 {Object.entries(groupedData)
-                    .filter(([mapelNama], i) => (activeMapel ? activeMapel === mapelNama : i === 0))
-                    .map(([mapelNama, typeGroups]) => (
-                <div key={mapelNama} className="bg-transparent rounded-2xl">
-                  {/* MAPEL HEADER */}
-                  <div className="flex items-center gap-3 mb-6 pb-2 border-b-2 border-gray-200">
-                    <div className="bg-blue-600 text-white rounded p-1.5"><Layers size={20}/></div>
-                    <h2 className="text-xl font-bold font-display text-gray-800 uppercase tracking-wider">{mapelNama}</h2>
-                  </div>
-                  
-                  <div className="space-y-8 pl-0 md:pl-4">
-                    {Object.entries(typeGroups).map(([tipeSoal, soals]) => (
-                      <div key={tipeSoal} className="space-y-4">
-                        {/* TYPE HEADER */}
-                        <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-800 border border-purple-100 px-3 py-1.5 rounded-lg shadow-sm">
-                          <span className="text-sm font-bold tracking-wide">{tipeSoal.replace(/_/g, ' ')}</span>
-                          <span className="bg-purple-200 text-purple-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{soals.length} Soal</span>
+            {viewMode === "SOAL" ? (
+              <div className="space-y-8">
+                {Object.entries(groupedData)
+                  .filter(([mapelNama], i) =>
+                    activeMapel ? activeMapel === mapelNama : i === 0,
+                  )
+                  .map(([mapelNama, typeGroups]) => (
+                    <div key={mapelNama} className="space-y-6">
+                      {/* MAPEL HEADER */}
+                      <div className="flex items-center gap-2.5 pb-2 border-b-2 border-gray-200">
+                        <div className="bg-blue-600 text-white rounded-lg p-1.5 shrink-0">
+                          <Layers size={18} />
                         </div>
-                        
-                        <div className="space-y-4">
-                          {soals.map((soal: any, idx: number) => {
-                             const isExpanded = expandedSoalId === soal.id;
-                             const answeredCount = soal.jawabanSantri.filter((j: any) => j.id).length;
-                             const isEssay = soal.tipeSoal.startsWith("ESSAY");
-                             
-                             return (
-                                <div key={soal.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-primary ring-2 ring-primary/10 shadow-md transform -translate-y-0.5' : 'border-gray-200 hover:border-gray-300'}`}>
-                                   
-                                   {/* SOAL HEADER - CLICKABLE */}
-                                   <div 
-                                     className="p-4 md:p-5 flex flex-col md:flex-row gap-4 md:items-start cursor-pointer"
-                                     onClick={() => setExpandedSoalId(isExpanded ? null : soal.id)}
-                                   >
-                                     {/* Info Number & Meta */}
-                                     <div className="shrink-0 md:w-48">
-                                        <div className="flex items-center gap-2 mb-2">
-                                           <div className="flex bg-blue-50 text-blue-700 font-bold text-sm px-2.5 py-1 rounded-md border border-blue-100 shadow-sm items-center justify-center shrink-0">
-                                             No {idx + 1}
-                                           </div>
-                                           <span className="text-[10px] uppercase font-bold tracking-widest text-gray-400">Bobot {soal.bobot}</span>
+                        <h2 className="text-lg sm:text-xl font-bold font-display text-gray-800 uppercase tracking-wider break-words">
+                          {mapelNama}
+                        </h2>
+                      </div>
+
+                      <div className="space-y-6">
+                        {Object.entries(typeGroups).map(([tipeSoal, soals]) => (
+                          <div key={tipeSoal} className="space-y-3.5">
+                            {/* TYPE HEADER */}
+                            <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-800 border border-purple-100 px-3 py-1.5 rounded-lg shadow-sm">
+                              <span className="text-xs sm:text-sm font-bold tracking-wide">
+                                {tipeSoal.replace(/_/g, " ")}
+                              </span>
+                              <span className="bg-purple-200 text-purple-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                {soals.length} Soal
+                              </span>
+                            </div>
+
+                            <div className="space-y-3.5">
+                              {soals.map((soal: any, idx: number) => {
+                                const isExpanded = expandedSoalId === soal.id;
+                                const answeredCount = soal.jawabanSantri.filter(
+                                  (j: any) => j.id,
+                                ).length;
+                                const isEssay = soal.tipeSoal.startsWith("ESSAY");
+
+                                return (
+                                  <div
+                                    key={soal.id}
+                                    className={`bg-white rounded-xl shadow-sm border transition-all overflow-hidden ${
+                                      isExpanded
+                                        ? "border-blue-400 ring-2 ring-blue-100 shadow-md"
+                                        : "border-gray-200 hover:border-gray-300"
+                                    }`}
+                                  >
+                                    {/* SOAL HEADER - SELALU TERBACA DI HP */}
+                                    <div
+                                      className="p-3.5 sm:p-4 md:p-5 flex flex-col gap-3 cursor-pointer"
+                                      onClick={() =>
+                                        setExpandedSoalId(
+                                          isExpanded ? null : soal.id,
+                                        )
+                                      }
+                                    >
+                                      {/* Baris Meta: Nomor, Bobot, Jumlah Menjawab, Tombol Buka */}
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="inline-flex bg-blue-50 text-blue-700 font-bold text-xs sm:text-sm px-2.5 py-1 rounded-md border border-blue-100">
+                                            No {idx + 1}
+                                          </span>
+                                          <span className="text-[11px] uppercase font-bold tracking-wider text-gray-500">
+                                            Bobot {soal.bobot}
+                                          </span>
+                                          <span className="inline-flex items-center gap-1 text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                                            <Users_ico /> {answeredCount}/
+                                            {soal.jawabanSantri.length}
+                                          </span>
                                         </div>
-                                     </div>
-                                     
-                                     {/* Content Soal */}
-                                     <div className="flex-1 min-w-0">
-                                        <div className="prose prose-sm max-w-none text-gray-800 !mb-0 max-h-32 overflow-hidden relative break-words" dangerouslySetInnerHTML={{ __html: soal.pertanyaan }} />
-                                        {!isExpanded && (
-                                           <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none md:hidden"></div>
-                                        )}
-                                     </div>
-                                     
-                                     {/* Expand Indicator & Action */}
-                                     <div className="shrink-0 flex items-center justify-between md:flex-col md:items-end gap-3 self-stretch md:w-48 border-t md:border-t-0 md:border-l pt-3 md:pt-0 md:pl-4">
-                                        <div className="flex flex-col items-end gap-1.5 w-full">
-                                           <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500">
-                                              <Users_ico/> {answeredCount}/{soal.jawabanSantri.length} 
-                                              <span className="font-medium text-[10px] truncate hidden md:block">menjawab</span>
-                                           </div>
-                                           
-                                           {isEssay && answeredCount > 0 && (
-                                             <button 
-                                               onClick={(e) => { e.stopPropagation(); handleAIGradeSoal(soal.id, soal.jawabanSantri); }}
-                                               disabled={isAIGrading === soal.id}
-                                               className={`w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase transition mt-1 ${isAIGrading === soal.id ? 'bg-purple-100 text-purple-400' : 'bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-100'}`}
-                                             >
-                                                <Brain size={12} className={isAIGrading === soal.id ? "animate-pulse" : ""} />
-                                                {isAIGrading === soal.id ? "Proses..." : "Nilai AI"}
-                                             </button>
-                                           )}
+
+                                        <div className="flex items-center gap-2">
+                                          {isEssay && answeredCount > 0 && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleAIGradeSoal(
+                                                  soal.id,
+                                                  soal.jawabanSantri,
+                                                );
+                                              }}
+                                              disabled={isAIGrading === soal.id}
+                                              className={`inline-flex items-center gap-1 py-1.5 px-2.5 rounded-lg text-[11px] font-bold uppercase transition ${
+                                                isAIGrading === soal.id
+                                                  ? "bg-purple-100 text-purple-400"
+                                                  : "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
+                                              }`}
+                                            >
+                                              <Brain
+                                                size={12}
+                                                className={
+                                                  isAIGrading === soal.id
+                                                    ? "animate-pulse"
+                                                    : ""
+                                                }
+                                              />
+                                              {isAIGrading === soal.id
+                                                ? "Proses..."
+                                                : "Nilai AI"}
+                                            </button>
+                                          )}
+
+                                          <button
+                                            type="button"
+                                            className={`inline-flex items-center gap-1 border py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                                              isExpanded
+                                                ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                : "bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700"
+                                            }`}
+                                          >
+                                            {isExpanded
+                                              ? "Tutup"
+                                              : "Cek Santri"}
+                                            <ChevronDown
+                                              size={14}
+                                              className={`transition-transform duration-200 ${
+                                                isExpanded ? "rotate-180" : ""
+                                              }`}
+                                            />
+                                          </button>
                                         </div>
-                                        
-                                        <button className={`w-full flex items-center justify-center gap-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${isExpanded ? 'bg-primary/10 text-primary border-primary/20' : ''}`}>
-                                           {isExpanded ? 'Tutup' : 'Cek Santri'}
-                                           <ChevronDown size={14} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                                        </button>
-                                     </div>
-                                   </div>
-                                   
-                                   {/* EXPANDED AREA - STUDENT LIST */}
-                                   {isExpanded && (
-                                     <div className="border-t border-gray-100 bg-gray-50/50 rounded-b-xl overflow-hidden">
-                                        <div className="p-4 bg-purple-50/50 border-b border-purple-100/50">
-                                           <h5 className="text-[11px] uppercase font-bold text-gray-500 mb-2">Referensi Kebenaran (Kunci)</h5>
-                                           {renderKunciJawaban(soal)}
+                                      </div>
+
+                                      {/* Konten Soal — saat belum dibuka tampil ringkas & terbaca penuh saat dibuka */}
+                                      {!isExpanded ? (
+                                        <div className="min-w-0 space-y-2">
+                                          {soal.gambarUrl && (
+                                            <div className="text-[11px] font-semibold text-blue-600">
+                                              🖼️ Soal memiliki gambar (ketuk untuk lihat penuh)
+                                            </div>
+                                          )}
+                                          <SoalText
+                                            html={soal.pertanyaan || ""}
+                                            className="text-sm sm:text-base text-gray-800 leading-relaxed prose prose-sm max-w-none break-words"
+                                          />
+                                          {Array.isArray(soal.opsiList) &&
+                                            soal.opsiList.length > 0 && (
+                                              <div className="flex flex-wrap gap-1.5 pt-1" dir="auto">
+                                                {soal.opsiList.map(
+                                                  (o: any, oIdx: number) => (
+                                                    <span
+                                                      key={o.id || oIdx}
+                                                      className={`text-xs px-2 py-0.5 rounded-md border break-words max-w-full ${
+                                                        o.isCorrect
+                                                          ? "bg-green-50 border-green-200 text-green-800 font-semibold"
+                                                          : "bg-gray-50 border-gray-200 text-gray-600"
+                                                      }`}
+                                                    >
+                                                      <strong>
+                                                        {String.fromCharCode(
+                                                          65 + oIdx,
+                                                        )}
+                                                        .
+                                                      </strong>{" "}
+                                                      <SoalText
+                                                        html={o.teks || ""}
+                                                        className="inline break-words"
+                                                      />
+                                                    </span>
+                                                  ),
+                                                )}
+                                              </div>
+                                            )}
                                         </div>
-                                        
-                                        <div className="overflow-x-auto">
-                                          <table className="w-full text-left text-sm table-fixed min-w-[600px]">
+                                      ) : (
+                                        <div
+                                          className="min-w-0 pt-1"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <ReviewSoalDetail
+                                            soal={soal}
+                                            showKunciOnOptions
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* EXPANDED AREA - KUNCI & DAFTAR SANTRI */}
+                                    {isExpanded && (
+                                      <div className="border-t border-gray-200 bg-gray-50/50">
+                                        <div className="p-3.5 sm:p-4 bg-green-50/40 border-b border-green-100">
+                                          <h5 className="text-[11px] uppercase font-bold text-green-800 mb-2 tracking-wider">
+                                            Referensi Kebenaran (Kunci)
+                                          </h5>
+                                          <ReviewKunciJawaban soal={soal} />
+                                        </div>
+
+                                        {/* MOBILE & TABLET VIEW (< lg): Kartu Santri Penuh (tidak menyempit di HP!) */}
+                                        <div className="lg:hidden divide-y divide-gray-200 bg-white">
+                                          {soal.jawabanSantri
+                                            .slice(0, getLimit(soal.id))
+                                            .map((jaw: any) => (
+                                              <div
+                                                key={jaw.id || jaw.santriNama}
+                                                className="p-3.5 sm:p-4 space-y-3"
+                                              >
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="min-w-0">
+                                                    <div className="font-bold text-gray-800 text-sm break-words">
+                                                      {jaw.santriNama}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-400 font-medium">
+                                                      Status sesi:{" "}
+                                                      {jaw.sesiStatus}
+                                                    </div>
+                                                  </div>
+                                                  <div className="shrink-0">
+                                                    {renderStatus(jaw, soal)}
+                                                  </div>
+                                                </div>
+
+                                                <div className="min-w-0">
+                                                  <div className="text-[10px] uppercase font-bold text-gray-400 mb-1">
+                                                    Jawaban Santri
+                                                  </div>
+                                                  <ReviewJawabanSantri
+                                                    jaw={jaw}
+                                                    soal={soal}
+                                                  />
+                                                  {jaw.aiFeedback && (
+                                                    <div className="mt-2 text-xs p-2.5 bg-purple-50 text-purple-800 rounded-lg border border-purple-100 flex items-start gap-1.5">
+                                                      <Brain
+                                                        size={13}
+                                                        className="shrink-0 mt-0.5 text-purple-600"
+                                                      />
+                                                      <span className="leading-relaxed break-words">
+                                                        {jaw.aiFeedback}
+                                                      </span>
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                <div className="pt-2 border-t border-gray-100">
+                                                  {renderAksiRevisi(
+                                                    jaw,
+                                                    soal,
+                                                    true,
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                        </div>
+
+                                        {/* DESKTOP VIEW (lg+): Tabel Rapi */}
+                                        <div className="hidden lg:block overflow-x-auto">
+                                          <table className="w-full text-left text-sm">
                                             <thead>
                                               <tr className="bg-gray-100/80 text-gray-500 uppercase tracking-wider text-[10px] font-bold border-b border-gray-200">
-                                                <th className="px-4 py-3 w-48">Nama Santri</th>
-                                                <th className="px-4 py-3">Jawaban Santri</th>
-                                                <th className="px-4 py-3 w-32 text-center">Status / Skor</th>
-                                                <th className="px-4 py-3 text-right w-40">Aksi Revisi</th>
+                                                <th className="px-4 py-3 w-48">
+                                                  Nama Santri
+                                                </th>
+                                                <th className="px-4 py-3">
+                                                  Jawaban Santri
+                                                </th>
+                                                <th className="px-4 py-3 w-32 text-center">
+                                                  Status / Skor
+                                                </th>
+                                                <th className="px-4 py-3 text-right w-48">
+                                                  Aksi Revisi
+                                                </th>
                                               </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
-                                               {soal.jawabanSantri.slice(0, getLimit(soal.id)).map((jaw: any) => (
-                                                 <tr key={jaw.id || jaw.santriNama} className="hover:bg-gray-50 transition-colors">
-                                                   <td className="px-4 py-3">
-                                                      <div className="font-bold text-gray-800 text-sm truncate">{jaw.santriNama}</div>
-                                                      <div className="text-[10px] text-gray-400 font-medium">Session: {jaw.sesiStatus}</div>
-                                                   </td>
-                                                   
-                                                   <td className="px-4 py-3">
-                                                      {renderJawabanSantri(jaw, soal)}
+                                              {soal.jawabanSantri
+                                                .slice(0, getLimit(soal.id))
+                                                .map((jaw: any) => (
+                                                  <tr
+                                                    key={
+                                                      jaw.id || jaw.santriNama
+                                                    }
+                                                    className="hover:bg-gray-50/70 transition-colors align-top"
+                                                  >
+                                                    <td className="px-4 py-3">
+                                                      <div className="font-bold text-gray-800 text-sm break-words">
+                                                        {jaw.santriNama}
+                                                      </div>
+                                                      <div className="text-[10px] text-gray-400 font-medium">
+                                                        Session:{" "}
+                                                        {jaw.sesiStatus}
+                                                      </div>
+                                                    </td>
+
+                                                    <td className="px-4 py-3 max-w-xl">
+                                                      <ReviewJawabanSantri
+                                                        jaw={jaw}
+                                                        soal={soal}
+                                                      />
                                                       {jaw.aiFeedback && (
                                                         <div className="mt-2 text-xs p-2 bg-purple-50 text-purple-800 rounded border border-purple-100 flex items-start gap-1.5">
-                                                          <Brain size={12} className="shrink-0 mt-0.5 text-purple-600"/>
-                                                          <span className="leading-relaxed">{jaw.aiFeedback}</span>
+                                                          <Brain
+                                                            size={12}
+                                                            className="shrink-0 mt-0.5 text-purple-600"
+                                                          />
+                                                          <span className="leading-relaxed">
+                                                            {jaw.aiFeedback}
+                                                          </span>
                                                         </div>
                                                       )}
-                                                   </td>
-                                                   
-                                                   <td className="px-4 py-3 text-center align-middle">
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-center">
                                                       {renderStatus(jaw, soal)}
-                                                   </td>
-                                                   
-                                                   <td className="px-4 py-3 text-right">
-                                                      {editingJawabanId === (jaw.id || "dummy") ? (
-                                                         <div className="flex flex-col items-end gap-1.5">
-                                                            <input 
-                                                              type="number" 
-                                                              max={soal.bobot} min={0} 
-                                                              value={editScore}
-                                                              onChange={(e) => setEditScore(e.target.value === "" ? "" : Number(e.target.value))}
-                                                              className="neu-input w-20 py-1.5 px-2 text-center text-sm font-bold border rounded-lg focus:ring focus:ring-blue-200"
-                                                            />
-                                                            <div className="flex justify-end gap-1">
-                                                              <button onClick={() => handleUpdateNilai(jaw.id)} disabled={isUpdating} className="p-1.5 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"><Save size={14}/></button>
-                                                              <button onClick={() => setEditingJawabanId(null)} className="p-1.5 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"><X size={14}/></button>
-                                                            </div>
-                                                         </div>
-                                                      ) : jaw.id ? (
-                                                        EXACT_TYPES.includes(soal.tipeSoal) ? (
-                                                          <div className="flex flex-col gap-1 items-end w-24 ml-auto">
-                                                            <button 
-                                                              disabled={isUpdating}
-                                                              onClick={() => { setEditingJawabanId(jaw.id); setEditScore(soal.bobot); setTimeout(() => handleUpdateNilai(jaw.id, soal.bobot), 0); }}
-                                                              className="w-full px-2 py-1 bg-green-50 text-green-700 border border-green-200 font-bold rounded hover:bg-green-100 flex items-center justify-center gap-1 text-[10px] transition-colors"
-                                                            >
-                                                              <CheckCircle2 size={12}/> Benarkan
-                                                            </button>
-                                                            <button 
-                                                              disabled={isUpdating}
-                                                              onClick={() => { setEditingJawabanId(jaw.id); setEditScore(0); setTimeout(() => handleUpdateNilai(jaw.id, 0), 0); }}
-                                                              className="w-full px-2 py-1 bg-rose-50 text-rose-700 border border-rose-200 font-bold rounded hover:bg-rose-100 flex items-center justify-center gap-1 text-[10px] transition-colors"
-                                                            >
-                                                              <XCircle size={12}/> Salahkan
-                                                            </button>
-                                                            {jaw.nilaiManual !== null && (
-                                                              <button disabled={isUpdating} onClick={() => { setEditingJawabanId(jaw.id); setEditScore(-1); setTimeout(() => handleUpdateNilai(jaw.id, null), 0); }} className="text-[9px] text-gray-400 mt-0.5 hover:text-gray-600 underline">Reset Auto</button>
-                                                            )}
-                                                          </div>
-                                                        ) : (
-                                                          <React.Fragment>
-                                                            <button 
-                                                              onClick={() => { setEditingJawabanId(jaw.id); setEditScore(jaw.nilaiManual !== null ? jaw.nilaiManual : 0); }}
-                                                              className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 flex items-center gap-1.5 ml-auto text-xs"
-                                                            >
-                                                              <Edit3 size={13}/> {jaw.nilaiManual !== null ? 'Revisi' : 'Beri Nilai'}
-                                                            </button>
-                                                            {jaw.nilaiManual !== null && (
-                                                              <button disabled={isUpdating} onClick={() => { setEditingJawabanId(jaw.id); setEditScore(-1); setTimeout(() => handleUpdateNilai(jaw.id, null), 0); }} className="text-[10px] text-gray-400 mt-2 block w-full text-right hover:text-gray-600 underline">Reset Auto</button>
-                                                            )}
-                                                          </React.Fragment>
-                                                        )
-                                                      ) : (
-                                                        <span className="text-gray-300 text-[10px] font-bold uppercase">-</span>
+                                                    </td>
+
+                                                    <td className="px-4 py-3 text-right">
+                                                      {renderAksiRevisi(
+                                                        jaw,
+                                                        soal,
                                                       )}
-                                                   </td>
-                                                 </tr>
-                                               ))}
+                                                    </td>
+                                                  </tr>
+                                                ))}
                                             </tbody>
                                           </table>
                                         </div>
-                                        
+
                                         {/* LOAD MORE BUTTON */}
-                                        {soal.jawabanSantri.length > getLimit(soal.id) && (
-                                           <div className="p-3 bg-gray-50/80 border-t border-gray-100 flex justify-center">
-                                             <button 
-                                               onClick={() => setSantriLimits(p => ({ ...p, [soal.id]: getLimit(soal.id) + 20 }))}
-                                               className="text-xs font-bold text-blue-600 bg-blue-50/50 border border-blue-100 px-6 py-2 rounded-lg hover:bg-blue-100 transition-colors"
-                                             >
-                                               Tampilkan Lebih Banyak ({Math.min(getLimit(soal.id), soal.jawabanSantri.length)} dari {soal.jawabanSantri.length} Santri)
-                                             </button>
-                                           </div>
+                                        {soal.jawabanSantri.length >
+                                          getLimit(soal.id) && (
+                                          <div className="p-3 bg-gray-50/80 border-t border-gray-100 flex justify-center">
+                                            <button
+                                              onClick={() =>
+                                                setSantriLimits((p) => ({
+                                                  ...p,
+                                                  [soal.id]:
+                                                    getLimit(soal.id) + 20,
+                                                }))
+                                              }
+                                              className="text-xs font-bold text-blue-600 bg-blue-50/50 border border-blue-100 px-5 py-2 rounded-lg hover:bg-blue-100 transition-colors"
+                                            >
+                                              Tampilkan Lebih Banyak (
+                                              {Math.min(
+                                                getLimit(soal.id),
+                                                soal.jawabanSantri.length,
+                                              )}{" "}
+                                              dari {soal.jawabanSantri.length}{" "}
+                                              Santri)
+                                            </button>
+                                          </div>
                                         )}
-                                     </div>
-                                   )}
-                                </div>
-                             );
-                          })}
-                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-                <div className="space-y-4">
-                  {groupedBySantri.map((santri: any) => {
-                    const isExpanded = expandedStudentId === santri.nama;
-                    
-                    return (
-                      <div key={santri.nama} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-blue-400 ring-2 ring-blue-50 shadow-md' : 'border-gray-200 hover:border-gray-300'}`}>
-                        
-                        {/* HEADER SANTRI */}
-                        <div 
-                          className="p-4 md:p-5 flex flex-col md:flex-row gap-4 md:items-center cursor-pointer"
-                          onClick={() => setExpandedStudentId(isExpanded ? null : santri.nama)}
-                        >
-                           <div className="flex-1">
-                             <h3 className="text-lg font-bold text-gray-800">{santri.nama}</h3>
-                             <p className="text-xs text-gray-500 font-medium mt-0.5">Status: {santri.sesiStatus}</p>
-                             
-                             <div className="flex flex-col gap-2 mt-3">
-                               {Object.values(santri.mapels).map((m: any) => (
-                                 <div key={m.nama} className="flex flex-wrap items-center gap-2">
-                                   <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
-                                     {m.nama}: {m.totalNilaiMapel}
-                                   </span>
-                                   {Object.entries(m.tipeSoalScores || {}).map(([ts, score]: [string, any]) => (
-                                      <span key={ts} className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
-                                        {ts.replace(/_/g, ' ')}: {score}
-                                      </span>
-                                   ))}
-                                 </div>
-                               ))}
-                             </div>
-                           </div>
-                           <div className="shrink-0 flex items-center gap-6">
-                             <div className="text-right">
-                               <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Total Skor</div>
-                               <div className="text-lg font-bold text-blue-600">{santri.totalNilai} <span className="text-xs text-gray-400 font-normal">poin</span></div>
-                             </div>
-                             <ChevronDown size={20} className={`text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                           </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              /* VIEW BERDASARKAN SANTRI */
+              <div className="space-y-4">
+                {groupedBySantri.map((santri: any) => {
+                  const isExpanded = expandedStudentId === santri.nama;
+
+                  return (
+                    <div
+                      key={santri.nama}
+                      className={`bg-white rounded-xl shadow-sm border transition-all overflow-hidden ${
+                        isExpanded
+                          ? "border-blue-400 ring-2 ring-blue-100 shadow-md"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      {/* HEADER SANTRI */}
+                      <div
+                        className="p-3.5 sm:p-4 md:p-5 flex flex-col sm:flex-row gap-3 sm:items-center justify-between cursor-pointer"
+                        onClick={() =>
+                          setExpandedStudentId(isExpanded ? null : santri.nama)
+                        }
+                      >
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base sm:text-lg font-bold text-gray-800 break-words">
+                            {santri.nama}
+                          </h3>
+                          <p className="text-xs text-gray-500 font-medium mt-0.5">
+                            Status: {santri.sesiStatus}
+                          </p>
+
+                          <div className="flex flex-col gap-1.5 mt-2.5">
+                            {Object.values(santri.mapels).map((m: any) => (
+                              <div
+                                key={m.nama}
+                                className="flex flex-wrap items-center gap-1.5"
+                              >
+                                <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800 border border-blue-200">
+                                  {m.nama}: {m.totalNilaiMapel}
+                                </span>
+                                {Object.entries(m.tipeSoalScores || {}).map(
+                                  ([ts, score]: [string, any]) => (
+                                    <span
+                                      key={ts}
+                                      className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100"
+                                    >
+                                      {ts.replace(/_/g, " ")}: {score}
+                                    </span>
+                                  ),
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
 
-                        {/* EXPANDED AREA */}
-                        {isExpanded && (
-                          <div className="border-t border-gray-100 bg-gray-50/50 rounded-b-xl overflow-hidden p-4 md:p-6 space-y-8">
-                            {Object.values(santri.mapels)
-                              .filter((mapel: any, i) => {
-                                const defaultMapel = Object.keys(groupedData)[0];
-                                const currentActiveMapel = activeMapel || defaultMapel;
-                                return mapel.nama === currentActiveMapel;
-                              })
-                              .map((mapel: any) => (
+                        <div className="shrink-0 flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                          <div className="sm:text-right">
+                            <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                              Total Skor
+                            </div>
+                            <div className="text-lg font-bold text-blue-600">
+                              {santri.totalNilai}{" "}
+                              <span className="text-xs text-gray-400 font-normal">
+                                poin
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronDown
+                            size={20}
+                            className={`text-gray-400 transition-transform duration-200 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* EXPANDED AREA PER SANTRI */}
+                      {isExpanded && (
+                        <div className="border-t border-gray-100 bg-gray-50/50 p-3 sm:p-4 md:p-6 space-y-6">
+                          {Object.values(santri.mapels)
+                            .filter((mapel: any) => {
+                              const defaultMapel = Object.keys(groupedData)[0];
+                              const currentActiveMapel =
+                                activeMapel || defaultMapel;
+                              return mapel.nama === currentActiveMapel;
+                            })
+                            .map((mapel: any) => (
                               <div key={mapel.nama} className="space-y-4">
-                                <div className="flex items-center justify-between border-b-2 border-gray-200 pb-2">
-                                  <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                                    <Layers size={18} className="text-blue-500"/> {mapel.nama}
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-gray-200 pb-2">
+                                  <h4 className="font-bold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
+                                    <Layers
+                                      size={17}
+                                      className="text-blue-500 shrink-0"
+                                    />{" "}
+                                    {mapel.nama}
                                   </h4>
                                   <div className="text-xs font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-md border border-green-200">
                                     Total Mapel: {mapel.totalNilaiMapel}
                                   </div>
                                 </div>
-                                
+
                                 <div className="space-y-4">
-                                  {mapel.jawabanList.map((item: any, idx: number) => {
-                                    const { soal, jawaban: jaw } = item;
-                                    return (
-                                      <div key={soal.id} className="bg-white border border-gray-200 rounded-xl p-4 md:p-5 shadow-sm">
-                                        
-                                        <div className="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-4 border-b border-gray-100 pb-4">
-                                          <div className="flex-1">
-                                            <div className="flex flex-wrap items-center gap-2 mb-2.5">
-                                              <span className="bg-blue-50 text-blue-700 font-bold text-[10px] px-2 py-0.5 rounded border border-blue-100 uppercase tracking-wide">Soal {idx + 1}</span>
-                                              <span className="bg-purple-50 text-purple-700 font-bold text-[10px] px-2 py-0.5 rounded border border-purple-100 uppercase tracking-wide">{soal.tipeSoal.replace(/_/g, ' ')}</span>
-                                              <span className="text-[10px] text-gray-500 font-bold tracking-wider">Bobot: {soal.bobot}</span>
+                                  {mapel.jawabanList.map(
+                                    (item: any, idx: number) => {
+                                      const { soal, jawaban: jaw } = item;
+                                      return (
+                                        <div
+                                          key={soal.id}
+                                          className="bg-white border border-gray-200 rounded-xl p-3.5 sm:p-4 md:p-5 shadow-sm space-y-4"
+                                        >
+                                          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                              <span className="bg-blue-50 text-blue-700 font-bold text-[10px] px-2 py-0.5 rounded border border-blue-100 uppercase tracking-wide">
+                                                Soal {idx + 1}
+                                              </span>
+                                              <span className="bg-purple-50 text-purple-700 font-bold text-[10px] px-2 py-0.5 rounded border border-purple-100 uppercase tracking-wide">
+                                                {soal.tipeSoal.replace(
+                                                  /_/g,
+                                                  " ",
+                                                )}
+                                              </span>
+                                              <span className="text-[10px] text-gray-500 font-bold tracking-wider">
+                                                Bobot: {soal.bobot}
+                                              </span>
                                             </div>
-                                            <div className="prose prose-sm max-w-none text-gray-800" dangerouslySetInnerHTML={{ __html: soal.pertanyaan }} />
-                                          </div>
-                                          
-                                          {/* Status */}
-                                          <div className="shrink-0 flex md:block items-end flex-col">
-                                            {renderStatus(jaw, soal)}
-                                          </div>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                          <div className="bg-gray-50/50 border border-gray-200 rounded-lg p-3.5">
-                                            <div className="text-[10px] uppercase font-bold text-gray-500 mb-2 tracking-wider">Kunci Jawaban Benar</div>
-                                            {renderKunciJawaban(soal)}
-                                          </div>
-                                          
-                                          <div className="bg-blue-50/20 border border-blue-100 rounded-lg p-3.5">
-                                            <div className="text-[10px] uppercase font-bold text-gray-500 mb-2 tracking-wider flex justify-between items-center">
-                                              Jawaban Santri
+                                            <div className="shrink-0">
+                                              {renderStatus(jaw, soal)}
                                             </div>
-                                            {renderJawabanSantri(jaw, soal)}
-                                            
-                                            {/* AI Feedback */}
-                                            {jaw.aiFeedback && (
-                                              <div className="mt-3 text-xs p-2.5 bg-purple-50 text-purple-800 rounded-md border border-purple-100 flex items-start gap-2">
-                                                <Brain size={14} className="shrink-0 mt-0.5 text-purple-600"/>
-                                                <span className="leading-relaxed">{jaw.aiFeedback}</span>
+                                          </div>
+
+                                          {/* Soal lengkap + gambar + semua opsi jawaban */}
+                                          <ReviewSoalDetail
+                                            soal={soal}
+                                            showKunciOnOptions
+                                          />
+
+                                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+                                            <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-3 min-w-0">
+                                              <div className="text-[10px] uppercase font-bold text-gray-500 mb-2 tracking-wider">
+                                                Kunci Jawaban Benar
                                               </div>
-                                            )}
-                                            
-                                            {/* Aksi Revisi */}
-                                            <div className="mt-4 flex justify-end border-t border-gray-100 pt-3">
-                                              {editingJawabanId === (jaw.id || "dummy") ? (
-                                                 <div className="flex flex-col items-end gap-1.5 object-right">
-                                                    <div className="flex items-center gap-2">
-                                                      <span className="text-xs text-gray-500 font-bold">Ubah Nilai:</span>
-                                                      <input 
-                                                        type="number" 
-                                                        max={soal.bobot} min={0} 
-                                                        value={editScore}
-                                                        onChange={(e) => setEditScore(e.target.value === "" ? "" : Number(e.target.value))}
-                                                        className="neu-input w-20 py-1.5 px-2 text-center text-sm font-bold border rounded-lg focus:ring focus:ring-blue-200"
-                                                      />
-                                                    </div>
-                                                    <div className="flex justify-end gap-1.5 mt-1">
-                                                      <button onClick={() => handleUpdateNilai(jaw.id)} disabled={isUpdating} className="px-3 py-1 bg-green-500 text-white rounded-md text-xs font-bold hover:bg-green-600 disabled:opacity-50 flex items-center gap-1"><Save size={12}/> Simpan</button>
-                                                      <button onClick={() => setEditingJawabanId(null)} className="px-3 py-1 bg-gray-200 text-gray-600 rounded-md text-xs font-bold hover:bg-gray-300 flex items-center gap-1"><X size={12}/> Batal</button>
-                                                    </div>
-                                                 </div>
-                                              ) : jaw.id ? (
-                                                EXACT_TYPES.includes(soal.tipeSoal) ? (
-                                                  <div className="flex gap-2 items-center flex-wrap justify-end">
-                                                    <button 
-                                                      disabled={isUpdating}
-                                                      onClick={() => { setEditingJawabanId(jaw.id); setEditScore(soal.bobot); setTimeout(() => handleUpdateNilai(jaw.id, soal.bobot), 0); }}
-                                                      className="px-2.5 py-1.5 bg-green-50 text-green-700 border border-green-200 font-bold rounded hover:bg-green-100 flex items-center justify-center gap-1 text-[10px] transition-colors"
-                                                    >
-                                                      <CheckCircle2 size={13}/> Beri Benar
-                                                    </button>
-                                                    <button 
-                                                      disabled={isUpdating}
-                                                      onClick={() => { setEditingJawabanId(jaw.id); setEditScore(0); setTimeout(() => handleUpdateNilai(jaw.id, 0), 0); }}
-                                                      className="px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 font-bold rounded hover:bg-rose-100 flex items-center justify-center gap-1 text-[10px] transition-colors"
-                                                    >
-                                                      <XCircle size={13}/> Beri Salah
-                                                    </button>
-                                                    {jaw.nilaiManual !== null && (
-                                                      <button disabled={isUpdating} onClick={() => { setEditingJawabanId(jaw.id); setEditScore(-1); setTimeout(() => handleUpdateNilai(jaw.id, null), 0); }} className="text-[10px] text-gray-400 hover:text-gray-700 underline font-medium ml-1">Reset AI / Auto</button>
-                                                    )}
-                                                  </div>
-                                                ) : (
-                                                  <div className="flex gap-3 items-center flex-wrap justify-end">
-                                                    {jaw.nilaiManual !== null && (
-                                                      <button disabled={isUpdating} onClick={() => { setEditingJawabanId(jaw.id); setEditScore(-1); setTimeout(() => handleUpdateNilai(jaw.id, null), 0); }} className="text-[10px] text-gray-400 hover:text-gray-700 underline font-medium">Reset AI / Auto</button>
-                                                    )}
-                                                    <button 
-                                                      onClick={() => { setEditingJawabanId(jaw.id); setEditScore(jaw.nilaiManual !== null ? jaw.nilaiManual : 0); }}
-                                                      className="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg hover:bg-gray-50 flex items-center gap-1.5 text-xs shadow-sm"
-                                                    >
-                                                      <Edit3 size={13}/> {jaw.nilaiManual !== null ? 'Revisi Nilai' : 'Beri Nilai Manual'}
-                                                    </button>
-                                                  </div>
-                                                )
-                                              ) : (
-                                                <span className="text-gray-300 text-[10px] font-bold uppercase">-</span>
-                                              )}
+                                              <ReviewKunciJawaban soal={soal} />
                                             </div>
-                                            
+
+                                            <div className="bg-blue-50/20 border border-blue-100 rounded-xl p-3 min-w-0 flex flex-col justify-between">
+                                              <div>
+                                                <div className="text-[10px] uppercase font-bold text-gray-500 mb-2 tracking-wider">
+                                                  Jawaban Santri
+                                                </div>
+                                                <ReviewJawabanSantri
+                                                  jaw={jaw}
+                                                  soal={soal}
+                                                />
+
+                                                {jaw.aiFeedback && (
+                                                  <div className="mt-3 text-xs p-2.5 bg-purple-50 text-purple-800 rounded-lg border border-purple-100 flex items-start gap-2">
+                                                    <Brain
+                                                      size={14}
+                                                      className="shrink-0 mt-0.5 text-purple-600"
+                                                    />
+                                                    <span className="leading-relaxed break-words">
+                                                      {jaw.aiFeedback}
+                                                    </span>
+                                                  </div>
+                                                )}
+                                              </div>
+
+                                              <div className="mt-4 pt-3 border-t border-gray-200/70">
+                                                {renderAksiRevisi(
+                                                  jaw,
+                                                  soal,
+                                                  true,
+                                                )}
+                                              </div>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    },
+                                  )}
                                 </div>
                               </div>
                             ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -1241,7 +1264,17 @@ export default function ReviewJawabanPage() {
 
 function Users_ico() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
       <circle cx="9" cy="7" r="4"></circle>
       <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>

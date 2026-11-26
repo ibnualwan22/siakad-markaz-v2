@@ -17,7 +17,8 @@ import { ChevronDown, CornerDownLeft, Delete, Globe } from "lucide-react";
 import {
   ARABIC_ROWS,
   LATIN_ROWS,
-  NUMBER_ROWS,
+  ARABIC_SYMBOL_PAGES,
+  LATIN_SYMBOL_PAGES,
   HARAKAT,
   KEY_VARIANTS,
   keyLabel,
@@ -309,6 +310,7 @@ export function ExamKeyboardProvider({
   const activeRef = useRef<Binding | null>(null);
   const [language, setLanguage] = useState<KeyboardLanguage>("ar");
   const [numbers, setNumbers] = useState(false);
+  const [symbolPage, setSymbolPage] = useState<0 | 1>(0);
   const [shift, setShift] = useState(false);
   const [menu, setMenu] = useState<VariantMenu | null>(null);
   const [height, setHeight] = useState(0);
@@ -469,7 +471,9 @@ export function ExamKeyboardProvider({
   useEffect(() => {
     if (!active || disabled || !panel.current) return;
     const element = panel.current;
-    const measure = () => setHeight(element.getBoundingClientRect().height + 16);
+    // Tambah ruang ekstra (+72px) agar baris terbawah tabel matrix / soal panjang
+    // bisa di-scroll nyaman ke atas keyboard dan tidak pernah ketutupan keyboard.
+    const measure = () => setHeight(element.getBoundingClientRect().height + 72);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
@@ -482,18 +486,27 @@ export function ExamKeyboardProvider({
     animation.current = requestAnimationFrame(() => {
       const field = active;
       if (!field.isConnected) return;
+      // Cari kontainer yang BENAR-BENAR bisa scroll vertikal (lewati wrapper
+      // overflow-x-auto pada tabel matrix yang secara CSS ikut memiliki overflowY="auto"
+      // tetapi scrollHeight === clientHeight sehingga tidak bisa menggulir vertikal).
       let scroller: HTMLElement | null = field.parentElement;
-      while (
-        scroller &&
-        !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
-      ) {
+      while (scroller) {
+        if (scroller.dataset.horizontalScroll !== "true") {
+          const oy = getComputedStyle(scroller).overflowY;
+          if (
+            /(auto|scroll)/.test(oy) &&
+            scroller.scrollHeight > scroller.clientHeight + 8
+          ) {
+            break;
+          }
+        }
         scroller = scroller.parentElement;
       }
       const viewport = scroller?.getBoundingClientRect();
       const vvHeight = window.visualViewport?.height ?? window.innerHeight;
       const top = Math.max(0, viewport?.top ?? 0) + 16;
       const panelTop = panel.current?.getBoundingClientRect().top ?? vvHeight;
-      const bottom = Math.min(viewport?.bottom ?? vvHeight, panelTop) - 16;
+      const bottom = Math.min(viewport?.bottom ?? vvHeight, panelTop) - 20;
       const rect = field.getBoundingClientRect();
       const delta =
         rect.top < top || rect.height > bottom - top
@@ -533,11 +546,12 @@ export function ExamKeyboardProvider({
   const toggleLanguage = () => {
     setLanguage((prev) => (prev === "ar" ? "id" : "ar"));
     setNumbers(false);
+    setSymbolPage(0);
     setMenu(null);
   };
 
   const rows = numbers
-    ? NUMBER_ROWS
+    ? (language === "ar" ? ARABIC_SYMBOL_PAGES : LATIN_SYMBOL_PAGES)[symbolPage]
     : language === "ar"
       ? ARABIC_ROWS
       : LATIN_ROWS;
@@ -592,6 +606,7 @@ export function ExamKeyboardProvider({
                   onAction={() => {
                     setLanguage("ar");
                     setNumbers(false);
+                    setSymbolPage(0);
                     setMenu(null);
                   }}
                 >
@@ -603,6 +618,7 @@ export function ExamKeyboardProvider({
                   onAction={() => {
                     setLanguage("id");
                     setNumbers(false);
+                    setSymbolPage(0);
                     setMenu(null);
                   }}
                 >
@@ -670,7 +686,7 @@ export function ExamKeyboardProvider({
               return (
                 <div
                   className={rowClass}
-                  key={`${numbers}:${language}:${index}`}
+                  key={`${numbers}:${symbolPage}:${language}:${index}`}
                 >
                   {latinLetters && isLastRow && (
                     <FastActionButton
@@ -683,6 +699,24 @@ export function ExamKeyboardProvider({
                       }}
                     >
                       ⇧
+                    </FastActionButton>
+                  )}
+
+                  {numbers && isLastRow && (
+                    <FastActionButton
+                      className={`${styles.actionKey} ${styles.pageToggleKey}`}
+                      ariaLabel={
+                        symbolPage === 0
+                          ? "Halaman simbol 2 dari 2"
+                          : "Kembali ke halaman simbol 1 dari 2"
+                      }
+                      ariaPressed={symbolPage === 1}
+                      onAction={() => {
+                        setSymbolPage((p) => (p === 0 ? 1 : 0));
+                        setMenu(null);
+                      }}
+                    >
+                      {symbolPage === 0 ? "1/2" : "2/2"}
                     </FastActionButton>
                   )}
 
@@ -715,6 +749,7 @@ export function ExamKeyboardProvider({
                 ariaPressed={numbers}
                 onAction={() => {
                   setNumbers((v) => !v);
+                  setSymbolPage(0);
                   setMenu(null);
                 }}
               >

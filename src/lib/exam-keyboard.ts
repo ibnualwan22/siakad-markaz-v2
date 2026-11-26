@@ -14,11 +14,40 @@ export const LATIN_ROWS = [
   Array.from("zxcvbnm"),
 ];
 
-export const NUMBER_ROWS = [
-  Array.from("1234567890"),
-  ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"],
-  ["؟", "!", "،", ".", "؛", ":", "-", "(", ")"],
+// Halaman simbol & angka Arab (terpisah dari angka Indonesia) — halaman 1/2 & 2/2 ala Gboard
+export const ARABIC_SYMBOL_PAGES: string[][][] = [
+  // Halaman 1/2: Angka Arab + tanda baca utama
+  [
+    ["١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩", "٠"],
+    ["؛", ":", "!", "؟", "-", "_", "+", "(", ")", "/"],
+    ['"', "'", "«", "»", "،", ".", "*"],
+  ],
+  // Halaman 2/2: Tanda baca & simbol tambahan lazim di keyboard Arab
+  [
+    ["٪", "٫", "٬", "~", "^", "=", "{", "}", "[", "]"],
+    ["<", ">", "\\", "|", "#", "@", "&", "$", "×", "÷"],
+    ["﴿", "﴾", "…", "—", "–", "•", "°"],
+  ],
 ];
+
+// Halaman simbol & angka Indonesia (terpisah dari angka Arab) — halaman 1/2 & 2/2 ala Gboard
+export const LATIN_SYMBOL_PAGES: string[][][] = [
+  // Halaman 1/2: Angka Latin + tanda baca utama
+  [
+    Array.from("1234567890"),
+    ["@", "#", "$", "_", "&", "-", "+", "(", ")", "/"],
+    ["*", '"', "'", ":", ";", "!", "?"],
+  ],
+  // Halaman 2/2: Tanda baca & simbol tambahan lazim di Gboard
+  [
+    ["~", "`", "|", "%", "^", "=", "{", "}", "[", "]"],
+    ["<", ">", "\\", "°", "×", "÷", "±", "≠", "≤", "≥"],
+    ["«", "»", "…", "—", "–", "•", "§"],
+  ],
+];
+
+// Kompatibilitas bila ada impor lama
+export const NUMBER_ROWS = LATIN_SYMBOL_PAGES[0];
 
 export const HARAKAT = ["َ", "ُ", "ِ", "ّ", "ْ"];
 
@@ -36,10 +65,10 @@ export const KEY_VARIANTS: Record<string, string[]> = {
   "ِ": ["ِ", "ٍ"],
   "ّ": ["ّ", "َّ", "ُّ", "ِّ", "ًّ", "ٌّ", "ٍّ"],
   "ْ": ["ْ", "ّ"],
-  ".": [".", ",", "،", "؛", ":", "؟", "?", "!"],
+  ".": [".", ",", "،", "؛", ":", "؟", "?", "!", "…"],
   ",": [",", "،", ";", ":", "-", "/"],
   "،": ["،", ",", "؛", ":", "-", "/"],
-  "؟": ["؟", "?", "!", ".", "،", "؛"],
+  "؟": ["؟", "?", "!", ".", "،", "؛", "…"],
 };
 
 export const MARK_NAMES: Record<string, string> = {

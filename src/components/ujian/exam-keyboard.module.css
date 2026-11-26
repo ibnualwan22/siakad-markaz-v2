@@ -1,502 +1,537 @@
 /* Keyboard ujian bergaya Gboard (Google Keyboard) — responsif hingga iPhone 320px */
 .keyboard {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  z-index: 150;
-  width: 100%;
-  max-width: 720px;
-  box-sizing: border-box;
-  padding: 4px 3px max(6px, env(safe-area-inset-bottom));
-  background: #e9eef5;
-  border-top: 1px solid #cbd5e1;
-  border-radius: 14px 14px 0 0;
-  box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.14);
-  color: #17233a;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    z-index: 150;
+    width: 100%;
+    max-width: 720px;
+    box-sizing: border-box;
+    padding: 4px 3px max(6px, env(safe-area-inset-bottom));
+    background: #e9eef5;
+    border-top: 1px solid #cbd5e1;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.14);
+    color: #17233a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .keyboard button {
-  font: inherit;
-  cursor: pointer;
-  border: 0;
-  outline-offset: 2px;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: none;
+    font: inherit;
+    cursor: pointer;
+    border: 0;
+    outline-offset: 2px;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
 }
 
 .keyboard button:focus-visible {
-  outline: 2px solid #2563eb;
+    outline: 2px solid #2563eb;
 }
 
 /* Strip utilitas atas ala Gboard (ringkas 1 baris agar ruang soal tetap lega) */
 .toolbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 2px 5px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 2px 5px;
 }
 
 .langGroup {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
 }
 
 .toolBtn {
-  height: 30px;
-  min-width: 34px;
-  padding: 0 9px;
-  border-radius: 9999px;
-  background: #d8e1ee;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 80ms ease;
+    height: 30px;
+    min-width: 34px;
+    padding: 0 9px;
+    border-radius: 9999px;
+    background: #d8e1ee;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 80ms ease;
 }
 
 .toolBtn:active {
-  background: #bfdbfe;
+    background: #bfdbfe;
 }
 
 .toolBtn[aria-pressed="true"] {
-  background: #2563eb;
-  color: #ffffff;
+    background: #2563eb;
+    color: #ffffff;
 }
 
 .hint {
-  display: none;
-  margin-left: 6px;
-  font-size: 10px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+    display: none;
+    margin-left: 6px;
+    font-size: 10px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .toolbarRight {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 4px;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .iconToolBtn {
-  height: 30px;
-  width: 34px;
-  border-radius: 9999px;
-  background: #d8e1ee;
-  color: #334155;
-  font-size: 15px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    height: 30px;
+    width: 34px;
+    border-radius: 9999px;
+    background: #d8e1ee;
+    color: #334155;
+    font-size: 15px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .iconToolBtn:active {
-  background: #bfdbfe;
+    background: #bfdbfe;
 }
 
 .closeBtn {
-  background: transparent;
-  color: #475569;
-  font-size: 18px;
+    background: transparent;
+    color: #475569;
+    font-size: 18px;
 }
 
 /* Baris harakat di atas huruf Arab */
 .harakat {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-  margin-bottom: 6px;
-  padding-inline: 1px;
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    margin-bottom: 6px;
+    padding-inline: 1px;
 }
 
 .harakat .key {
-  background: #dbe6f4;
-  height: 33px;
-  min-height: 33px;
-  max-width: none;
-  font-size: clamp(19px, 5.2vw, 23px);
-  border-radius: 7px;
+    background: #dbe6f4;
+    height: 33px;
+    min-height: 33px;
+    max-width: none;
+    font-size: clamp(19px, 5.2vw, 23px);
+    border-radius: 7px;
 }
 
 /* Baris tombol huruf — jarak vertikal Gboard (7px), jarak horizontal rapat (3px-4px) */
 .row {
-  display: flex;
-  gap: 3px;
-  justify-content: center;
-  margin-bottom: 7px;
-  width: 100%;
-  box-sizing: border-box;
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+    margin-bottom: 7px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Baris kedua QWERTY (a..l) menjorok 0.5 tombol kiri-kanan persis Gboard */
 .latinRow2 {
-  padding-inline: 5%;
+    padding-inline: 5%;
 }
 
-/* Baris tombol huruf standar Gboard */
+/* Baris tombol huruf standar Gboard — bold agar tegas & mudah terbaca */
 .key,
 .actionKey {
-  position: relative;
-  flex: 1 1 0%;
-  min-width: 0;
-  height: 43px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: #ffffff;
-  border-radius: 6px;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.24);
-  font-size: clamp(18px, 5vw, 22px);
-  line-height: 1;
-  color: #17233a;
-  touch-action: none;
+    position: relative;
+    flex: 1 1 0%;
+    min-width: 0;
+    height: 43px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.24);
+    font-size: clamp(18px, 5vw, 22px);
+    font-weight: 700;
+    line-height: 1;
+    color: #0f172a;
+    touch-action: none;
 }
 
 .arabicRow .key {
-  font-size: clamp(17px, 4.7vw, 22px);
+    font-size: clamp(17px, 4.7vw, 22px);
+    font-weight: 700;
 }
 
 .key small {
-  position: absolute;
-  right: 2px;
-  top: 1px;
-  font-size: 9px;
-  color: #7a8da5;
-  line-height: 10px;
-  pointer-events: none;
+    position: absolute;
+    right: 2px;
+    top: 1px;
+    font-size: 9px;
+    font-weight: 500;
+    color: #7a8da5;
+    line-height: 10px;
+    pointer-events: none;
 }
 
 .key:active {
-  background: #dbeafe;
+    background: #dbeafe;
 }
 
 /* Tombol aksi (Shift, Backspace) di baris ke-3 */
 .actionKey {
-  background: #cedaeb;
-  color: #1e3a5f;
-  font-size: 18px;
+    background: #cedaeb;
+    color: #1e3a5f;
+    font-size: 18px;
 }
 
 .actionKey:active {
-  background: #b6cbe6;
+    background: #b6cbe6;
 }
 
 .actionKey[aria-pressed="true"] {
-  background: #2563eb;
-  color: #ffffff;
+    background: #2563eb;
+    color: #ffffff;
 }
 
 .shiftKey {
-  flex: 1.45 1 0%;
+    flex: 1.45 1 0%;
+}
+
+.pageToggleKey {
+    flex: 1.45 1 0%;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .deleteKeyLatin {
-  flex: 1.45 1 0%;
+    flex: 1.45 1 0%;
 }
 
 .deleteKeyArabic {
-  flex: 1.35 1 0%;
+    flex: 1.35 1 0%;
 }
 
 /* Baris bawah ala Gboard: [?123] [,] [🌐] [   Bahasa   ] [.] [↵] */
 .bottom {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 43px;
-  width: 100%;
-  box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 43px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .bottom .key {
-  flex: 1 1 0%;
-  height: 43px;
-  background: #dbe4f0;
-  font-size: clamp(17px, 4.6vw, 20px);
+    flex: 1 1 0%;
+    height: 43px;
+    background: #dbe4f0;
+    font-size: clamp(17px, 4.6vw, 20px);
 }
 
 .pillKey {
-  flex: 1.45 1 0%;
-  min-width: 0;
-  height: 43px;
-  border-radius: 9999px;
-  background: #cedaeb;
-  color: #1e3a5f;
-  font-size: 13px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.2);
+    flex: 1.45 1 0%;
+    min-width: 0;
+    height: 43px;
+    border-radius: 9999px;
+    background: #cedaeb;
+    color: #1e3a5f;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.2);
 }
 
 .pillKey:active {
-  background: #b6cbe6;
+    background: #b6cbe6;
 }
 
 .globeKey {
-  flex: 1 1 0%;
-  min-width: 0;
-  height: 43px;
-  border-radius: 8px;
-  background: #dbe4f0;
-  color: #1e3a5f;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.2);
+    flex: 1 1 0%;
+    min-width: 0;
+    height: 43px;
+    border-radius: 8px;
+    background: #dbe4f0;
+    color: #1e3a5f;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.2);
 }
 
 .globeKey:active {
-  background: #bfdbfe;
+    background: #bfdbfe;
 }
 
 .space {
-  flex: 4.2 1 0%;
-  min-width: 0;
-  height: 43px;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.24);
+    flex: 4.2 1 0%;
+    min-width: 0;
+    height: 43px;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.24);
 }
 
 .space:active {
-  background: #dbeafe;
+    background: #dbeafe;
 }
 
 .enter {
-  flex: 1.45 1 0%;
-  min-width: 0;
-  height: 43px;
-  border-radius: 9999px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 19px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.35);
+    flex: 1.45 1 0%;
+    min-width: 0;
+    height: 43px;
+    border-radius: 9999px;
+    background: #2563eb;
+    color: #ffffff;
+    font-size: 19px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.35);
 }
 
 .enter:active {
-  background: #1d4ed8;
+    background: #1d4ed8;
 }
 
 /* Popup variasi huruf (tekan lama 450ms) */
 .variants {
-  position: absolute;
-  z-index: 5;
-  display: flex;
-  gap: 3px;
-  padding: 5px;
-  max-width: calc(100% - 12px);
-  box-sizing: border-box;
-  background: #1e40af;
-  border-radius: 10px;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.32);
-  touch-action: none;
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    gap: 3px;
+    padding: 5px;
+    max-width: calc(100% - 12px);
+    box-sizing: border-box;
+    background: #1e40af;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.32);
+    touch-action: none;
 }
 
 .variants button {
-  width: 40px;
-  min-width: 30px;
-  flex-shrink: 1;
-  height: 44px;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #17233a;
-  font-size: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+    width: 40px;
+    min-width: 30px;
+    flex-shrink: 1;
+    height: 44px;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .variants button:hover,
 .variants button:active {
-  background: #bfdbfe;
+    background: #bfdbfe;
 }
 
 /* Layar agak lebar (>= 420px / tablet / desktop): celah sedikit lebih lega */
 @media (min-width: 420px) {
-  .keyboard {
-    padding: 6px 6px max(8px, env(safe-area-inset-bottom));
-  }
-  .row {
-    gap: 5px;
-    margin-bottom: 8px;
-  }
-  .harakat {
-    gap: 6px;
-  }
-  .bottom {
-    gap: 5px;
-  }
-  .hint {
-    display: inline;
-  }
+    .keyboard {
+        padding: 6px 6px max(8px, env(safe-area-inset-bottom));
+    }
+
+    .row {
+        gap: 5px;
+        margin-bottom: 8px;
+    }
+
+    .harakat {
+        gap: 6px;
+    }
+
+    .bottom {
+        gap: 5px;
+    }
+
+    .hint {
+        display: inline;
+    }
 }
 
 /* Layar iPhone sangat sempit (<= 360px, mis. iPhone SE 1 / Display Zoom) */
 @media (max-width: 360px) {
-  .keyboard {
-    padding: 4px 2px max(5px, env(safe-area-inset-bottom));
-  }
-  .row {
-    gap: 2px;
-    margin-bottom: 6px;
-  }
-  .arabicRow .key {
-    font-size: 16px;
-  }
-  .key,
-  .actionKey,
-  .bottom,
-  .bottom .key,
-  .pillKey,
-  .globeKey,
-  .space,
-  .enter {
-    height: 39px;
-  }
-  .harakat .key {
-    height: 30px;
-    min-height: 30px;
-    font-size: 18px;
-  }
-  .toolBtn {
-    padding: 0 7px;
-    font-size: 11px;
-    height: 28px;
-  }
-  .iconToolBtn {
-    width: 30px;
-    height: 28px;
-  }
+    .keyboard {
+        padding: 4px 2px max(5px, env(safe-area-inset-bottom));
+    }
+
+    .row {
+        gap: 2px;
+        margin-bottom: 6px;
+    }
+
+    .arabicRow .key {
+        font-size: 16px;
+    }
+
+    .key,
+    .actionKey,
+    .bottom,
+    .bottom .key,
+    .pillKey,
+    .globeKey,
+    .space,
+    .enter {
+        height: 39px;
+    }
+
+    .harakat .key {
+        height: 30px;
+        min-height: 30px;
+        font-size: 18px;
+    }
+
+    .toolBtn {
+        padding: 0 7px;
+        font-size: 11px;
+        height: 28px;
+    }
+
+    .iconToolBtn {
+        width: 30px;
+        height: 28px;
+    }
 }
 
 /* Mode kompak untuk layar pendek portrait iPhone SE / mini (<= 700px) */
 @media (max-height: 700px) and (min-height: 501px) {
-  .toolbar {
-    padding-bottom: 4px;
-  }
-  .toolBtn,
-  .iconToolBtn {
-    height: 28px;
-  }
-  .harakat {
-    margin-bottom: 5px;
-  }
-  .harakat .key {
-    height: 29px;
-    min-height: 29px;
-  }
-  .row {
-    margin-bottom: 5px;
-  }
-  .key,
-  .actionKey,
-  .bottom,
-  .bottom .key,
-  .pillKey,
-  .globeKey,
-  .space,
-  .enter {
-    height: 38px;
-  }
+    .toolbar {
+        padding-bottom: 4px;
+    }
+
+    .toolBtn,
+    .iconToolBtn {
+        height: 28px;
+    }
+
+    .harakat {
+        margin-bottom: 5px;
+    }
+
+    .harakat .key {
+        height: 29px;
+        min-height: 29px;
+    }
+
+    .row {
+        margin-bottom: 5px;
+    }
+
+    .key,
+    .actionKey,
+    .bottom,
+    .bottom .key,
+    .pillKey,
+    .globeKey,
+    .space,
+    .enter {
+        height: 38px;
+    }
 }
 
 /* Mode sangat kompak untuk landscape HP (<= 500px tinggi) */
 @media (max-height: 500px) {
-  .keyboard {
-    max-width: 640px;
-    padding-top: 3px;
-  }
-  .toolbar {
-    padding-bottom: 3px;
-  }
-  .toolBtn,
-  .iconToolBtn {
-    height: 24px;
-    font-size: 11px;
-  }
-  .harakat {
-    margin-bottom: 3px;
-  }
-  .harakat .key {
-    height: 25px;
-    min-height: 25px;
-    font-size: 17px;
-  }
-  .row {
-    margin-bottom: 4px;
-  }
-  .key,
-  .actionKey,
-  .bottom,
-  .bottom .key,
-  .pillKey,
-  .globeKey,
-  .space,
-  .enter {
-    height: 31px;
-  }
-  .key {
-    font-size: 17px;
-  }
-  .variants button {
-    height: 36px;
-  }
+    .keyboard {
+        max-width: 640px;
+        padding-top: 3px;
+    }
+
+    .toolbar {
+        padding-bottom: 3px;
+    }
+
+    .toolBtn,
+    .iconToolBtn {
+        height: 24px;
+        font-size: 11px;
+    }
+
+    .harakat {
+        margin-bottom: 3px;
+    }
+
+    .harakat .key {
+        height: 25px;
+        min-height: 25px;
+        font-size: 17px;
+    }
+
+    .row {
+        margin-bottom: 4px;
+    }
+
+    .key,
+    .actionKey,
+    .bottom,
+    .bottom .key,
+    .pillKey,
+    .globeKey,
+    .space,
+    .enter {
+        height: 31px;
+    }
+
+    .key {
+        font-size: 17px;
+    }
+
+    .variants button {
+        height: 36px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .keyboard * {
-    scroll-behavior: auto;
-  }
+    .keyboard * {
+        scroll-behavior: auto;
+    }
 }
 
 .fakeCaret {
-  display: inline-block;
-  width: 2px;
-  height: 1.15em;
-  vertical-align: -0.18em;
-  background: currentColor;
-  animation: caretBlink 1.1s step-end infinite;
+    display: inline-block;
+    width: 2px;
+    height: 1.15em;
+    vertical-align: -0.18em;
+    background: currentColor;
+    animation: caretBlink 1.1s step-end infinite;
 }
 
 @keyframes caretBlink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0;
-  }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fakeCaret {
-    animation: none;
-  }
+    .fakeCaret {
+        animation: none;
+    }
 }

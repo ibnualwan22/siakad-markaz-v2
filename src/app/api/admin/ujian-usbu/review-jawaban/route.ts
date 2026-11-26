@@ -42,7 +42,9 @@ export async function GET(req: Request) {
         soal: {
           include: {
             opsiList: true,
-            mapel: true
+            mapel: true,
+            jenisSoal: { select: { instruksi: true } },
+            grupInduk: { select: { id: true, pertanyaan: true, gambarUrl: true } },
           }
         },
         paket: true
@@ -113,6 +115,10 @@ export async function GET(req: Request) {
         mapelNama: soal.mapel.nama_indo || soal.mapel.nama,
         bobot: spRef?.bobotSnapshot ?? soal.bobot,
         pertanyaan: spRef?.pertanyaanSnapshot ?? soal.pertanyaan,
+        gambarUrl: soal.gambarUrl || null,
+        perintah: soal.jenisSoal?.instruksi || soal.perintah || null,
+        grupSoalId: soal.grupSoalId || null,
+        grupInduk: soal.grupInduk || null,
         kunciJawaban: spRef?.kunciJawabanSnapshot ?? soal.kunciJawaban,
         opsiList: soal.opsiList,
         dataTambahan: soal.dataTambahan ? (typeof soal.dataTambahan === 'string' ? JSON.parse(soal.dataTambahan) : soal.dataTambahan) : null,

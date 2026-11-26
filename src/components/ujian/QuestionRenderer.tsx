@@ -897,7 +897,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
             <>
               <p className="text-sm text-gray-500 mb-2 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
               <p className="text-xs text-amber-600 mb-3 self-start flex items-center gap-1 font-semibold md:hidden">👆 Geser tabel ke kiri/kanan ↔ jika kolom melebar. Kolom otomatis menyesuaikan panjang jawaban.</p>
-              <div className="w-full overflow-x-auto pb-4 rounded-xl border border-amber-200 shadow-sm bg-white" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
+              <div data-horizontal-scroll="true" className="w-full overflow-x-auto pb-4 rounded-xl border border-amber-200 shadow-sm bg-white" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
                 <table className="w-max min-w-full text-center border-collapse" dir="rtl">
                   <thead className="bg-amber-100/90 text-amber-900 border-b border-amber-200">
                     <tr>

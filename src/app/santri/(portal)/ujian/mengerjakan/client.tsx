@@ -20,21 +20,35 @@ import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 import QuestionRenderer from "@/components/ujian/QuestionRenderer";
 
-export default function ClientMengerjakanUjian() {
+export type SimulationExamData = {
+  sesiId: string;
+  sisaWaktuDetik: number;
+  durasiMenit: number;
+  soal: any[];
+};
+
+export default function ClientMengerjakanUjian({
+  simulationData,
+  simulationLabel,
+}: {
+  simulationData?: SimulationExamData;
+  simulationLabel?: string;
+} = {}) {
+  const isSimulation = Boolean(simulationData);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sesiId = searchParams?.get("s");
+  const sesiId = simulationData?.sesiId ?? searchParams?.get("s");
 
-  const [examData, setExamData] = useState<any>(null);
-  const examDataRef = useRef<any>(null); // Ref utk avoid stale closure di handleAnswerSubmit
+  const [examData, setExamData] = useState<any>(simulationData ?? null);
+  const examDataRef = useRef<any>(simulationData ?? null); // Ref utk avoid stale closure di handleAnswerSubmit
   const setExamDataSynced = useCallback((data: any) => {
     examDataRef.current = data;
     setExamData(data);
   }, []);
 
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [hasStarted, setHasStarted] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number>(simulationData?.sisaWaktuDetik ?? 0);
+  const [hasStarted, setHasStarted] = useState(isSimulation);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [secureMode, setSecureMode] = useState(false);
@@ -53,6 +67,7 @@ export default function ClientMengerjakanUjian() {
   const showSummaryRef = useRef(false);
 
   useEffect(() => {
+    if (isSimulation) return;
     if (!sesiId) return router.replace("/santri/ujian");
 
     const initializeData = async () => {
@@ -122,11 +137,12 @@ export default function ClientMengerjakanUjian() {
   // Grace period 2.5s before strict anti-cheat activates 
   // (to prevent 'blur'/'resize' triggering immediately on fullscreen animation)
   useEffect(() => {
+    if (isSimulation) return;
     if (hasStarted) {
       const timer = setTimeout(() => setSecureMode(true), 2500);
       return () => clearTimeout(timer);
     }
-  }, [hasStarted]);
+  }, [hasStarted, isSimulation]);
 
   // Sync ref so async anti-cheat callbacks can check current summary state
   useEffect(() => {
@@ -165,6 +181,33 @@ export default function ClientMengerjakanUjian() {
         }
       };
     }
+  }, [hasStarted]);
+
+  // Kunci pinch-to-zoom dua jari di iOS Safari (iOS 10+ mengabaikan user-scalable=no untuk pinch).
+  // Berlaku sama persis di ujian usbu'i santri maupun halaman /simulasi-ujian.
+  useEffect(() => {
+    if (!hasStarted || hasSubmitted.current) return;
+
+    const preventGesture = (e: Event) => {
+      e.preventDefault();
+    };
+    const preventMultiTouchZoom = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("gesturestart", preventGesture, { passive: false });
+    document.addEventListener("gesturechange", preventGesture, { passive: false });
+    document.addEventListener("gestureend", preventGesture, { passive: false });
+    document.addEventListener("touchmove", preventMultiTouchZoom, { passive: false });
+
+    return () => {
+      document.removeEventListener("gesturestart", preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+      document.removeEventListener("gestureend", preventGesture);
+      document.removeEventListener("touchmove", preventMultiTouchZoom);
+    };
   }, [hasStarted]);
 
   // Handle Fullscreen & Anti-Cheat
@@ -271,9 +314,13 @@ export default function ClientMengerjakanUjian() {
 
       wasKeyboardOpen = kbOpen;
 
-      // Keyboard-Aware Auto-Scroll
+      // Keyboard-Aware Auto-Scroll (lewati jika memakai ExamKeyboard halaman agar tidak bentrok di iOS Safari)
       const active = document.activeElement as HTMLElement;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      if (
+        active &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') &&
+        active.dataset.examInput !== 'true'
+      ) {
         setTimeout(() => {
           active.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 150);
@@ -391,16 +438,18 @@ export default function ClientMengerjakanUjian() {
 
   // Auto-submit saat waktu habis — terpisah dari timer agar tidak terjebak closure basi
   useEffect(() => {
+    if (isSimulation) return;
     if (hasStarted && timeLeft <= 0 && !hasSubmitted.current && examData) {
       handleAutoSubmit("TIME_UP");
     }
-  }, [timeLeft, hasStarted, examData]);
+  }, [timeLeft, hasStarted, examData, isSimulation]);
 
   // Polling Real-Time (15 detik):
   // 1. Deteksi tutup paksa oleh admin → halaman langsung dialihkan ke hasil
   // 2. Sinkronisasi tambahan waktu dari pengawas → timer HP otomatis bertambah
   // 3. Pengaman waktu habis versi server → auto-submit walau timer HP belum nol
   useEffect(() => {
+    if (isSimulation) return;
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
     const pullStatus = async () => {
@@ -603,6 +652,7 @@ export default function ClientMengerjakanUjian() {
 
   // Periodic sync setiap 45 detik + sekali 3 detik setelah mount (untuk kasus refresh)
   useEffect(() => {
+    if (isSimulation) return;
     if (!hasStarted || hasSubmitted.current || !sesiId) return;
 
     const doSync = async () => {
@@ -706,6 +756,11 @@ export default function ClientMengerjakanUjian() {
   };
 
   const handleManualSubmit = async () => {
+    if (isSimulation) {
+      toast.success("Mode simulasi: pengujian selesai (tidak menyimpan ke database).");
+      setShowSummary(false);
+      return;
+    }
     if (hasSubmitted.current) return;
     hasSubmitted.current = true;
     setIsSubmitting(true);
@@ -762,6 +817,11 @@ export default function ClientMengerjakanUjian() {
 
     const newExamData = { ...latestExamData, soal: newSoalArr };
     setExamDataSynced(newExamData);
+    if (isSimulation) {
+      savedVersions.current.set(soalId, newVersion);
+      return;
+    }
+
     localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
     persistVersions();
 
@@ -772,7 +832,7 @@ export default function ClientMengerjakanUjian() {
     // Persist every key locally immediately; coalesce network writes while typing.
     if (keyboardSaveTimer.current) clearTimeout(keyboardSaveTimer.current);
     keyboardSaveTimer.current = setTimeout(() => { keyboardSaveTimer.current = null; void processQueue(); }, 400);
-  }, [sesiId, persistVersions, persistQueue, processQueue]);
+  }, [isSimulation, sesiId, persistVersions, persistQueue, processQueue]);
 
   const toggleRagu = useCallback(() => {
     if (hasSubmitted.current) return;
@@ -786,6 +846,7 @@ export default function ClientMengerjakanUjian() {
     const newSoalArr = latestExamData.soal.map((s: any, i: number) => i === currentIdx ? { ...s, rpiId: newRagu } : s);
     const newExamData = { ...latestExamData, soal: newSoalArr };
     setExamDataSynced(newExamData);
+    if (isSimulation) return;
     localStorage.setItem(`exam_${sesiId}`, JSON.stringify(newExamData));
 
     // Naikkan versi dan kirim melalui robust save
@@ -802,7 +863,7 @@ export default function ClientMengerjakanUjian() {
     setUnsavedCount(pendingQueue.current.size);
     persistQueue();
     processQueue();
-  }, [currentIdx, sesiId, persistVersions, persistQueue, processQueue]);
+  }, [isSimulation, currentIdx, sesiId, persistVersions, persistQueue, processQueue]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -877,14 +938,14 @@ export default function ClientMengerjakanUjian() {
 
   if (showSummary) {
     return (
-      <div className="fixed inset-0 bg-gray-50 flex flex-col font-sans z-50 overflow-hidden">
+      <div className="fixed inset-0 h-[100dvh] touch-manipulation bg-gray-50 flex flex-col font-sans z-50 overflow-hidden">
         <style dangerouslySetInnerHTML={{
           __html: `
           aside { display: none !important; }
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
           .santri-mobile-menu-btn { display: none !important; }
-          body { overflow: hidden !important; overscroll-behavior: none; }
+          html, body { overflow: hidden !important; overscroll-behavior: none; touch-action: manipulation; }
         `}} />
         <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center">
           <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
@@ -1011,9 +1072,9 @@ export default function ClientMengerjakanUjian() {
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 overflow-hidden z-50">
+    <div className="fixed inset-0 h-[100dvh] touch-manipulation bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 overflow-hidden z-50">
 
-      {/* Hide Global Navigasi Saat CBT */}
+      {/* Hide Global Navigasi Saat CBT + kunci overflow & cegah double-tap zoom iOS */}
       {hasStarted && !hasSubmitted.current && !showSummary && (
         <style dangerouslySetInnerHTML={{
           __html: `
@@ -1021,15 +1082,25 @@ export default function ClientMengerjakanUjian() {
           .app-footer { display: none !important; }
           .santri-bottom-nav, nav.fixed.bottom-0 { display: none !important; }
           .santri-mobile-menu-btn { display: none !important; }
-          body { overscroll-behavior: none; }
+          html, body { overflow: hidden !important; overscroll-behavior: none; touch-action: manipulation; }
         `}} />
       )}
 
       {/* LEFT: Soal Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden px-0 bg-white">
 
+        {/* Banner Simulasi (hanya tampil di /simulasi-ujian) */}
+        {isSimulation && (
+          <div className="bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-[11px] font-bold text-amber-800 flex items-center justify-between gap-2 shrink-0">
+            <span className="truncate">🧪 {simulationLabel || "Mode Simulasi Ujian (Tanpa Token & Tidak Tersimpan)"}</span>
+            <span className="shrink-0 text-[10px] font-semibold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">
+              {examData.soal.length} Soal
+            </span>
+          </div>
+        )}
+
         {/* Header - Timer */}
-        <div className="bg-white px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
+        <div className="bg-white px-3 sm:px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
           <div className="flex min-w-0 items-center gap-2 md:gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
               {currentTypeIdx}
@@ -1190,7 +1261,7 @@ export default function ClientMengerjakanUjian() {
             );
           })()}
 
-          <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 mb-6">
+          <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100 mb-5 sm:mb-6">
             {soal.gambarUrl && (
               <div className="mb-6 flex justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

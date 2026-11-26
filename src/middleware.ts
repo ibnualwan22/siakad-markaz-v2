@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { decrypt, encrypt, isMaxAgeExceeded, shouldRefreshToken, SESSION_DURATION_HOURS } from '@/lib/auth';
 
-const publicRoutes = ['/login', '/api/auth/login', '/tauzi/login'];
+const publicRoutes = ['/login', '/api/auth/login', '/tauzi/login', '/simulasi-ujian'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

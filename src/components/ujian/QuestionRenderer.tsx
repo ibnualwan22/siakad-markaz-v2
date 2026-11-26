@@ -72,8 +72,8 @@ function SortableItem({ id, item, isHorizontal, isMatch, index }: { id: string, 
       ref={setNodeRef}
       style={style}
       {...(isHorizontal ? { ...attributes, ...listeners } : {})}
-      className={`bg-white border-2 border-gray-200 rounded-xl ${isHorizontal ? 'cursor-grab active:cursor-grabbing' : ''} shadow-sm transition-colors z-10 relative flex items-center gap-3
-        ${isHorizontal ? 'p-1 justify-center font-serif text-3xl w-14 h-14 md:w-16 md:h-16 shrink-0 text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100' : 'p-3 md:p-4 w-full text-left hover:border-blue-300'}`
+      className={`bg-white border-2 border-gray-200 rounded-xl ${isHorizontal ? 'cursor-grab active:cursor-grabbing' : ''} shadow-sm transition-colors z-10 relative flex items-center gap-2 sm:gap-3
+        ${isHorizontal ? 'p-1 justify-center font-serif text-2xl sm:text-3xl w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 shrink-0 text-amber-900 border-amber-200 bg-amber-50 hover:bg-amber-100' : 'p-2.5 sm:p-3 md:p-4 w-full text-left hover:border-blue-300'}`
       }
     >
       {!isHorizontal && !isMatch && index !== undefined && (
@@ -169,19 +169,19 @@ function OrderingComponent({
                  const color = matchColors[index % matchColors.length];
                  return (
                    <div 
-                     className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex items-center shadow-sm text-gray-700 relative z-10 min-w-0" 
+                     className="flex-1 bg-white border border-gray-200 rounded-xl p-2.5 sm:p-4 flex items-center shadow-sm text-gray-700 relative z-10 min-w-0" 
                      style={{ borderRightWidth: '4px', borderRightColor: color }}
                    >
-                      <SoalText html={fixedLefts[index]} className="text-sm md:text-base font-medium prose break-words overflow-auto" />
+                      <SoalText html={fixedLefts[index]} className="text-sm md:text-base font-medium prose break-words overflow-auto max-w-full" />
                    </div>
                  );
                })()}
                {fixedLefts && (() => {
                  const color = matchColors[index % matchColors.length];
                  return (
-                   <div className="w-8 md:w-16 shrink-0 relative flex flex-col justify-center">
+                   <div className="w-5 sm:w-8 md:w-16 shrink-0 relative flex flex-col justify-center">
                      <div className="h-[2px] w-[calc(100%+4px)] absolute top-1/2 -left-[2px] -translate-y-1/2 z-0" style={{ backgroundColor: color, opacity: 0.35 }}></div>
-                     <div className="w-3 h-3 md:w-4 md:h-4 rounded-full mx-auto relative z-10 shadow-sm border-2 border-white" style={{ backgroundColor: color }}></div>
+                     <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 rounded-full mx-auto relative z-10 shadow-sm border-2 border-white" style={{ backgroundColor: color }}></div>
                    </div>
                  );
                })()}
@@ -240,7 +240,7 @@ const StabiloSyntaxRenderer = ({ soaldId, dataTambahan, jawabanData, onAnswer }:
       <p className="text-sm text-gray-500 mb-6 flex flex-col items-center gap-1 font-medium bg-fuchsia-50/50 p-3 rounded-lg border border-fuchsia-100"><span className="bg-fuchsia-100 text-fuchsia-600 px-2 py-0.5 rounded font-bold text-xs shrink-0 tracking-wider">STABILO</span> Pilih warna kategori, lalu sentuh wacana untuk menandainya.</p>
 
       {/* Teks Wacana */}
-      <div className="w-full max-w-3xl flex flex-wrap justify-center gap-2 md:gap-3 p-4 md:p-8 bg-white border border-gray-200 rounded-3xl shadow-sm leading-[3rem]" dir="rtl">
+      <div className="w-full max-w-3xl flex flex-wrap justify-center gap-2 md:gap-3 p-3 sm:p-4 md:p-8 bg-white border border-gray-200 rounded-2xl sm:rounded-3xl shadow-sm leading-[2.6rem] sm:leading-[3rem]" dir="rtl">
         {words.map((w: any, index: number) => {
            const assignedCat = assignments[index];
            const cat = categories.find(c => c.name === assignedCat);
@@ -249,7 +249,7 @@ const StabiloSyntaxRenderer = ({ soaldId, dataTambahan, jawabanData, onAnswer }:
              <button
                key={index}
                onClick={() => handleWordTap(index)}
-               className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-serif text-2xl md:text-3xl transition-all duration-300 outline-none transform active:scale-95 shadow-sm filter hover:brightness-110
+               className={`px-2.5 py-1 sm:px-3 sm:py-1.5 md:px-4 md:py-2 rounded-xl font-serif text-xl sm:text-2xl md:text-3xl transition-all duration-300 outline-none transform active:scale-95 shadow-sm filter hover:brightness-110
                  ${isColorized 
                     ? 'font-bold outline-none border-b-4' 
                     : 'bg-gray-50 border-gray-200 hover:bg-gray-100 text-gray-800'
@@ -343,10 +343,10 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
          Pilih salah satu item di pilar <strong>Kiri</strong>, lalu sentuh dan hubungkan dengan satu atau beberapa item di pilar <strong>Kanan</strong> yang sesuai!
       </p>
 
-      <div className="w-full flex md:flex-row gap-6 md:gap-16 justify-center max-w-4xl px-2">
+      <div className="w-full flex gap-3 sm:gap-6 md:gap-16 justify-center max-w-4xl px-1 sm:px-2">
          {/* Kolom Kiri */}
-         <div className="flex-1 max-w-[200px] md:max-w-[300px] shrink-0 flex flex-col gap-3">
-            <h4 className="font-bold text-orange-400 text-xs tracking-wider uppercase border-b-2 border-orange-100 pb-2 mb-2 text-right">Pilar Kiri (Asal)</h4>
+         <div className="flex-1 min-w-0 max-w-[200px] md:max-w-[300px] flex flex-col gap-2.5 sm:gap-3">
+            <h4 className="font-bold text-orange-400 text-[11px] sm:text-xs tracking-wider uppercase border-b-2 border-orange-100 pb-2 mb-1 sm:mb-2 text-right">Pilar Kiri (Asal)</h4>
             {leftItems.map((l, i) => {
               const isActive = activeLeft === i;
               const color = getColorStr(i);
@@ -357,8 +357,8 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
                  <button
                    key={i}
                    onClick={() => setActiveLeft(i)}
-                   className={`p-3 md:p-4 rounded-xl text-xl md:text-2xl font-serif text-right shadow-sm border-2 transition-all transform w-full relative outline-none flex items-center justify-end min-h-[4rem]
-                      ${isActive ? 'opacity-100 scale-105 z-10' : 'opacity-80 hover:opacity-100 z-0'}`}
+                   className={`p-2.5 sm:p-3 md:p-4 rounded-xl text-base sm:text-xl md:text-2xl font-serif text-right shadow-sm border-2 transition-all transform w-full relative outline-none flex items-center justify-end min-h-[3.5rem] sm:min-h-[4rem] break-words
+                      ${isActive ? 'opacity-100 scale-[1.03] z-10' : 'opacity-80 hover:opacity-100 z-0'}`}
                    style={{
                      borderColor: isActive || hasConnections ? color : '#e5e7eb',
                      backgroundColor: isActive ? `${color}10` : '#fff',
@@ -366,9 +366,9 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
                      boxShadow: isActive ? `0 4px 12px ${color}30` : undefined,
                    }}
                  >
-                   <span dir="auto">{l}</span>
+                   <span dir="auto" className="break-words max-w-full">{l}</span>
                    {isActive && (
-                      <div className="absolute top-1/2 -translate-y-1/2 -left-8 md:-left-12 w-6 md:w-10 h-1 rounded-full transition-all" style={{ backgroundColor: color }}></div>
+                      <div className="absolute top-1/2 -translate-y-1/2 -left-3.5 sm:-left-8 md:-left-12 w-3.5 sm:w-6 md:w-10 h-1 rounded-full transition-all" style={{ backgroundColor: color }}></div>
                    )}
                  </button>
               );
@@ -376,8 +376,8 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
          </div>
 
          {/* Kolom Kanan */}
-         <div className="flex-1 max-w-[200px] md:max-w-[300px] shrink-0 space-y-3 flex flex-col gap-3">
-            <h4 className="font-bold text-orange-400 text-xs tracking-wider uppercase border-b-2 border-orange-100 pb-2 mb-2 text-left">Pilar Kanan (Tujuan)</h4>
+         <div className="flex-1 min-w-0 max-w-[200px] md:max-w-[300px] flex flex-col gap-2.5 sm:gap-3">
+            <h4 className="font-bold text-orange-400 text-[11px] sm:text-xs tracking-wider uppercase border-b-2 border-orange-100 pb-2 mb-1 sm:mb-2 text-left">Pilar Kanan (Tujuan)</h4>
             {rightItems.map((r, j) => {
               // Only first left connected visualizer
               const connectedLeftIndices = connections.filter(c => c.right.includes(j)).map(c => c.left);
@@ -395,7 +395,7 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
                    key={j}
                    onClick={() => toggleRight(j)}
                    disabled={activeLeft === null && !isConnected}
-                   className={`p-3 md:p-4 rounded-xl text-xl md:text-2xl font-serif shadow-sm border-2 transition-all transform w-full relative outline-none text-right flex items-center justify-end min-h-[4rem]
+                   className={`p-2.5 sm:p-3 md:p-4 rounded-xl text-base sm:text-xl md:text-2xl font-serif shadow-sm border-2 transition-all transform w-full relative outline-none text-right flex items-center justify-end min-h-[3.5rem] sm:min-h-[4rem] break-words
                       ${!isConnected && activeLeft === null ? 'opacity-50 cursor-pointer hover:bg-gray-50' : 'hover:scale-[1.02] active:scale-95 cursor-pointer'}
                       ${belongsToActive ? 'scale-[1.02] !border-4 font-bold z-10' : 'z-0'}`}
                    style={{
@@ -407,7 +407,7 @@ const JaringRelasiRenderer = ({ dataTambahan, jawabanData, onAnswer }: any) => {
                    {activeLeft !== null && isConnected && !belongsToActive && (
                      <div className="absolute inset-0 bg-white/70 rounded-lg pointer-events-none transition-all"></div>
                    )}
-                   <span dir="auto" className="relative z-10">{r}</span>
+                   <span dir="auto" className="relative z-10 break-words max-w-full">{r}</span>
                  </button>
               )
             })}
@@ -435,14 +435,14 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
             return (
               <label 
                 key={opt.id} 
-                className={`flex gap-4 p-4 md:p-5 rounded-2xl cursor-pointer transition-all border-2 group ${isSelected ? 'bg-blue-50 border-blue-500 shadow-sm shadow-blue-100' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
+                className={`flex gap-3 sm:gap-4 p-3 sm:p-4 md:p-5 rounded-2xl cursor-pointer transition-all border-2 group ${isSelected ? 'bg-blue-50 border-blue-500 shadow-sm shadow-blue-100' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
               >
-                <div className="pt-0.5">
+                <div className="pt-0.5 shrink-0">
                   <div className={`w-6 h-6 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center text-xs md:text-sm font-bold transition-colors ${isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-gray-500 group-hover:border-blue-400 group-hover:text-blue-500'}`}>
                     {String.fromCharCode(65 + index)}
                   </div>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0 break-words">
                   <input 
                     type="radio" 
                     name={`opsi-${soal.soalId}`} 
@@ -571,7 +571,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
     return (
       <div className="space-y-4">
          <p className="text-sm text-gray-500 mb-2 font-medium">Tentukan apakah pernyataan di atas Benar atau Salah:</p>
-         <div className="flex gap-4">
+         <div className="flex gap-3 sm:gap-4">
            {opsiList?.map((opt: any) => {
              const isSelected = opsiTerpilih === opt.id;
              // Try to determine if this option represents "Benar" or "Salah"
@@ -595,7 +595,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
              return (
                <label 
                  key={opt.id} 
-                 className={`flex-1 flex flex-col items-center justify-center gap-2 p-6 rounded-3xl cursor-pointer transition-all border-2 shadow-sm active:scale-95 ${isSelected ? activeColor : `bg-white border-gray-200 ${hoverColor}`}`}
+                 className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-2 p-4 sm:p-6 rounded-2xl sm:rounded-3xl cursor-pointer transition-all border-2 shadow-sm active:scale-95 ${isSelected ? activeColor : `bg-white border-gray-200 ${hoverColor}`}`}
                >
                  <input 
                    type="radio" 
@@ -627,14 +627,14 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
           return (
             <label 
               key={opt.id} 
-              className={`flex gap-4 p-4 md:p-5 rounded-2xl cursor-pointer transition-all border-2 group ${isSelected ? 'bg-blue-50 border-blue-500 shadow-sm shadow-blue-100' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
+              className={`flex gap-3 sm:gap-4 p-3 sm:p-4 md:p-5 rounded-2xl cursor-pointer transition-all border-2 group ${isSelected ? 'bg-blue-50 border-blue-500 shadow-sm shadow-blue-100' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50'}`}
             >
-              <div className="pt-0.5">
+              <div className="pt-0.5 shrink-0">
                 <div className={`w-6 h-6 md:w-8 md:h-8 rounded-md border-2 flex items-center justify-center text-xs md:text-sm font-bold transition-colors ${isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 text-gray-500 group-hover:border-blue-400 group-hover:text-blue-500'}`}>
                   {isSelected ? '✓' : ''}
                 </div>
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0 break-words">
                 <input 
                   type="checkbox" 
                   className="hidden" 
@@ -707,18 +707,21 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
     const parts = paragraf.split(/(\{\{\d+\}\})/g);
     
     return (
-      <div className="mt-6 p-6 bg-white border border-gray-200 rounded-2xl shadow-sm text-lg md:text-xl leading-loose" dir="auto">
+      <div className="mt-6 p-4 sm:p-6 bg-white border border-gray-200 rounded-2xl shadow-sm text-base sm:text-lg md:text-xl leading-loose break-words" dir="auto">
         {parts.map((part, i) => {
           const match = part.match(/\{\{(\d+)\}\}/);
           if (match) {
             const idxStr = match[1];
+            const val = answers[idxStr] || "";
+            const dynWidth = Math.max(96, Math.min(240, val.length * 12 + 40));
             return (
               <ExamTextInput
                 key={i}
-                value={answers[idxStr] || ""}
+                value={val}
                 label={`Jawaban rumpang ${idxStr}`}
                 onValueChange={value => onAnswer({ jawabanData: { ...jawabanData, answers: { ...answers, [idxStr]: value } } })}
-                className="mx-2 px-3 py-1 bg-gray-50 border-b-2 border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none transition-colors w-24 md:w-32 text-center text-blue-700 font-bold font-sans"
+                className="mx-1.5 px-3 py-1 bg-gray-50 border-b-2 border-gray-300 focus:border-blue-500 focus:bg-white focus:outline-none transition-colors text-center text-blue-700 font-bold font-sans max-w-full"
+                style={{ width: `${dynWidth}px`, maxWidth: "100%" }}
               />
             );
           }
@@ -783,7 +786,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
         <p className="text-sm text-gray-500 mb-4 flex items-center gap-2"><span className="bg-cyan-100 text-cyan-700 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketuk kata dari kotak bank kata (di bawah) untuk mengisi bagian paragraf yang kosong.</p>
         
         {/* TextBox Area */}
-        <div className="p-6 bg-cyan-50/20 border-2 border-cyan-100 rounded-3xl shadow-inner leading-[3.5rem] md:leading-[4.5rem]" dir="auto">
+        <div className="p-4 sm:p-6 bg-cyan-50/20 border-2 border-cyan-100 rounded-2xl sm:rounded-3xl shadow-inner leading-[2.8rem] sm:leading-[3.5rem] md:leading-[4.5rem] break-words" dir="auto">
           {parts.map((part, i) => {
             const match = part.match(/\{\{(\d+)\}\}/);
             if (match) {
@@ -793,7 +796,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                 <button
                   key={i}
                   onClick={() => handleTapHole(idxStr)}
-                  className={`mx-2 min-w-[5rem] px-4 py-2 font-serif text-xl md:text-2xl rounded-xl transition-all border-b-4 focus:outline-none align-middle
+                  className={`mx-1.5 sm:mx-2 min-w-[4.5rem] sm:min-w-[5rem] px-3 sm:px-4 py-1.5 sm:py-2 font-serif text-lg sm:text-xl md:text-2xl rounded-xl transition-all border-b-4 focus:outline-none align-middle
                     ${isFilled 
                        ? 'bg-cyan-100 border-cyan-400 text-cyan-900 shadow-sm active:scale-95 font-bold' 
                        : 'bg-gray-100 border-gray-300 text-transparent border-dashed cursor-default active:bg-gray-200'}`}
@@ -802,12 +805,12 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                 </button>
               );
             }
-            return <span key={i} className="font-serif text-xl md:text-2xl text-gray-800">{part}</span>;
+            return <span key={i} className="font-serif text-lg sm:text-xl md:text-2xl text-gray-800">{part}</span>;
           })}
         </div>
 
         {/* Word Bank Area */}
-        <div className="mt-8 pt-6 border-t border-gray-100 flex flex-wrap justify-center gap-3" dir="rtl">
+        <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-gray-100 flex flex-wrap justify-center gap-2 sm:gap-3" dir="rtl">
           {(() => {
              const usedAnswers = [...Object.values(answers)];
              return wordBank.map((w, i) => {
@@ -821,7 +824,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                      key={i}
                      disabled={isSelected}
                      onClick={() => handleTapBank(w)}
-                     className={`px-4 py-3 rounded-xl text-xl font-serif transition-colors duration-200 shadow-[0_4px_0_var(--tw-shadow-color)] active:shadow-none active:translate-y-1 font-bold
+                     className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl text-lg sm:text-xl font-serif transition-colors duration-200 shadow-[0_4px_0_var(--tw-shadow-color)] active:shadow-none active:translate-y-1 font-bold
                        ${isSelected 
                           ? 'bg-gray-100 text-transparent border-gray-200 shadow-transparent pointer-events-none' 
                           : 'bg-white text-cyan-900 border-2 border-cyan-200 hover:bg-cyan-50 shadow-cyan-200'
@@ -845,7 +848,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
     return (
       <div className="mt-6">
         <p className="text-sm text-gray-500 mb-4 flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Sentuh / klik pada bagian kata yang mengandung kesalahan tata bahasa (Grammar).</p>
-        <div className="flex flex-wrap gap-2 md:gap-3 p-6 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-inner justify-center" dir="auto">
+        <div className="flex flex-wrap gap-2 md:gap-3 p-4 sm:p-6 bg-blue-50/50 rounded-2xl border border-blue-100 shadow-inner justify-center" dir="auto">
           {segments.map((seg, i) => {
              const isSelected = selectedIndices.includes(i);
              return (
@@ -860,7 +863,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                     }
                     onAnswer({ jawabanData: { ...jawabanData, selectedIndices: nextSelected } });
                  }}
-                 className={`px-4 py-3 rounded-xl border-2 text-xl md:text-2xl transition-all shadow-sm font-serif
+                 className={`px-3 py-2 sm:px-4 sm:py-3 rounded-xl border-2 text-lg sm:text-xl md:text-2xl transition-all shadow-sm font-serif
                    ${isSelected ? 'bg-rose-100 border-rose-400 text-rose-700 font-bold scale-105' : 'bg-white border-blue-200 text-gray-800 hover:border-blue-400 hover:bg-blue-50'}`}
                >
                  {seg.text}
@@ -879,40 +882,91 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
 
     return (
       <TabelMatrixWrapper>
-        {(zoom: number) => (
-          <>
-            <p className="text-sm text-gray-500 mb-2 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
-            <p className="text-xs text-amber-600 mb-4 self-start flex items-center gap-1 font-semibold md:hidden">👆 Gunakan tombol zoom (+/−). Geser tabel ke kiri/kanan ↔ jika tidak muat di layar.</p>
-            <div className="w-full overflow-x-auto overflow-y-visible pb-[40vh] scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-              <div className="min-w-[320px] min-[400px]:min-w-[420px] md:min-w-[600px]" style={zoom === 1 ? undefined : { transform: `scale(${zoom})`, transformOrigin: 'top right' }}>
-                <table className="w-full text-center border-collapse text-sm md:text-base border border-amber-200 shadow-sm rounded-xl overflow-hidden" dir="rtl">
-                  <thead className="bg-amber-100/80 text-amber-900 border-b border-amber-200">
+        {(zoom: number) => {
+          // Skala ukuran kolom & font teks statis tanpa transform:scale() agar:
+          // 1) font <input> SELALU >= 16px (mencegah auto-zoom iOS Safari saat zoom < 1),
+          // 2) lebar scroll horizontal tabel selalu akurat,
+          // 3) kolom otomatis melebar mengikuti panjang jawaban yang diketik agar seluruh teks terlihat.
+          const inputFontPx = Math.max(16, Math.round(16 * zoom));
+          const headerFontPx = Math.max(12, Math.round(14 * zoom));
+          const staticFontPx = Math.max(15, Math.round(20 * zoom));
+          const baseColWidth = Math.round(110 * zoom);
+          const cellPad = Math.max(4, Math.round(8 * zoom));
+
+          return (
+            <>
+              <p className="text-sm text-gray-500 mb-2 self-start flex items-center gap-2"><span className="bg-amber-100 text-amber-600 p-1 px-2 rounded font-bold text-xs shrink-0">INFO</span> Ketik isian yang tepat pada sel matriks tabel yang masih kosong.</p>
+              <p className="text-xs text-amber-600 mb-3 self-start flex items-center gap-1 font-semibold md:hidden">👆 Geser tabel ke kiri/kanan ↔ jika kolom melebar. Kolom otomatis menyesuaikan panjang jawaban.</p>
+              <div className="w-full overflow-x-auto pb-4 rounded-xl border border-amber-200 shadow-sm bg-white" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
+                <table className="w-max min-w-full text-center border-collapse" dir="rtl">
+                  <thead className="bg-amber-100/90 text-amber-900 border-b border-amber-200">
                     <tr>
-                      <th className="p-3"></th>
+                      <th
+                        className="sticky right-0 z-10 bg-amber-100 font-bold border-l border-amber-200/80 whitespace-nowrap"
+                        style={{ padding: `${cellPad}px`, fontSize: `${headerFontPx}px` }}
+                      ></th>
                       {headers.map((h, i) => (
-                        <th key={i} className="p-1.5 min-[400px]:p-2 md:p-3 font-bold border-r border-amber-200/50 min-w-[44px] min-[400px]:min-w-[56px] md:min-w-[80px]">{h}</th>
+                        <th
+                          key={i}
+                          className="font-bold border-r border-amber-200/50 whitespace-nowrap"
+                          style={{
+                            padding: `${cellPad}px ${cellPad + 2}px`,
+                            fontSize: `${headerFontPx}px`,
+                            minWidth: `${baseColWidth}px`,
+                          }}
+                        >
+                          {h}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map((row, rIdx) => (
                       <tr key={rIdx} className="border-b border-amber-100 last:border-none bg-white hover:bg-amber-50/30 transition-colors">
-                        <td className="p-1.5 min-[400px]:p-2 md:p-3 font-bold text-amber-900 border-l border-amber-200/50 bg-amber-50/20">{row.label}</td>
+                        <td
+                          className="sticky right-0 z-10 bg-amber-50 font-bold text-amber-900 border-l border-amber-200/80 whitespace-nowrap shadow-[-2px_0_4px_rgba(0,0,0,0.04)]"
+                          style={{ padding: `${cellPad}px ${cellPad + 2}px`, fontSize: `${headerFontPx}px` }}
+                        >
+                          {row.label}
+                        </td>
                         {row.cells.map((cell: any, cIdx: number) => {
                           const key = `${rIdx}-${cIdx}`;
+                          const val = answers[key] || "";
+                          // Lebar sel otomatis mengikuti teks terpanjang agar seluruh jawaban terlihat utuh
+                          const charPx = Math.round(inputFontPx * 0.72);
+                          const dynamicMinWidth = Math.max(
+                            baseColWidth,
+                            Math.min(260, val.length * charPx + 36),
+                          );
                           return (
-                            <td key={cIdx} className="p-1 min-[400px]:p-1.5 md:p-2 border-r border-amber-100 align-middle min-w-[52px] min-[400px]:min-w-[64px] md:min-w-[100px]">
+                            <td
+                              key={cIdx}
+                              className="border-r border-amber-100 align-middle"
+                              style={{
+                                padding: `${Math.max(4, cellPad - 2)}px`,
+                                minWidth: `${dynamicMinWidth}px`,
+                              }}
+                            >
                               {cell.isBlank ? (
                                 <ExamTextInput
                                   name={`tasrif_${rIdx}_${cIdx}`}
                                   label={`Jawaban tasrif ${rIdx + 1}, ${cIdx + 1}`}
-                                  value={answers[key] || ""}
+                                  value={val}
                                   onValueChange={value => onAnswer({ jawabanData: { ...jawabanData, cells: { ...answers, [key]: value } } })}
-                                  className="w-full min-w-[40px] min-[400px]:min-w-[56px] md:min-w-[90px] p-1 min-[400px]:p-1.5 md:p-2 bg-amber-50/50 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner resize-none overflow-hidden"
-                                  style={{ lineHeight: '1.5' }}
+                                  className="w-full px-2.5 py-2 bg-amber-50/60 border-2 border-amber-200 focus:border-amber-500 focus:bg-white rounded-lg outline-none text-center font-bold text-amber-900 transition-colors shadow-inner"
+                                  style={{
+                                    fontSize: `${inputFontPx}px`,
+                                    lineHeight: '1.5',
+                                    minWidth: `${dynamicMinWidth - 8}px`,
+                                  }}
                                 />
                               ) : (
-                                <span className="font-serif text-lg min-[400px]:text-xl md:text-2xl text-gray-800 py-1 md:py-2 inline-block">{cell.value.split('|')[0].trim()}</span>
+                                <span
+                                  className="font-serif text-gray-800 py-1 inline-block whitespace-nowrap"
+                                  style={{ fontSize: `${staticFontPx}px` }}
+                                >
+                                  {cell.value.split('|')[0].trim()}
+                                </span>
                               )}
                             </td>
                           );
@@ -922,9 +976,9 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                   </tbody>
                 </table>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          );
+        }}
       </TabelMatrixWrapper>
     );
   }
@@ -966,7 +1020,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
         {/* Area Susunan (Target) */}
         <div 
           onClick={handleTapSusunan}
-          className="w-full max-w-xl min-h-[5rem] p-4 bg-gray-50 border-2 border-dashed border-indigo-300 rounded-2xl flex flex-wrap gap-2 justify-center items-center shadow-inner cursor-pointer hover:bg-gray-100 transition-colors select-none" 
+          className="w-full max-w-xl min-h-[4.5rem] sm:min-h-[5rem] p-3 sm:p-4 bg-gray-50 border-2 border-dashed border-indigo-300 rounded-2xl flex flex-wrap gap-2 justify-center items-center shadow-inner cursor-pointer hover:bg-gray-100 transition-colors select-none" 
           dir="rtl"
           title="Ketuk untuk membatalkan item terakhir"
         >
@@ -974,13 +1028,13 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
             <span className="text-indigo-300 font-bold text-sm">Pilih di bawah...</span>
           ) : (
             currentSusunan.map((h, i) => (
-              <span key={i} className="px-4 py-3 bg-indigo-600 text-white border-b-4 border-indigo-800 rounded-xl text-2xl md:text-3xl font-serif shadow-sm transform transition-all">{h}</span>
+              <span key={i} className="px-3 py-2 sm:px-4 sm:py-3 bg-indigo-600 text-white border-b-4 border-indigo-800 rounded-xl text-xl sm:text-2xl md:text-3xl font-serif shadow-sm transform transition-all">{h}</span>
             ))
           )}
         </div>
 
         {/* Area Chip Acak */}
-        <div className="w-full max-w-xl mt-6 md:mt-8 pt-6 border-t border-gray-100 flex flex-wrap gap-3 justify-center select-none" dir="rtl">
+        <div className="w-full max-w-xl mt-5 sm:mt-6 md:mt-8 pt-5 sm:pt-6 border-t border-gray-100 flex flex-wrap gap-2 sm:gap-3 justify-center select-none" dir="rtl">
           {hurufAcak.map((h, i) => {
              const selected = isSelected(i);
              return (
@@ -988,7 +1042,7 @@ function QuestionContent({ soal, onAnswer }: QuestionRendererProps) {
                  key={i}
                  disabled={selected}
                  onClick={() => handleTapHuruf(i)}
-                 className={`px-4 py-3 min-w-[3rem] rounded-xl text-2xl md:text-3xl font-serif transition-all duration-200 transform font-bold
+                 className={`px-3 py-2 sm:px-4 sm:py-3 min-w-[2.75rem] sm:min-w-[3rem] rounded-xl text-xl sm:text-2xl md:text-3xl font-serif transition-all duration-200 transform font-bold
                    ${selected 
                       ? 'bg-gray-100 text-gray-300 border-2 border-gray-100 scale-95 shadow-none' 
                       : 'bg-white text-indigo-900 border-2 border-indigo-200 shadow-[0_4px_0_theme(colors.indigo.200)] hover:-translate-y-1 hover:shadow-[0_6px_0_theme(colors.indigo.200)] active:translate-y-0 active:shadow-none'
@@ -1205,7 +1259,7 @@ function TapAndConnectComponent({
            {items.map((item: any, idx: number) => {
              const selectedCat = savedItems.find((s: any) => s.text === item.text)?.category;
              return (
-               <div key={idx} className={`p-4 border-2 rounded-xl transition-colors ${selectedCat ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-white'}`}>
+               <div key={idx} className={`p-3 sm:p-4 border-2 rounded-xl transition-colors min-w-0 break-words ${selectedCat ? 'border-blue-200 bg-blue-50/30' : 'border-gray-200 bg-white'}`}>
                   <SoalText html={item.text} className="text-base font-medium mb-3 block" />
                   <div className="flex flex-wrap gap-2">
                      {categories.map((cat: string) => {

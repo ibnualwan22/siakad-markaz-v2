@@ -16,6 +16,8 @@ import { createPortal } from "react-dom";
 import { ChevronDown, CornerDownLeft, Delete, Globe } from "lucide-react";
 import {
   ARABIC_ROWS,
+  PEGON_ROWS,
+  PEGON_HAROKAT_ROWS,
   LATIN_ROWS,
   ARABIC_SYMBOL_PAGES,
   LATIN_SYMBOL_PAGES,
@@ -23,11 +25,14 @@ import {
   KEY_VARIANTS,
   keyLabel,
   keyDisplay,
+  pegonHarokatDisplay,
   insertExamText,
   deleteExamText,
   moveExamCursor,
   isArabicDirection,
   type KeyboardLanguage,
+  type PegonSpecialKey,
+  type TextSelection,
 } from "@/lib/exam-keyboard";
 import styles from "./exam-keyboard.module.css";
 
@@ -36,10 +41,13 @@ type Binding = {
   element: Field;
   read: () => string;
   write: (value: string) => void;
+  setPendingSelection: (range: TextSelection) => void;
   multiline: boolean;
 };
 type KeyboardContextValue = {
   activate: (field: Binding) => void;
+  syncSelection: (element: Field) => void;
+  getLastSelection: (element: Field) => TextSelection | null;
   disabled: boolean;
   activeId: string | null;
 };
@@ -54,12 +62,20 @@ function CharacterKey({
   insert,
   variants,
   chooseAt,
+  displayText,
+  subLabel,
+  ariaLabelOverride,
+  extraClassName,
 }: {
   value: string;
   shifted: boolean;
   insert: (value: string) => void;
   variants: (key: string, rect: DOMRect) => void;
   chooseAt: (x: number, y: number) => boolean;
+  displayText?: string;
+  subLabel?: string;
+  ariaLabelOverride?: string;
+  extraClassName?: string;
 }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const press = useRef<{
@@ -90,13 +106,20 @@ function CharacterKey({
   }, [clear]);
 
   const output = shifted ? value.toUpperCase() : value;
+  const hasVariants = !subLabel && Boolean(KEY_VARIANTS[value]);
 
   return (
     <button
       type="button"
-      className={styles.key}
-      aria-label={keyLabel(output)}
-      aria-haspopup={KEY_VARIANTS[value] ? "listbox" : undefined}
+      className={[
+        styles.key,
+        subLabel ? styles.pegonDiacriticKey : "",
+        extraClassName || "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label={ariaLabelOverride ?? keyLabel(output)}
+      aria-haspopup={hasVariants ? "listbox" : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         if (e.button !== 0 || press.current) return;
@@ -115,7 +138,7 @@ function CharacterKey({
           cancelled: false,
         };
         const rect = e.currentTarget.getBoundingClientRect();
-        if (KEY_VARIANTS[value]) {
+        if (hasVariants) {
           timer.current = setTimeout(() => {
             if (!press.current || press.current.cancelled) return;
             press.current.held = true;
@@ -155,22 +178,24 @@ function CharacterKey({
         if (e.detail === 0) insert(output);
       }}
       onKeyDown={(e) => {
-        if (e.key === "ArrowDown" && KEY_VARIANTS[value]) {
+        if (e.key === "ArrowDown" && hasVariants) {
           e.preventDefault();
           variants(value, e.currentTarget.getBoundingClientRect());
         }
       }}
     >
-      <span>{keyDisplay(output)}</span>
-      {KEY_VARIANTS[value] && <small aria-hidden="true">•</small>}
+      <span className={subLabel || extraClassName ? styles.pegonMainGlyph : undefined}>
+        {displayText ?? keyDisplay(output)}
+      </span>
+      {subLabel && <span className={styles.pegonSubLabel}>{subLabel}</span>}
+      {hasVariants && <small aria-hidden="true">•</small>}
     </button>
   );
 }
 
 /**
- * Tombol aksi cepat yang andal di iOS Safari (Spasi, Hapus, Enter, Shift, Bahasa, Kursor, Tutup).
- * Menggunakan pointer events agar tidak tertelan oleh delay/batalnya event click saat
- * `pointerdown` memanggil `preventDefault()`, serta menjaga fokus input tidak lepas.
+ * Tombol aksi cepat yang andal di iOS Safari & Android Chrome
+ * (Spasi, Hapus, Enter, Shift, Harokat, Bahasa, Kursor, Tutup).
  */
 function FastActionButton({
   className,
@@ -308,10 +333,15 @@ export function ExamKeyboardProvider({
   const [active, setActive] = useState<Field | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const activeRef = useRef<Binding | null>(null);
+  // Simpan posisi kursor terakhir per elemen aktif agar tidak pernah reset ke 0
+  // saat browser HP kehilangan fokus sesaat atau React me-render ulang controlled value.
+  const selectionMapRef = useRef<WeakMap<Field, TextSelection>>(new WeakMap());
+
   const [language, setLanguage] = useState<KeyboardLanguage>("ar");
   const [numbers, setNumbers] = useState(false);
   const [symbolPage, setSymbolPage] = useState<0 | 1>(0);
   const [shift, setShift] = useState(false);
+  const [pegonHarokat, setPegonHarokat] = useState(false);
   const [menu, setMenu] = useState<VariantMenu | null>(null);
   const [height, setHeight] = useState(0);
   const [viewportStyle, setViewportStyle] = useState<CSSProperties | undefined>(
@@ -320,16 +350,36 @@ export function ExamKeyboardProvider({
   const panel = useRef<HTMLDivElement>(null);
   const animation = useRef(0);
 
+  const syncSelection = useCallback((element: Field) => {
+    if (!element.isConnected) return;
+    const s = element.selectionStart;
+    const e = element.selectionEnd;
+    if (s !== null && e !== null) {
+      selectionMapRef.current.set(element, { start: s, end: e });
+    }
+  }, []);
+
+  const getLastSelection = useCallback((element: Field): TextSelection | null => {
+    return selectionMapRef.current.get(element) ?? null;
+  }, []);
+
   const activate = useCallback(
     (field: Binding) => {
       if (disabled) return;
-      // Keep activation stable while typing; selection changes must not restart scrolling.
       activeRef.current = field;
       setActive(field.element);
       setActiveId(field.element.id || null);
       setMenu(null);
+      syncSelection(field.element);
+      // Di beberapa HP Android/iOS, selectionStart baru ter-update ke titik tap
+      // pada frame berikutnya setelah focus/touchend.
+      requestAnimationFrame(() => {
+        if (activeRef.current?.element === field.element) {
+          syncSelection(field.element);
+        }
+      });
     },
-    [disabled],
+    [disabled, syncSelection],
   );
 
   const close = useCallback(() => {
@@ -342,52 +392,112 @@ export function ExamKeyboardProvider({
     if (document.activeElement === field?.element) field.element.blur();
   }, []);
 
+  // Pantau selectionchange di dokumen agar geser kursor lewat sentuhan jari
+  // di tengah kalimat pada essay panjang/singkat/matriks selalu tersinkronisasi.
+  useEffect(() => {
+    if (!active || disabled) return;
+    const onSelectionChange = () => {
+      const el = activeRef.current?.element;
+      if (el && document.activeElement === el) {
+        syncSelection(el);
+      }
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+    };
+  }, [active, disabled, syncSelection]);
+
   function update(
     operation: "insert" | "delete" | "left" | "right",
     value = "",
   ) {
     const field = activeRef.current;
     if (disabled || !field?.element.isConnected) return;
+    const el = field.element;
     const text = field.read();
+
+    // Ambil posisi kursor paling akurat:
+    // Jika elemen sedang fokus di DOM, pakai selectionStart/End langsung dari DOM;
+    // jika fokus sempat lepas (kasus klasik di HP), pakai posisi tersimpan terakhir — JANGAN jatuh ke 0!
+    const isFocused = document.activeElement === el;
+    const saved = selectionMapRef.current.get(el);
+    let start: number;
+    let end: number;
+    if (isFocused && el.selectionStart !== null && el.selectionEnd !== null) {
+      start = el.selectionStart;
+      end = el.selectionEnd;
+    } else if (saved) {
+      start = saved.start;
+      end = saved.end;
+    } else {
+      start = el.selectionStart ?? text.length;
+      end = el.selectionEnd ?? text.length;
+    }
+
     const range = {
-      start: field.element.selectionStart ?? text.length,
-      end: field.element.selectionEnd ?? text.length,
+      start: Math.max(0, Math.min(text.length, start)),
+      end: Math.max(0, Math.min(text.length, end)),
     };
+
     const result =
       operation === "insert"
         ? insertExamText(text, range, value, field.multiline)
         : operation === "delete"
           ? deleteExamText(text, range)
           : {
+            text,
+            ...moveExamCursor(
               text,
-              ...moveExamCursor(
-                text,
-                range,
-                operation === "right"
-                  ? !isArabicDirection(text)
-                  : isArabicDirection(text),
-              ),
-            };
-    if (result.text !== text) field.write(result.text);
-    // Restore the controlled value before setting the selection; never save a DOM-injected value.
-    field.element.value = result.text;
-    if (document.activeElement !== field.element) {
-      field.element.focus({ preventScroll: true });
+              range,
+              operation === "right"
+                ? !isArabicDirection(text)
+                : isArabicDirection(text),
+            ),
+          };
+
+    const nextRange = { start: result.start, end: result.end };
+    selectionMapRef.current.set(el, nextRange);
+    field.setPendingSelection(nextRange);
+
+    if (result.text !== text) {
+      field.write(result.text);
+    }
+
+    // Pastikan fokus & posisi kursor segera terpasang (sebelum maupun sesudah commit React)
+    if (document.activeElement !== el) {
+      el.focus({ preventScroll: true });
+    }
+    if (el.value !== result.text) {
+      el.value = result.text;
     }
     try {
-      field.element.setSelectionRange(result.start, result.end);
+      el.setSelectionRange(nextRange.start, nextRange.end);
     } catch {
       /* abaikan bila input tidak mendukung selectionRange */
     }
-    if (result.start === result.text.length) {
-      field.element.scrollTop = field.element.scrollHeight;
+    requestAnimationFrame(() => {
+      if (activeRef.current?.element === el && el.isConnected) {
+        if (document.activeElement !== el) {
+          el.focus({ preventScroll: true });
+        }
+        try {
+          el.setSelectionRange(nextRange.start, nextRange.end);
+        } catch {
+          /* abaikan */
+        }
+        selectionMapRef.current.set(el, nextRange);
+      }
+    });
+
+    if (result.start === result.text.length && field.multiline) {
+      el.scrollTop = el.scrollHeight;
     }
     setMenu(null);
-    if (operation === "insert") setShift(false);
+    if (operation === "insert" && language === "id") setShift(false);
   }
 
   // Sinkronisasi posisi & lebar keyboard ke VisualViewport (khusus iOS Safari non-fullscreen).
-  // Mencegah keyboard terpotong kiri/kanan/bawah saat toolbar Safari naik-turun atau terjadi zoom.
   useEffect(() => {
     if (!active || disabled || typeof window === "undefined") {
       setViewportStyle(undefined);
@@ -442,10 +552,14 @@ export function ExamKeyboardProvider({
   useEffect(() => {
     if (!active || disabled) return;
     const outside = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!panel.current?.contains(target) && target !== activeRef.current?.element) {
-        close();
-      }
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (panel.current?.contains(target)) return;
+      if (target === activeRef.current?.element) return;
+      // Jangan tutup keyboard saat berpindah ke input ujian lain (mis. sel tabel matriks lain)
+      // agar tidak terjadi flicker/lompatan scroll yang mengacaukan posisi kursor.
+      if (target.closest?.('[data-exam-input="true"]')) return;
+      close();
     };
     const keys = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -471,8 +585,6 @@ export function ExamKeyboardProvider({
   useEffect(() => {
     if (!active || disabled || !panel.current) return;
     const element = panel.current;
-    // Tambah ruang ekstra (+72px) agar baris terbawah tabel matrix / soal panjang
-    // bisa di-scroll nyaman ke atas keyboard dan tidak pernah ketutupan keyboard.
     const measure = () => setHeight(element.getBoundingClientRect().height + 72);
     measure();
     const observer = new ResizeObserver(measure);
@@ -486,9 +598,6 @@ export function ExamKeyboardProvider({
     animation.current = requestAnimationFrame(() => {
       const field = active;
       if (!field.isConnected) return;
-      // Cari kontainer yang BENAR-BENAR bisa scroll vertikal (lewati wrapper
-      // overflow-x-auto pada tabel matrix yang secara CSS ikut memiliki overflowY="auto"
-      // tetapi scrollHeight === clientHeight sehingga tidak bisa menggulir vertikal).
       let scroller: HTMLElement | null = field.parentElement;
       while (scroller) {
         if (scroller.dataset.horizontalScroll !== "true") {
@@ -514,8 +623,6 @@ export function ExamKeyboardProvider({
           : rect.bottom > bottom
             ? rect.bottom - bottom
             : 0;
-      // One bounded adjustment on open/field change/resize. Override scroll-smooth so
-      // it cannot compete with the browser's cursor selection and scroll anchoring.
       if (Math.abs(delta) > 1) {
         (scroller ?? document.scrollingElement)?.scrollBy({
           top: delta,
@@ -530,6 +637,7 @@ export function ExamKeyboardProvider({
     const bounds = panel.current?.getBoundingClientRect();
     if (!bounds) return;
     const values = KEY_VARIANTS[key];
+    if (!values) return;
     const width = Math.min(values.length * 43 + 10, bounds.width - 12);
     setMenu({
       key,
@@ -543,21 +651,33 @@ export function ExamKeyboardProvider({
   }
 
   const insert = (value: string) => update("insert", value);
-  const toggleLanguage = () => {
-    setLanguage((prev) => (prev === "ar" ? "id" : "ar"));
+
+  const selectLanguage = (nextLang: KeyboardLanguage) => {
+    setLanguage(nextLang);
     setNumbers(false);
     setSymbolPage(0);
+    setPegonHarokat(false);
+    setShift(false);
     setMenu(null);
   };
 
-  const rows = numbers
-    ? (language === "ar" ? ARABIC_SYMBOL_PAGES : LATIN_SYMBOL_PAGES)[symbolPage]
+  const toggleLanguage = () => {
+    const next: KeyboardLanguage =
+      language === "ar" ? "pegon" : language === "pegon" ? "id" : "ar";
+    selectLanguage(next);
+  };
+
+  const isArabicScript = language === "ar" || language === "pegon";
+  const arabicLetters = !numbers && language === "ar";
+  const pegonMode = !numbers && language === "pegon";
+  const latinLetters = !numbers && language === "id";
+  const multiline = active?.tagName === "TEXTAREA";
+
+  const standardRows = numbers
+    ? (isArabicScript ? ARABIC_SYMBOL_PAGES : LATIN_SYMBOL_PAGES)[symbolPage]
     : language === "ar"
       ? ARABIC_ROWS
       : LATIN_ROWS;
-  const arabicLetters = !numbers && language === "ar";
-  const latinLetters = !numbers && language === "id";
-  const multiline = active?.tagName === "TEXTAREA";
 
   const deleteButton = (cls: string) => (
     <FastActionButton
@@ -570,8 +690,24 @@ export function ExamKeyboardProvider({
         size={19}
         strokeWidth={2}
         aria-hidden="true"
-        style={language === "ar" ? { transform: "scaleX(-1)" } : undefined}
+        style={isArabicScript ? { transform: "scaleX(-1)" } : undefined}
       />
+    </FastActionButton>
+  );
+
+  const pegonHarokatButton = (
+    <FastActionButton
+      className={`${styles.actionKey} ${styles.pegonHarokatToggle}`}
+      ariaLabel={
+        pegonHarokat ? "Kembali ke huruf Pegon" : "Buka tombol harokat Pegon"
+      }
+      ariaPressed={pegonHarokat}
+      onAction={() => {
+        setPegonHarokat((v) => !v);
+        setMenu(null);
+      }}
+    >
+      Harokat
     </FastActionButton>
   );
 
@@ -580,8 +716,17 @@ export function ExamKeyboardProvider({
       ? (document.fullscreenElement ?? document.body)
       : null;
 
+  const spaceLabel =
+    language === "ar"
+      ? "العربية"
+      : language === "pegon"
+        ? "Pegon"
+        : "Indonesia";
+
   return (
-    <KeyboardContext.Provider value={{ activate, disabled, activeId }}>
+    <KeyboardContext.Provider
+      value={{ activate, syncSelection, getLastSelection, disabled, activeId }}
+    >
       {children}
       {active && !disabled && <div aria-hidden="true" style={{ height }} />}
       {active &&
@@ -603,24 +748,21 @@ export function ExamKeyboardProvider({
                 <FastActionButton
                   className={styles.toolBtn}
                   ariaPressed={!numbers && language === "ar"}
-                  onAction={() => {
-                    setLanguage("ar");
-                    setNumbers(false);
-                    setSymbolPage(0);
-                    setMenu(null);
-                  }}
+                  onAction={() => selectLanguage("ar")}
                 >
                   العربية
                 </FastActionButton>
                 <FastActionButton
                   className={styles.toolBtn}
+                  ariaPressed={!numbers && language === "pegon"}
+                  onAction={() => selectLanguage("pegon")}
+                >
+                  Pegon
+                </FastActionButton>
+                <FastActionButton
+                  className={styles.toolBtn}
                   ariaPressed={!numbers && language === "id"}
-                  onAction={() => {
-                    setLanguage("id");
-                    setNumbers(false);
-                    setSymbolPage(0);
-                    setMenu(null);
-                  }}
+                  onAction={() => selectLanguage("id")}
                 >
                   Indonesia
                 </FastActionButton>
@@ -656,7 +798,7 @@ export function ExamKeyboardProvider({
               </div>
             </div>
 
-            {/* Harakat di atas huruf Arab */}
+            {/* Harakat di atas huruf Arab (khusus mode العربية) */}
             {arabicLetters && (
               <div className={styles.harakat}>
                 {HARAKAT.map((value) => (
@@ -672,76 +814,145 @@ export function ExamKeyboardProvider({
               </div>
             )}
 
-            {/* Baris huruf / angka mengikuti tata letak Gboard */}
-            {rows.map((row, index) => {
-              const isLastRow = index === rows.length - 1;
-              const rowClass = [
-                styles.row,
-                arabicLetters ? styles.arabicRow : "",
-                latinLetters && index === 1 ? styles.latinRow2 : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
-
-              return (
-                <div
-                  className={rowClass}
-                  key={`${numbers}:${symbolPage}:${language}:${index}`}
-                >
-                  {latinLetters && isLastRow && (
-                    <FastActionButton
-                      className={`${styles.actionKey} ${styles.shiftKey}`}
-                      ariaLabel="Huruf kapital"
-                      ariaPressed={shift}
-                      onAction={() => {
-                        setShift((v) => !v);
-                        setMenu(null);
-                      }}
+            {/* MODE PEGON: 4 baris × 10 kolom (Base huruf atau Lapisan Harokat) */}
+            {pegonMode ? (
+              pegonHarokat ? (
+                PEGON_HAROKAT_ROWS.map((row: PegonSpecialKey[], index: number) => {
+                  const isLastRow = index === PEGON_HAROKAT_ROWS.length - 1;
+                  return (
+                    <div
+                      className={`${styles.row} ${styles.pegonRow}`}
+                      key={`pegon-harokat:${index}`}
                     >
-                      ⇧
-                    </FastActionButton>
-                  )}
+                      {isLastRow && pegonHarokatButton}
 
-                  {numbers && isLastRow && (
-                    <FastActionButton
-                      className={`${styles.actionKey} ${styles.pageToggleKey}`}
-                      ariaLabel={
-                        symbolPage === 0
-                          ? "Halaman simbol 2 dari 2"
-                          : "Kembali ke halaman simbol 1 dari 2"
-                      }
-                      ariaPressed={symbolPage === 1}
-                      onAction={() => {
-                        setSymbolPage((p) => (p === 0 ? 1 : 0));
-                        setMenu(null);
-                      }}
+                      {row.map((item, kIdx) => {
+                        const extraCls = [
+                          item.isPhrase ? styles.pegonPhraseKey : "",
+                          item.span === 2 ? styles.pegonSpan2 : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ");
+                        return (
+                          <CharacterKey
+                            key={`${index}-${kIdx}-${item.value}`}
+                            value={item.value}
+                            shifted={false}
+                            insert={insert}
+                            variants={showVariants}
+                            chooseAt={chooseAt}
+                            displayText={
+                              item.display ?? pegonHarokatDisplay(item.value)
+                            }
+                            subLabel={item.subLabel}
+                            ariaLabelOverride={item.label ?? keyLabel(item.value)}
+                            extraClassName={extraCls || undefined}
+                          />
+                        );
+                      })}
+
+                      {isLastRow && deleteButton(styles.deleteKeyPegon)}
+                    </div>
+                  );
+                })
+              ) : (
+                PEGON_ROWS.map((row, index) => {
+                  const isLastRow = index === PEGON_ROWS.length - 1;
+                  return (
+                    <div
+                      className={`${styles.row} ${styles.pegonRow}`}
+                      key={`pegon-base:${index}`}
                     >
-                      {symbolPage === 0 ? "1/2" : "2/2"}
-                    </FastActionButton>
-                  )}
+                      {isLastRow && pegonHarokatButton}
 
-                  {row.map((value) => (
-                    <CharacterKey
-                      key={value}
-                      value={value}
-                      shifted={shift && latinLetters}
-                      insert={insert}
-                      variants={showVariants}
-                      chooseAt={chooseAt}
-                    />
-                  ))}
+                      {row.map((value) => (
+                        <CharacterKey
+                          key={value}
+                          value={value}
+                          shifted={false}
+                          insert={insert}
+                          variants={showVariants}
+                          chooseAt={chooseAt}
+                        />
+                      ))}
 
-                  {isLastRow &&
-                    deleteButton(
-                      arabicLetters
-                        ? styles.deleteKeyArabic
-                        : styles.deleteKeyLatin,
+                      {isLastRow && deleteButton(styles.deleteKeyPegon)}
+                    </div>
+                  );
+                })
+              )
+            ) : (
+              /* MODE ARAB / INDONESIA / ANGKA & SIMBOL */
+              standardRows.map((row, index) => {
+                const isLastRow = index === standardRows.length - 1;
+                const rowClass = [
+                  styles.row,
+                  arabicLetters ? styles.arabicRow : "",
+                  latinLetters && index === 1 ? styles.latinRow2 : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  <div
+                    className={rowClass}
+                    key={`${numbers}:${symbolPage}:${language}:${index}`}
+                  >
+                    {latinLetters && isLastRow && (
+                      <FastActionButton
+                        className={`${styles.actionKey} ${styles.shiftKey}`}
+                        ariaLabel="Huruf kapital"
+                        ariaPressed={shift}
+                        onAction={() => {
+                          setShift((v) => !v);
+                          setMenu(null);
+                        }}
+                      >
+                        ⇧
+                      </FastActionButton>
                     )}
-                </div>
-              );
-            })}
 
-            {/* Baris bawah Gboard: [?123 / ؟٣٢١] [, / ،] [🌐] [Spasi] [. / ؟] [↵ / ✓] */}
+                    {numbers && isLastRow && (
+                      <FastActionButton
+                        className={`${styles.actionKey} ${styles.pageToggleKey}`}
+                        ariaLabel={
+                          symbolPage === 0
+                            ? "Halaman simbol 2 dari 2"
+                            : "Kembali ke halaman simbol 1 dari 2"
+                        }
+                        ariaPressed={symbolPage === 1}
+                        onAction={() => {
+                          setSymbolPage((p) => (p === 0 ? 1 : 0));
+                          setMenu(null);
+                        }}
+                      >
+                        {symbolPage === 0 ? "1/2" : "2/2"}
+                      </FastActionButton>
+                    )}
+
+                    {row.map((value) => (
+                      <CharacterKey
+                        key={value}
+                        value={value}
+                        shifted={shift && latinLetters}
+                        insert={insert}
+                        variants={showVariants}
+                        chooseAt={chooseAt}
+                      />
+                    ))}
+
+                    {isLastRow &&
+                      deleteButton(
+                        arabicLetters
+                          ? styles.deleteKeyArabic
+                          : styles.deleteKeyLatin,
+                      )}
+                  </div>
+                );
+              })
+            )}
+
+            {/* Baris bawah Gboard: [?123 / ؟٣٢١] [, / ، / ؛] [🌐] [Spasi] [. / ؟] [↵ / ✓] */}
             <div className={styles.bottom}>
               <FastActionButton
                 className={styles.pillKey}
@@ -754,16 +965,24 @@ export function ExamKeyboardProvider({
                 }}
               >
                 {numbers
-                  ? language === "ar"
+                  ? isArabicScript
                     ? "أبج"
                     : "ABC"
-                  : language === "ar"
+                  : isArabicScript
                     ? "؟٣٢١"
                     : "?123"}
               </FastActionButton>
 
               <CharacterKey
-                value={numbers ? "/" : language === "ar" ? "،" : ","}
+                value={
+                  numbers
+                    ? "/"
+                    : pegonMode && pegonHarokat
+                      ? "؛"
+                      : isArabicScript
+                        ? "،"
+                        : ","
+                }
                 shifted={false}
                 insert={insert}
                 variants={showVariants}
@@ -783,11 +1002,13 @@ export function ExamKeyboardProvider({
                 ariaLabel="Spasi"
                 onAction={() => insert(" ")}
               >
-                {language === "ar" ? "العربية" : "Indonesia"}
+                {spaceLabel}
               </FastActionButton>
 
               <CharacterKey
-                value={language === "ar" ? "؟" : "."}
+                value={
+                  language === "ar" || (pegonMode && pegonHarokat) ? "؟" : "."
+                }
                 shifted={false}
                 insert={insert}
                 variants={showVariants}
@@ -871,58 +1092,70 @@ export function ExamTextInput({
   const id = useId();
   const field = useRef<Field | null>(null);
   const latest = useRef({ value, onValueChange });
+  const pendingSelectionRef = useRef<TextSelection | null>(null);
+
   useLayoutEffect(() => {
     latest.current = { value, onValueChange };
   }, [value, onValueChange]);
 
-  // Kursor palsu: input readOnly di iOS tidak menampilkan kursor ketap-ketip,
-  // padahal provider sudah menjaga selection-nya. Overlay cermin ini menggambar
-  // garis kursor sendiri (hanya input satu baris yang aktif) mengikuti posisi
-  // kursor DOM, supaya santri melihat posisi ketiknya.
-  const mirror = useRef<HTMLSpanElement | null>(null);
-  const [cursor, setCursor] = useState(0);
-  const [mirrorStyle, setMirrorStyle] = useState<CSSProperties | null>(null);
   const isActive =
     !!keyboard && !keyboard.disabled && keyboard.activeId === id;
 
+  // Setelah React meng-commit controlled `value`, pulihkan posisi kursor yang tepat
+  // agar browser HP tidak me-reset kursor ke index 0 (awal kalimat) atau akhir teks.
   useLayoutEffect(() => {
     const el = field.current;
-    if (!el || !isActive) return;
-    const cs = getComputedStyle(el);
-    setMirrorStyle({
-      font: cs.font,
-      letterSpacing: cs.letterSpacing,
-      lineHeight: cs.lineHeight,
-      textAlign: cs.textAlign as CSSProperties["textAlign"],
-      color: cs.color,
-      direction: cs.direction as CSSProperties["direction"],
-      paddingTop: cs.paddingTop,
-      paddingRight: cs.paddingRight,
-      paddingBottom: cs.paddingBottom,
-      paddingLeft: cs.paddingLeft,
-    });
-    setCursor(el.selectionStart ?? value.length);
-    if (mirror.current) mirror.current.scrollLeft = el.scrollLeft;
-  }, [isActive, value]);
+    const pending = pendingSelectionRef.current;
+    if (!el || !pending || !isActive) return;
+    pendingSelectionRef.current = null;
+    const clampedStart = Math.max(0, Math.min(el.value.length, pending.start));
+    const clampedEnd = Math.max(clampedStart, Math.min(el.value.length, pending.end));
+    try {
+      el.setSelectionRange(clampedStart, clampedEnd);
+    } catch {
+      /* abaikan */
+    }
+    keyboard?.syncSelection(el);
+  }, [value, isActive, keyboard]);
 
-  const open = () => {
-    if (!field.current || !keyboard) return;
+  const openAndSync = () => {
+    const el = field.current;
+    if (!el || !keyboard) return;
     keyboard.activate({
-      element: field.current,
+      element: el,
       multiline,
       read: () => latest.current.value,
       write: (next) => {
         latest.current.value = next;
         latest.current.onValueChange(next);
       },
+      setPendingSelection: (range) => {
+        pendingSelectionRef.current = range;
+      },
+    });
+    keyboard.syncSelection(el);
+  };
+
+  const syncAfterTap = () => {
+    const el = field.current;
+    if (!el || !keyboard) return;
+    keyboard.syncSelection(el);
+    requestAnimationFrame(() => {
+      if (field.current) keyboard.syncSelection(field.current);
     });
   };
 
   // iOS Safari auto-zoom bila font input efektif < 16px.
-  // Paksa minimal 16px (inline + touch-action: manipulation) agar aman dari auto-zoom & double-tap zoom.
+  // Tanpa `readOnly` (cukup `inputMode="none"` + blokir onBeforeInput/onKeyDown),
+  // kursor ketap-ketip asli tampil di semua HP (Android & iPhone) pada essay panjang,
+  // singkat, maupun matriks, dan sentuhan di tengah kalimat menempatkan kursor akurat.
   const mergedStyle: CSSProperties = {
     fontSize: "max(16px, 1rem)",
     touchAction: "manipulation",
+    caretColor: "#2563eb",
+    fontFamily:
+      style?.fontFamily ??
+      '"Scheherazade New", "Amiri", "Inter", -apple-system, BlinkMacSystemFont, sans-serif',
     ...style,
   };
 
@@ -937,27 +1170,43 @@ export function ExamTextInput({
     "data-exam-input": keyboard ? "true" : undefined,
     dir: "auto" as const,
     disabled: keyboard?.disabled,
-    readOnly: Boolean(keyboard),
+    // PENTING: JANGAN pasang readOnly di sini! readOnly menyembunyikan kursor ketap-ketip
+    // dan membuat sentuhan di tengah kalimat melompat ke awal (index 0) di banyak HP Android/iOS.
+    // Keyboard bawaan HP tetap terkunci oleh inputMode="none" + blokir onBeforeInput/onInput/onKeyDown.
     inputMode: keyboard ? ("none" as const) : ("text" as const),
     autoComplete: "off",
     autoCorrect: "off",
     autoCapitalize: "off",
     spellCheck: false,
-    onFocus: open,
-    onClick: open,
-    onSelect: (e: React.SyntheticEvent<Field>) => {
-      setCursor(e.currentTarget.selectionStart ?? value.length);
+    onFocus: openAndSync,
+    onClick: () => {
+      openAndSync();
+      syncAfterTap();
     },
-    onScroll: () => {
-      if (mirror.current && field.current) {
-        mirror.current.scrollLeft = field.current.scrollLeft;
-      }
+    onPointerUp: syncAfterTap,
+    onTouchEnd: syncAfterTap,
+    onSelect: (e: React.SyntheticEvent<Field>) => {
+      keyboard?.syncSelection(e.currentTarget);
     },
     onBeforeInput: (e: React.FormEvent<Field>) => {
       if (keyboard) e.preventDefault();
     },
     onInput: (e: React.FormEvent<Field>) => {
-      if (keyboard) e.currentTarget.value = latest.current.value;
+      if (!keyboard) return;
+      const el = e.currentTarget;
+      const expected = latest.current.value;
+      if (el.value !== expected) {
+        const saved = keyboard.getLastSelection(el);
+        el.value = expected;
+        if (saved) {
+          const pos = Math.max(0, Math.min(expected.length, saved.start));
+          try {
+            el.setSelectionRange(pos, pos);
+          } catch {
+            /* abaikan */
+          }
+        }
+      }
     },
     onChange: (e: React.ChangeEvent<Field>) => {
       if (!keyboard) onValueChange(e.currentTarget.value);
@@ -989,19 +1238,8 @@ export function ExamTextInput({
       />
     );
   }
-  if (!keyboard) {
-    return (
-      <input
-        {...props}
-        ref={(el) => {
-          field.current = el;
-        }}
-        type="text"
-      />
-    );
-  }
 
-  const inputEl = (
+  return (
     <input
       {...props}
       ref={(el) => {
@@ -1009,30 +1247,5 @@ export function ExamTextInput({
       }}
       type="text"
     />
-  );
-  const wide = (className || "").includes("w-full");
-  return (
-    <span className={wide ? "relative block w-full" : "relative inline-block max-w-full"}>
-      {inputEl}
-      {isActive && mirrorStyle && (
-        <span
-          ref={mirror}
-          aria-hidden="true"
-          dir="auto"
-          style={{
-            position: "absolute",
-            inset: 0,
-            overflow: "hidden",
-            pointerEvents: "none",
-            whiteSpace: "pre",
-            ...mirrorStyle,
-          }}
-        >
-          <span style={{ visibility: "hidden" }}>{value.slice(0, cursor)}</span>
-          <span className={styles.fakeCaret} />
-          <span style={{ visibility: "hidden" }}>{value.slice(cursor)}</span>
-        </span>
-      )}
-    </span>
   );
 }

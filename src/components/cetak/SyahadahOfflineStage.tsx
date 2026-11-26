@@ -374,7 +374,8 @@ export default function SyahadahOfflineStage({
             fontSize: `${fontPt}pt`,
             lineHeight: 1.25,
             color: cfg.color || "#000000",
-            fontWeight: key === "nama" ? 700 : undefined,
+            fontWeight:
+              key === "nama" || key === "namaMudir" ? 700 : undefined,
             whiteSpace: "nowrap",
           }}
         >

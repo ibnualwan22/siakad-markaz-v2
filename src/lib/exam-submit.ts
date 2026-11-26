@@ -530,50 +530,67 @@ async function autoGradeEssaysBackground(jawabanIds: string[], sesiId: string) {
   await acquireAiSlot();
   
   try {
-    const { gradeEssayWithAI } = await import("@/lib/ai-grader");
+    const { buildAiGraderInputFromSoal, gradeEssayWithAI } = await import("@/lib/ai-grader");
     const { recalculateSesiNilai: recalcFn } = await import("@/lib/recalculate-sesi-nilai");
-    const removeHtml = (s: string) => (s || "").replace(/<[^>]*>?/gm, '');
 
     console.log(`[AUTO-AI-SUBMIT] Memulai auto-grade untuk ${jawabanIds.length} essay (Sesi: ${sesiId}) [Active: ${activeAiGradingCount}/${MAX_CONCURRENT_AI_GRADING}]`);
 
     for (const jawId of jawabanIds) {
       try {
         const jaw: any = await prisma.jawabanUjianSantri.findUnique({
-          where: { id: jawId }
+          where: { id: jawId },
+          include: { sesi: { select: { paketId: true } } }
         });
         if (!jaw || !jaw.jawabanTeks || jaw.nilaiManual !== null) continue;
 
         const soal: any = await prisma.bankSoalUsbu.findUnique({
-          where: { id: jaw.soalId }
+          where: { id: jaw.soalId },
+          include: {
+            mapel: true,
+            program: true,
+            jenisSoal: true,
+            grupInduk: { select: { pertanyaan: true } }
+          }
         });
         if (!soal) continue;
 
-        const result = await gradeEssayWithAI({
-          pertanyaan: removeHtml(soal.pertanyaan),
-          kunciJawaban: soal.kunciJawaban || "",
-          jawabanSantri: jaw.jawabanTeks,
-          bobot: soal.bobot,
-          tipeSoal: soal.tipeSoal
-        });
+        const snapshot = jaw.sesi?.paketId
+          ? await prisma.soalPaket.findUnique({
+              where: {
+                paketId_soalId: { paketId: jaw.sesi.paketId, soalId: soal.id }
+              },
+              select: {
+                pertanyaanSnapshot: true,
+                kunciJawabanSnapshot: true,
+                bobotSnapshot: true
+              }
+            })
+          : null;
+
+        const graderInput = buildAiGraderInputFromSoal(soal, jaw.jawabanTeks, snapshot);
+        const result = await gradeEssayWithAI(graderInput);
 
         if (result && result.score !== undefined) {
-          let finalScore = result.score;
-          if (finalScore > soal.bobot && finalScore <= 100) finalScore = (finalScore / 100) * soal.bobot;
-          if (finalScore > soal.bobot) finalScore = soal.bobot;
-          if (finalScore < 0) finalScore = 0;
+          const bobot = graderInput.bobot || 10;
+          const finalScore = Math.min(Math.max(Number(result.score) || 0, 0), bobot);
 
           // FIX race condition: conditional update — skip jika
           // pengajar sudah koreksi manual di tengah jalan
-          // @ts-ignore
           await prisma.jawabanUjianSantri.updateMany({
             where: { id: jawId, nilaiManual: null, aiGraded: false },
-            // @ts-ignore
-            data: { nilaiManual: finalScore, aiGraded: true, aiFeedback: result.feedback || null }
+            data: {
+              nilaiManual: finalScore,
+              aiGraded: true,
+              aiFeedback: result.feedback || null,
+              needsReview: Boolean(result.needsTeacherReview)
+            }
           });
         }
 
-        // Jeda 4 detik per soal (rate-limit safety — dinaikkan dari 2.5 detik)
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        // Jeda 4 detik hanya jika benar-benar memanggil API AI (bukan pre-filter deterministik)
+        if (!result?.deterministic) {
+          await new Promise(resolve => setTimeout(resolve, 4000));
+        }
       } catch (err) {
         console.error(`[AUTO-AI-SUBMIT] Error pada jawaban ${jawId}:`, err);
       }

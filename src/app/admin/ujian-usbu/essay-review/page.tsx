@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Brain, Search, CheckCircle, Clock, Save, Edit3, X } from "lucide-react";
+import { Brain, Search, CheckCircle, Clock, Save, Edit3, X, AlertTriangle, UserCheck } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function EssayReviewPage() {
@@ -262,9 +262,29 @@ export default function EssayReviewPage() {
 
                    {/* Field AI Feedback jika ada */}
                    {j.aiFeedback && (
-                      <div className="mt-4 p-4 bg-purple-50 border border-purple-100 rounded-xl">
-                        <h4 className="text-xs font-bold text-purple-700 flex items-center gap-1 mb-1"><Brain size={14}/> Feedback AI Agnes:</h4>
-                        <p className="text-sm text-purple-900">{j.aiFeedback}</p>
+                      <div className={`mt-4 p-4 rounded-xl border ${
+                        !j.reviewedByName && (j.needsReview || /\[(?:Perlu Cek Guru|ERROR|FATAL)\]/i.test(j.aiFeedback))
+                          ? "bg-amber-50 border-amber-200"
+                          : "bg-purple-50 border-purple-100"
+                      }`}>
+                        <h4 className={`text-xs font-bold flex items-center gap-1.5 mb-1 ${
+                          !j.reviewedByName && (j.needsReview || /\[(?:Perlu Cek Guru|ERROR|FATAL)\]/i.test(j.aiFeedback))
+                            ? "text-amber-800"
+                            : "text-purple-700"
+                        }`}>
+                          {!j.reviewedByName && (j.needsReview || /\[(?:Perlu Cek Guru|ERROR|FATAL)\]/i.test(j.aiFeedback)) ? (
+                            <>
+                              <AlertTriangle size={14}/> Perlu Cek Guru — Feedback AI Agnes:
+                            </>
+                          ) : (
+                            <>
+                              <Brain size={14}/> Feedback AI Agnes:
+                            </>
+                          )}
+                        </h4>
+                        <p className="text-sm text-gray-800">
+                          {String(j.aiFeedback).replace(/^\[Perlu Cek Guru\]\s*/i, "")}
+                        </p>
                       </div>
                    )}
                 </div>
@@ -272,17 +292,28 @@ export default function EssayReviewPage() {
                 {/* Bagian Penilaian */}
                 <div className="w-full md:w-64 shrink-0 border-t md:border-t-0 md:border-l pt-4 md:pt-0 md:pl-6 flex flex-col justify-center">
                    
-                   <div className="mb-4">
+                   <div className="mb-4 space-y-1.5">
                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">Status Penilaian</p>
                      {j.nilaiManual !== null ? (
                        <div className="flex items-center gap-2 text-green-600 font-bold text-sm bg-green-50 p-2 rounded-lg">
-                          <CheckCircle size={16}/> Selesai Dinilai ({j.aiGraded ? 'AI' : 'Manual'})
+                          <CheckCircle size={16}/> Selesai Dinilai ({j.reviewedByName ? 'Guru' : j.aiGraded ? 'AI' : 'Manual'})
                        </div>
                      ) : (
                        <div className="flex items-center gap-2 text-orange-500 font-bold text-sm bg-orange-50 p-2 rounded-lg">
                           <Clock size={16}/> Menunggu Penilaian
                        </div>
                      )}
+                     {j.reviewedByName ? (
+                       <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg">
+                         <UserCheck size={14} className="shrink-0" />
+                         <span>Sudah direview ({j.reviewedByName})</span>
+                       </div>
+                     ) : (j.needsReview || (j.aiFeedback && /\[(?:Perlu Cek Guru|ERROR|FATAL)\]/i.test(j.aiFeedback))) ? (
+                       <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-1.5 rounded-lg">
+                         <AlertTriangle size={14} className="shrink-0" />
+                         <span>Perlu Cek Guru</span>
+                       </div>
+                     ) : null}
                    </div>
 
                    {editingId === j.id ? (

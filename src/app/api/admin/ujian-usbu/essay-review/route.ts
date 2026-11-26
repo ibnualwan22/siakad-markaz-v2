@@ -82,16 +82,29 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Invalid data" }, { status: 400 });
     }
 
-    // @ts-ignore
+    const reviewerName = session.nama || session.username || "Pengajar";
+
     // FIX race condition: tandai aiGraded=true saat manusia mengkoreksi,
     // agar background AI grading tidak menimpa nilai manual.
     // Jika nilai dihapus (null), buka kembali untuk AI (aiGraded=false).
     const jaw = await prisma.jawabanUjianSantri.update({
       where: { id },
-      data: {
-        nilaiManual,
-        aiGraded: nilaiManual !== null ? true : false,
-      }
+      data:
+        nilaiManual !== null
+          ? {
+              nilaiManual,
+              aiGraded: true,
+              needsReview: false,
+              reviewedByName: reviewerName,
+              reviewedAt: new Date(),
+            }
+          : {
+              nilaiManual: null,
+              aiGraded: false,
+              needsReview: false,
+              reviewedByName: null,
+              reviewedAt: null,
+            },
     });
 
     if (jaw && jaw.sesiId) {

@@ -1167,11 +1167,14 @@ model JawabanUjianSantri {
   soalId String
   opsiId String?
   rpiId  String? // flag ragu-ragu
-  jawabanTeks  String?  // For essay, isian, kitabah answers
-  jawabanData  Json?    // For matching pairs, ordering, drag-category answers
-  nilaiManual  Float?   // Manual/AI grade for essay types (0-100 scale of bobot)
-  aiGraded     Boolean  @default(false)
-  aiFeedback   String?  // AI feedback/explanation
+  jawabanTeks    String?   // For essay, isian, kitabah answers
+  jawabanData    Json?     // For matching pairs, ordering, drag-category answers
+  nilaiManual    Float?    // Manual/AI grade for essay types (0-100 scale of bobot)
+  aiGraded       Boolean   @default(false)
+  aiFeedback     String?   // AI feedback/explanation
+  needsReview    Boolean   @default(false) // Flag dari AI jika perlu dicek guru (kunci kosong / ragu)
+  reviewedByName String?   // Nama guru/user yang mereview atau mengoreksi jawaban ini
+  reviewedAt     DateTime? // Waktu terakhir direview oleh guru
 
   sesi   SesiUjianSantri @relation(fields: [sesiId], references: [id], onDelete: Cascade)
 

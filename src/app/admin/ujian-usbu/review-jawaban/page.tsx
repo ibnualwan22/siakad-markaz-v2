@@ -11,6 +11,8 @@ import {
   Edit3,
   Save,
   AlertCircle,
+  AlertTriangle,
+  UserCheck,
   ChevronDown,
   Activity,
   BookOpen,
@@ -240,7 +242,7 @@ export default function ReviewJawabanPage() {
         const res = await fetch("/api/admin/ujian-usbu/start-bulk-ai-grade", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paketId: selectedPaket }),
+          body: JSON.stringify({ sesiGlobalId: selectedPaket }),
         });
 
         const json = await res.json();
@@ -260,6 +262,82 @@ export default function ReviewJawabanPage() {
     }
   };
 
+  const isNeedsTeacherReview = (jaw: any) =>
+    Boolean(
+      jaw?.id &&
+        !jaw.reviewedByName &&
+        (jaw.needsReview ||
+          (jaw.aiFeedback &&
+            /\[(?:Perlu Cek Guru|ERROR|FATAL)\]/i.test(jaw.aiFeedback))),
+    );
+
+  const renderFeedbackBox = (jaw: any, compact = false) => {
+    if (!jaw?.aiFeedback) return null;
+    const needsCheck = isNeedsTeacherReview(jaw);
+    const cleanedFeedback = String(jaw.aiFeedback)
+      .replace(/^\[Perlu Cek Guru\]\s*/i, "")
+      .trim();
+
+    return (
+      <div
+        className={`mt-2 text-xs rounded-lg border flex items-start gap-1.5 ${
+          compact ? "p-2" : "p-2.5"
+        } ${
+          needsCheck
+            ? "bg-amber-50 text-amber-950 border-amber-200"
+            : "bg-purple-50 text-purple-800 border-purple-100"
+        }`}
+      >
+        {needsCheck ? (
+          <AlertTriangle
+            size={13}
+            className="shrink-0 mt-0.5 text-amber-600"
+          />
+        ) : (
+          <Brain size={13} className="shrink-0 mt-0.5 text-purple-600" />
+        )}
+        <div className="min-w-0 leading-relaxed break-words">
+          {needsCheck && (
+            <span className="inline-block mr-1.5 px-1.5 py-0.5 rounded bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase tracking-wide align-middle">
+              Perlu Cek Guru
+            </span>
+          )}
+          <span>{cleanedFeedback}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderReviewMetaBadges = (jaw: any) => {
+    if (!jaw?.id) return null;
+    if (jaw.reviewedByName) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md max-w-[200px] leading-tight text-left">
+          <UserCheck size={11} className="shrink-0" />
+          <span className="break-words">
+            Sudah direview ({jaw.reviewedByName})
+          </span>
+        </span>
+      );
+    }
+    if (isNeedsTeacherReview(jaw)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md whitespace-nowrap">
+          <AlertTriangle size={11} className="shrink-0" />
+          Perlu Cek Guru
+        </span>
+      );
+    }
+    if (jaw.aiGraded && jaw.nilaiManual !== null && jaw.nilaiManual !== undefined) {
+      return (
+        <span className="text-[10px] text-purple-600 flex items-center gap-0.5 font-semibold">
+          <Brain size={10} /> AI
+        </span>
+      );
+    }
+    return null;
+  };
+
   const renderStatus = (jaw: any, soal: any) => {
     if (!jaw.id) {
       return <span className="text-gray-400 text-xs italic">Kosong</span>;
@@ -275,18 +353,14 @@ export default function ReviewJawabanPage() {
             ? "text-orange-700 bg-orange-50 border border-orange-200"
             : "text-rose-700 bg-rose-50 border border-rose-200";
       return (
-        <span className="inline-flex flex-col items-center gap-0.5">
+        <span className="inline-flex flex-col items-center gap-1">
           <span
             className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-md text-xs whitespace-nowrap ${badgeCls}`}
           >
             {pct >= 70 ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
             {Number(jaw.nilaiManual.toFixed(1))}/{soal.bobot}
           </span>
-          {jaw.aiGraded && (
-            <span className="text-[10px] text-purple-600 flex items-center gap-0.5 font-semibold">
-              <Brain size={10} /> AI
-            </span>
-          )}
+          {renderReviewMetaBadges(jaw)}
         </span>
       );
     }
@@ -294,8 +368,11 @@ export default function ReviewJawabanPage() {
     if (soal.tipeSoal.startsWith("ESSAY")) {
       if (jaw.jawabanTeks) {
         return (
-          <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
-            <Clock size={13} /> Menunggu
+          <span className="inline-flex flex-col items-center gap-1">
+            <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+              <Clock size={13} /> Menunggu
+            </span>
+            {renderReviewMetaBadges(jaw)}
           </span>
         );
       }
@@ -331,20 +408,28 @@ export default function ReviewJawabanPage() {
         }
       }
 
-      return isBenar ? (
-        <span className="inline-flex items-center gap-1 text-green-700 font-bold bg-green-50 border border-green-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
-          <CheckCircle size={13} /> Benar
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1 text-rose-700 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
-          <X size={13} /> Salah
+      return (
+        <span className="inline-flex flex-col items-center gap-1">
+          {isBenar ? (
+            <span className="inline-flex items-center gap-1 text-green-700 font-bold bg-green-50 border border-green-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+              <CheckCircle size={13} /> Benar
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-rose-700 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+              <X size={13} /> Salah
+            </span>
+          )}
+          {renderReviewMetaBadges(jaw)}
         </span>
       );
     }
 
     return (
-      <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
-        <Clock size={13} /> Belum Dihitung
+      <span className="inline-flex flex-col items-center gap-1">
+        <span className="inline-flex items-center gap-1 text-orange-700 font-bold bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md text-xs whitespace-nowrap">
+          <Clock size={13} /> Belum Dihitung
+        </span>
+        {renderReviewMetaBadges(jaw)}
       </span>
     );
   };
@@ -434,10 +519,20 @@ export default function ReviewJawabanPage() {
 
     return (
       <div
-        className={`flex flex-wrap gap-2 items-center ${
+        className={`flex flex-wrap gap-1.5 items-center ${
           compact ? "justify-start sm:justify-end" : "justify-end"
         }`}
       >
+        {jaw.nilaiManual !== null && jaw.nilaiManual !== undefined && !jaw.reviewedByName && (
+          <button
+            disabled={isUpdating}
+            onClick={() => handleUpdateNilai(jaw.id, jaw.nilaiManual)}
+            title="Setujui nilai saat ini dan tandai sudah direview"
+            className="px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-lg hover:bg-emerald-100 inline-flex items-center gap-1 text-xs transition-colors"
+          >
+            <UserCheck size={13} /> Setujui
+          </button>
+        )}
         {jaw.nilaiManual !== null && (
           <button
             disabled={isUpdating}
@@ -491,9 +586,17 @@ export default function ReviewJawabanPage() {
           santriMap[sNama] = {
             nama: sNama,
             totalNilai: 0,
+            needsReviewCount: 0,
+            reviewedCount: 0,
             mapels: {},
             sesiStatus: jaw.sesiStatus,
           };
+        }
+        if (isNeedsTeacherReview(jaw)) {
+          santriMap[sNama].needsReviewCount += 1;
+        }
+        if (jaw.reviewedByName) {
+          santriMap[sNama].reviewedCount += 1;
         }
 
         if (!santriMap[sNama].mapels[mapel]) {
@@ -750,6 +853,13 @@ export default function ReviewJawabanPage() {
                                 const answeredCount = soal.jawabanSantri.filter(
                                   (j: any) => j.id,
                                 ).length;
+                                const needsReviewCount =
+                                  soal.jawabanSantri.filter((j: any) =>
+                                    isNeedsTeacherReview(j),
+                                  ).length;
+                                const reviewedCount = soal.jawabanSantri.filter(
+                                  (j: any) => Boolean(j.reviewedByName),
+                                ).length;
                                 const isEssay = soal.tipeSoal.startsWith("ESSAY");
 
                                 return (
@@ -783,6 +893,18 @@ export default function ReviewJawabanPage() {
                                             <Users_ico /> {answeredCount}/
                                             {soal.jawabanSantri.length}
                                           </span>
+                                          {needsReviewCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                                              <AlertTriangle size={11} />
+                                              {needsReviewCount} Perlu Cek Guru
+                                            </span>
+                                          )}
+                                          {reviewedCount > 0 && (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                              <UserCheck size={11} />
+                                              {reviewedCount} Direview
+                                            </span>
+                                          )}
                                         </div>
 
                                         <div className="flex items-center gap-2">
@@ -933,17 +1055,7 @@ export default function ReviewJawabanPage() {
                                                     jaw={jaw}
                                                     soal={soal}
                                                   />
-                                                  {jaw.aiFeedback && (
-                                                    <div className="mt-2 text-xs p-2.5 bg-purple-50 text-purple-800 rounded-lg border border-purple-100 flex items-start gap-1.5">
-                                                      <Brain
-                                                        size={13}
-                                                        className="shrink-0 mt-0.5 text-purple-600"
-                                                      />
-                                                      <span className="leading-relaxed break-words">
-                                                        {jaw.aiFeedback}
-                                                      </span>
-                                                    </div>
-                                                  )}
+                                                  {renderFeedbackBox(jaw)}
                                                 </div>
 
                                                 <div className="pt-2 border-t border-gray-100">
@@ -1001,17 +1113,7 @@ export default function ReviewJawabanPage() {
                                                         jaw={jaw}
                                                         soal={soal}
                                                       />
-                                                      {jaw.aiFeedback && (
-                                                        <div className="mt-2 text-xs p-2 bg-purple-50 text-purple-800 rounded border border-purple-100 flex items-start gap-1.5">
-                                                          <Brain
-                                                            size={12}
-                                                            className="shrink-0 mt-0.5 text-purple-600"
-                                                          />
-                                                          <span className="leading-relaxed">
-                                                            {jaw.aiFeedback}
-                                                          </span>
-                                                        </div>
-                                                      )}
+                                                      {renderFeedbackBox(jaw, true)}
                                                     </td>
 
                                                     <td className="px-4 py-3 text-center">
@@ -1089,9 +1191,23 @@ export default function ReviewJawabanPage() {
                         }
                       >
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-base sm:text-lg font-bold text-gray-800 break-words">
-                            {santri.nama}
-                          </h3>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-base sm:text-lg font-bold text-gray-800 break-words">
+                              {santri.nama}
+                            </h3>
+                            {santri.needsReviewCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                                <AlertTriangle size={11} />
+                                {santri.needsReviewCount} Perlu Cek Guru
+                              </span>
+                            )}
+                            {santri.reviewedCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                <UserCheck size={11} />
+                                {santri.reviewedCount} Direview
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-gray-500 font-medium mt-0.5">
                             Status: {santri.sesiStatus}
                           </p>
@@ -1219,17 +1335,7 @@ export default function ReviewJawabanPage() {
                                                   soal={soal}
                                                 />
 
-                                                {jaw.aiFeedback && (
-                                                  <div className="mt-3 text-xs p-2.5 bg-purple-50 text-purple-800 rounded-lg border border-purple-100 flex items-start gap-2">
-                                                    <Brain
-                                                      size={14}
-                                                      className="shrink-0 mt-0.5 text-purple-600"
-                                                    />
-                                                    <span className="leading-relaxed break-words">
-                                                      {jaw.aiFeedback}
-                                                    </span>
-                                                  </div>
-                                                )}
+                                                {renderFeedbackBox(jaw)}
                                               </div>
 
                                               <div className="mt-4 pt-3 border-t border-gray-200/70">

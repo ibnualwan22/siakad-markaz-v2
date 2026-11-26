@@ -105,6 +105,9 @@ export async function GET(req: Request) {
           nilaiManual: jaw?.nilaiManual ?? null,
           aiGraded: jaw?.aiGraded || false,
           aiFeedback: jaw?.aiFeedback || null,
+          needsReview: jaw?.needsReview || false,
+          reviewedByName: jaw?.reviewedByName || null,
+          reviewedAt: jaw?.reviewedAt || null,
           sesiStatus: sesi.status
         };
       }).sort((a, b) => (a.santriNama || "").localeCompare(b.santriNama || ""));
@@ -144,10 +147,26 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: "Invalid data" }, { status: 400 });
     }
 
-    // @ts-ignore
+    const reviewerName = session.nama || session.username || "Pengajar";
+
     const jaw = await prisma.jawabanUjianSantri.update({
       where: { id: jawabanId },
-      data: { nilaiManual }
+      data:
+        nilaiManual !== null
+          ? {
+              nilaiManual,
+              aiGraded: true,
+              needsReview: false,
+              reviewedByName: reviewerName,
+              reviewedAt: new Date(),
+            }
+          : {
+              nilaiManual: null,
+              aiGraded: false,
+              needsReview: false,
+              reviewedByName: null,
+              reviewedAt: null,
+            },
     });
 
     if (jaw && jaw.sesiId) {

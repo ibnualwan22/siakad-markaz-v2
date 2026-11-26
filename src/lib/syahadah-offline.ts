@@ -30,6 +30,13 @@ export const OFFLINE_PROGRAM_KEY_PREFIX = "syahadah-offline-";
 // ganti konstanta ini + @font-face-nya, tanpa mengubah komponen lain.
 export const OFFLINE_DEFAULT_FONT_FAMILY = "Amiri";
 
+// Font KHUSUS nama mudir Arab di syahadah offline (keputusan user 26 Nov
+// 2026): "XB Tabriz" (OFL, subset Arab + Latin dasar, WOFF2, disematkan
+// base64 di components/cetak/xb-tabriz.css supaya tidak bergantung CDN).
+// Nama family di sini HARUS sama dengan @font-face di xb-tabriz.css.
+// Hanya nama Arab yang memakai font ini; jabatan tidak ditampilkan.
+export const OFFLINE_MUDIR_FONT_FAMILY = "XB Tabriz";
+
 /** "I'dad Awal" -> "idad-awal". Satu fungsi dipakai editor, halaman cetak,
  *  dan santri-overview supaya programKey selalu sama. */
 export function slugifyProgram(namaIndo: string): string {
@@ -58,6 +65,8 @@ export type OfflineFieldCfg = {
 // Slot ke-i = mapel tampil ke-i dari nilaiRows (sudah terfilter
 // tampil_di_syahadah + urutan di getCertificateData) — jadi isi + urutan
 // nama mapel dan nilai SELALU sama dengan settingan syahadah.
+// + 2 field mudir (26 Nov 2026): tandaTangan (gambar /images/signature.png)
+// dan namaMudir (teks Arab saja, font XB Tabriz, tanpa jabatan).
 export const OFFLINE_FIELD_KEYS = [
   "nama",
   "tempatLahir",
@@ -95,6 +104,8 @@ export const OFFLINE_FIELD_KEYS = [
   "nilaiSlot10",
   "nilaiSlot11",
   "nilaiSlot12",
+  "tandaTangan",
+  "namaMudir",
 ] as const;
 
 export type OfflineFieldKey = (typeof OFFLINE_FIELD_KEYS)[number];
@@ -149,6 +160,8 @@ export const OFFLINE_FIELD_LABEL: Record<string, string> = {
   nilaiSlot10: "Nilai 10 (kiri, baris 5)",
   nilaiSlot11: "Nilai 11 (kanan, baris 6)",
   nilaiSlot12: "Nilai 12 (kiri, baris 6)",
+  tandaTangan: "Tanda Tangan Mudir",
+  namaMudir: "Nama Mudir (Arab)",
 };
 
 /** Label ringkas untuk chip/badge editor, menyertakan nama mapel asli bila tersedia. */
@@ -207,6 +220,8 @@ export const OFFLINE_FIELD_SAMPLE: Record<string, string> = {
   nilaiSlot10: "٩٥",
   nilaiSlot11: "٩٥",
   nilaiSlot12: "٩٥",
+  tandaTangan: "TTD",
+  namaMudir: "اسم المدير",
 };
 
 // Posisi awal (tengah field, % dari 215 x 330 mm F4 portrait).
@@ -259,6 +274,18 @@ export function defaultFieldPositionsOffline(): Record<string, OfflineFieldCfg> 
     nilaiSlot10: { x: 32.5, y: 76.4, fontSize: 13, maxWidth: 10.0 },
     nilaiSlot11: { x: 66.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },
     nilaiSlot12: { x: 32.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },
+    // Blok mudir (26 Nov 2026) — POSISI ESTIMASI, admin WAJIB kalibrasi
+    // lewat drag di editor (seperti field lain): tanda tangan di atas,
+    // nama Arab di bawahnya, di area bawah kanan panggung. Nama memakai
+    // font XB Tabriz (bukan Amiri); jabatan TIDAK ditampilkan.
+    tandaTangan: { x: 70.0, y: 84.0, fontSize: 13, maxWidth: 14.0 },
+    namaMudir: {
+      x: 70.0,
+      y: 89.5,
+      fontSize: 14,
+      maxWidth: 20.0,
+      fontFamily: OFFLINE_MUDIR_FONT_FAMILY,
+    },
   };
 }
 

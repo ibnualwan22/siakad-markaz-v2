@@ -373,14 +373,17 @@ export default function SyahadahOfflineWorkspace({
   }, [editable, selectedKey, stepSize, visibleKeys, commitPositions, undo, handleSave]);
 
   const selectedCfg = selectedKey ? positions[selectedKey] || {} : null;
-  const selectedIsQr = selectedKey === "qr";
+  // Field gambar (QR + tanda tangan mudir): ukuran diatur lewat lebar
+  // (mm), tanpa kontrol font/warna.
+  const selectedIsImage =
+    selectedKey === "qr" || selectedKey === "tandaTangan";
   const selectedXMm = selectedCfg
     ? round2(((selectedCfg.x ?? 50) / 100) * OFFLINE_STAGE_W_MM)
     : 0;
   const selectedYMm = selectedCfg
     ? round2(((selectedCfg.y ?? 50) / 100) * OFFLINE_STAGE_H_MM)
     : 0;
-  const selectedQrMm = selectedCfg
+  const selectedImgMm = selectedCfg
     ? round2(((selectedCfg.maxWidth ?? 11.16) / 100) * OFFLINE_STAGE_W_MM)
     : 24;
 
@@ -626,15 +629,17 @@ export default function SyahadahOfflineWorkspace({
               {/* Row 1b: Properti detail elemen terpilih (Font / QR size, Lebar, Align, Warna, Font Family) */}
               {selectedKey && selectedCfg && (
                 <div className="flex flex-wrap items-center gap-3 border-t border-neutral-700/50 bg-neutral-900/40 px-4 py-2.5 text-[11px] text-slate-300">
-                  {selectedIsQr ? (
+                  {selectedIsImage ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-slate-400">Ukuran QR (mm):</span>
+                      <span className="text-slate-400">
+                        {selectedKey === "qr" ? "Ukuran QR (mm):" : "Ukuran TTD (mm):"}
+                      </span>
                       <button
                         type="button"
                         onClick={() =>
                           updateFieldCommit(selectedKey, {
                             maxWidth: round2(
-                              (Math.max(8, selectedQrMm - 1) / OFFLINE_STAGE_W_MM) * 100,
+                              (Math.max(8, selectedImgMm - 1) / OFFLINE_STAGE_W_MM) * 100,
                             ),
                           })
                         }
@@ -647,7 +652,7 @@ export default function SyahadahOfflineWorkspace({
                         step="1"
                         min="8"
                         max="120"
-                        value={Math.round(selectedQrMm)}
+                        value={Math.round(selectedImgMm)}
                         onChange={(e) => {
                           const mm = Math.max(8, Number(e.target.value) || 8);
                           updateFieldCommit(selectedKey, {
@@ -661,7 +666,7 @@ export default function SyahadahOfflineWorkspace({
                         onClick={() =>
                           updateFieldCommit(selectedKey, {
                             maxWidth: round2(
-                              (Math.min(120, selectedQrMm + 1) / OFFLINE_STAGE_W_MM) * 100,
+                              (Math.min(120, selectedImgMm + 1) / OFFLINE_STAGE_W_MM) * 100,
                             ),
                           })
                         }

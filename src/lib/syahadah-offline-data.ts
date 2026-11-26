@@ -82,6 +82,11 @@ export async function getOfflinePrintData(
   const { periode, tahunHijriyah, tahunMiladiyah } = periodeDanTahun(tpl);
   const { tglCetakHijriyah, tglCetakMiladiyah } = tahunCetakHariIni();
 
+  // Nama mudir ARAB saja (tanpa jabatan, tanpa nama Latin) — dari
+  // pengaturan syahadah (SyahadahTemplate.nama_mudir_arab). Kosong ->
+  // "اسم المدير" (sama seperti default saat simpan di master-data).
+  const namaMudirArab = (tpl?.nama_mudir_arab || "").trim() || "اسم المدير";
+
   // Duf'ah sebagai angka ("Duf'ah 95" -> "٩٥").
   const dufahMatch = String(cert.riwayatSantri.dufahNama || "").match(/\d+/);
   const dufah = dufahMatch ? toArabDigits(dufahMatch[0]) : "";
@@ -127,6 +132,7 @@ export async function getOfflinePrintData(
     taqdir: cert.averagePredikat?.arab || "",
     tglCetakHijriyah,
     tglCetakMiladiyah,
+    namaMudir: namaMudirArab,
     ...mapelSlot,
     ...nilaiSlot,
   };
@@ -171,6 +177,7 @@ type TemplateSyahadahMini = {
   tgl_selesai_arab?: string | null;
   tgl_mulai_indo?: string | null;
   tgl_selesai_indo?: string | null;
+  nama_mudir_arab?: string | null;
 };
 
 /** Periode + tahun pembelajaran dari baris SyahadahTemplate.
@@ -256,6 +263,10 @@ export async function getDummyPrintData(
   );
   const { tglCetakHijriyah, tglCetakMiladiyah } = tahunCetakHariIni();
 
+  // Nama mudir Arab (pengaturan syahadah) — sama seperti jalur asli.
+  const namaMudirArab =
+    ((tplRow as any)?.nama_mudir_arab || "").trim() || "اسم المدير";
+
   const mapelSlot: Record<string, string> = {};
   const nilaiSlot: Record<string, string> = {};
   for (let i = 1; i <= 12; i++) {
@@ -278,6 +289,7 @@ export async function getDummyPrintData(
     taqdir: "ممتاز",
     tglCetakHijriyah,
     tglCetakMiladiyah,
+    namaMudir: namaMudirArab,
     ...mapelSlot,
     ...nilaiSlot,
   };

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import "./xb-tabriz.css";
 import {
   OFFLINE_DEFAULT_FONT_FAMILY,
   OFFLINE_FIELD_KEYS,
@@ -280,6 +281,36 @@ export default function SyahadahOfflineStage({
               style={{ width: "100%", height: "100%", display: "block" }}
             />
           )}
+        </div>
+      );
+    }
+
+    if (key === "tandaTangan") {
+      // Gambar tanda tangan mudir (26 Nov 2026): file statis yang sama
+      // dengan syahadah online (/images/signature.png). Lebar diatur
+      // maxWidth (mm); tinggi mengikuti rasio gambar. Bisa di-drag seperti
+      // field lain; ikut tercetak (bukan background).
+      const widthMm = maxWMm;
+      return (
+        <div
+          key={key}
+          onPointerDown={(e) => onFieldDown(e, key)}
+          className={`absolute ${fieldClass}`}
+          style={{
+            left: `${xMm}mm`,
+            top: `${yMm}mm`,
+            transform: "translate(-50%, -50%)",
+            width: `${widthMm}mm`,
+          }}
+        >
+          {badge && <span className="offline-field-badge no-print">{badge}</span>}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/signature.png"
+            alt="Tanda tangan mudir"
+            draggable={false}
+            className="block w-full h-auto"
+          />
         </div>
       );
     }

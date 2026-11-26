@@ -1,4 +1,4 @@
-﻿import { redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { resolvePostLoginRedirect } from "@/lib/permission";
 

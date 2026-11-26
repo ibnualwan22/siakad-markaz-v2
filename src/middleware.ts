@@ -47,10 +47,9 @@ export async function middleware(request: NextRequest) {
     // Semua user (ADMIN, WALI_KELAS, PENGAJAR, KSU) menggunakan portal /admin
     // Akses spesifik halaman akan dibatasi oleh UI (Sidebar) dan API
 
-    // Redirect / atau /portal ke /admin/dashboard
-    if (pathname === '/' || pathname.startsWith('/portal')) {
-      const response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
-      // Sliding refresh juga berlaku untuk redirect
+    // Redirect /portal ke / agar HomePage mengarahkan sesuai izin user (mis. non-KSU dengan absen_kelas -> /admin/absensi/kelas)
+    if (pathname.startsWith('/portal')) {
+      const response = NextResponse.redirect(new URL('/', request.url));
       if (await shouldRefreshToken(sessionToken)) {
         const newToken = await encrypt(session);
         response.cookies.set('session', newToken, {

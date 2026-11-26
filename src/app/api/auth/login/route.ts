@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { verifyPassword, createSession } from '@/lib/auth';
+import { resolvePostLoginRedirect } from '@/lib/permission';
 
 // Rate Limiter Sederhana (In-Memory)
 // Catatan: Cukup untuk menangkal basic brute-force berulang dari satu IP dalam waktu singkat.
@@ -81,12 +82,7 @@ export async function POST(request: Request) {
       sakan: user.sakan,
     });
 
-    let redirectPath = '/admin/dashboard';
-    if (user.role === 'PENGAJAR' || user.role === 'WALI_KELAS') {
-      redirectPath = '/admin/absensi/kelas';
-    } else if (user.role === 'KSU') {
-      redirectPath = '/admin/absensi/sakan';
-    }
+    const redirectPath = await resolvePostLoginRedirect(user.id, user.role);
 
     return NextResponse.json({
       success: true,

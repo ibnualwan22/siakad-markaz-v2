@@ -93,3 +93,25 @@ export async function requirePermission(permissionId: string) {
     redirect("/admin/dashboard?error=unauthorized");
   }
 }
+
+/**
+ * Menentukan halaman tujuan utama setelah login / membuka root URL:
+ * - Role KSU tetap diarahkan ke Absen Sakan (/admin/absensi/sakan).
+ * - Semua user selain KSU yang memiliki akses ke `absen_kelas`
+ *   (termasuk ADMIN / role lain / override GRANT) langsung diarahkan
+ *   ke Absen Kelas (/admin/absensi/kelas).
+ * - User lain diarahkan ke /admin/dashboard.
+ */
+export async function resolvePostLoginRedirect(
+  userId: string,
+  role: string,
+): Promise<string> {
+  if ((role || "").toUpperCase() === "KSU") {
+    return "/admin/absensi/sakan";
+  }
+  const perms = await getEffectivePermissions(userId, role);
+  if (perms.includes("*") || perms.includes("absen_kelas")) {
+    return "/admin/absensi/kelas";
+  }
+  return "/admin/dashboard";
+}

@@ -7,7 +7,7 @@ import { getOfflinePrintData } from "@/lib/syahadah-offline-data";
 export const dynamic = "force-dynamic";
 
 /**
- * Halaman cetak syahadah offline (admin) — A4 portrait, kertas pre-printed.
+ * Halaman cetak syahadah offline (admin) — F4 portrait (215 x 330 mm), kertas pre-printed.
  * Background TIDAK ikut tercetak (hanya tampil di preview).
  * Contoh: /cetak-offline/<riwayatId atau santriId>
  * Program (dan template-nya) diturunkan dari program santri.

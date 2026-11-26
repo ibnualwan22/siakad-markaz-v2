@@ -1,25 +1,25 @@
-// Syahadah offline (A4 portrait, kertas pre-printed) — pustaka bersama.
+// Syahadah offline (F4 portrait 215 x 330 mm, kertas pre-printed) — pustaka bersama.
 // AMAN untuk client: tidak mengimpor prisma/app-data.
-// Geometri: panggung 210 x 297 mm; posisi tersimpan dalam PERSEN
-// (x% dari 210, y% dari 297), font tersimpan dalam PT.
-// Render: left = x% x 210 mm, top = y% x 297 mm, font-size pt —
+// Geometri: panggung 215 x 330 mm; posisi tersimpan dalam PERSEN
+// (x% dari 215, y% dari 330), font tersimpan dalam PT.
+// Render: left = x% x 215 mm, top = y% x 330 mm, font-size pt —
 // tanpa skala yang berubah antara layar dan print (WYSIWYG).
 
 import { toArabDigits } from "@/lib/munaqosah-hufadz";
 
-// Ukuran kertas cetak (mm).
-export const OFFLINE_STAGE_W_MM = 210;
-export const OFFLINE_STAGE_H_MM = 297;
+// Ukuran kertas cetak F4 portrait (mm).
+export const OFFLINE_STAGE_W_MM = 215;
+export const OFFLINE_STAGE_H_MM = 330;
 
-// Lebar panggung dalam px CSS (96dpi): 210mm = 793.7px. Dipakai zoom layar
-// dan tangkapan PNG html2canvas.
+// Lebar panggung dalam px CSS (96dpi): 215mm ≈ 812.6px, 330mm ≈ 1247px.
+// Dipakai zoom layar dan tangkapan PNG html2canvas.
 export const OFFLINE_STAGE_W_PX = (OFFLINE_STAGE_W_MM * 96) / 25.4;
 export const OFFLINE_STAGE_H_PX = Math.round(
   (OFFLINE_STAGE_W_PX * OFFLINE_STAGE_H_MM) / OFFLINE_STAGE_W_MM,
 );
 
-// Ukuran QR di kertas (mm) — kotak di desain sudah kosong, QR dicetak web.
-export const OFFLINE_QR_MM = 22;
+// Ukuran QR di kertas (mm) — QR murni tanpa logo di tengah.
+export const OFFLINE_QR_MM = 24;
 
 export const OFFLINE_PROGRAM_KEY_PREFIX = "syahadah-offline-";
 
@@ -45,19 +45,19 @@ export function offlineProgramKey(namaIndo: string): string {
 }
 
 export type OfflineFieldCfg = {
-  x: number; // persen dari lebar (210mm)
-  y: number; // persen dari tinggi (297mm)
+  x: number; // persen dari lebar (215mm)
+  y: number; // persen dari tinggi (330mm)
   fontSize: number; // pt
   align?: string;
-  maxWidth?: number; // persen dari lebar (210mm)
+  maxWidth?: number; // persen dari lebar (215mm)
   fontFamily?: string;
   color?: string;
 };
 
-// 11 field teks + QR + 12 slot nilai (nilai = field teks biasa yang
-// isinya angka; slot ke-i = mapel tampil ke-i dari nilaiRows — sudah
-// terfilter tampil_di_syahadah + urutan urutan di getCertificateData —
-// jadi isi + urutan kolom nilai SELALU sama dengan settingan syahadah).
+// 11 field teks + QR + 12 slot nama mapel + 12 slot nilai.
+// Slot ke-i = mapel tampil ke-i dari nilaiRows (sudah terfilter
+// tampil_di_syahadah + urutan di getCertificateData) — jadi isi + urutan
+// nama mapel dan nilai SELALU sama dengan settingan syahadah.
 export const OFFLINE_FIELD_KEYS = [
   "nama",
   "tempatLahir",
@@ -71,6 +71,18 @@ export const OFFLINE_FIELD_KEYS = [
   "tglCetakHijriyah",
   "tglCetakMiladiyah",
   "qr",
+  "mapelSlot1",
+  "mapelSlot2",
+  "mapelSlot3",
+  "mapelSlot4",
+  "mapelSlot5",
+  "mapelSlot6",
+  "mapelSlot7",
+  "mapelSlot8",
+  "mapelSlot9",
+  "mapelSlot10",
+  "mapelSlot11",
+  "mapelSlot12",
   "nilaiSlot1",
   "nilaiSlot2",
   "nilaiSlot3",
@@ -85,12 +97,27 @@ export const OFFLINE_FIELD_KEYS = [
   "nilaiSlot12",
 ] as const;
 
+export type OfflineFieldKey = (typeof OFFLINE_FIELD_KEYS)[number];
+
+/** Cek apakah field tampil untuk program dengan jumlah mapel tampil = slotCount. */
+export function isOfflineFieldVisible(key: string, slotCount: number): boolean {
+  if (key.startsWith("nilaiSlot")) {
+    const n = parseInt(key.slice("nilaiSlot".length), 10);
+    return !Number.isNaN(n) && n <= slotCount;
+  }
+  if (key.startsWith("mapelSlot")) {
+    const n = parseInt(key.slice("mapelSlot".length), 10);
+    return !Number.isNaN(n) && n <= slotCount;
+  }
+  return true;
+}
+
 export const OFFLINE_FIELD_LABEL: Record<string, string> = {
   nama: "Nama Santri",
-  tempatLahir: "Tempat Lahir",
+  tempatLahir: "Tempat & Tgl Lahir",
   program: "Program",
   dufah: "Duf'ah (angka)",
-  periode: "Fترات (Periode)",
+  periode: "Fatrat (Periode)",
   tahunHijriyah: "Tahun Hijriyah",
   tahunMiladiyah: "Tahun Masehi",
   muaddal: "Muaddal (Rata-rata)",
@@ -98,91 +125,144 @@ export const OFFLINE_FIELD_LABEL: Record<string, string> = {
   tglCetakHijriyah: "Tgl Cetak Hijriyah",
   tglCetakMiladiyah: "Tgl Cetak Masehi",
   qr: "QR Verifikasi",
-  nilaiSlot1: "Nilai Slot 1 (kanan, baris 1)",
-  nilaiSlot2: "Nilai Slot 2 (kanan, baris 2)",
-  nilaiSlot3: "Nilai Slot 3 (kanan, baris 3)",
-  nilaiSlot4: "Nilai Slot 4 (kanan, baris 4)",
-  nilaiSlot5: "Nilai Slot 5 (kiri, baris 1)",
-  nilaiSlot6: "Nilai Slot 6 (kiri, baris 2)",
-  nilaiSlot7: "Nilai Slot 7 (kiri, baris 3)",
-  nilaiSlot8: "Nilai Slot 8 (kiri, baris 4)",
-  nilaiSlot9: "Nilai Slot 9 (kanan, baris 5)",
-  nilaiSlot10: "Nilai Slot 10 (kiri, baris 5)",
-  nilaiSlot11: "Nilai Slot 11 (kanan, baris 6)",
-  nilaiSlot12: "Nilai Slot 12 (kiri, baris 6)",
+  mapelSlot1: "Mapel 1 (kanan, baris 1)",
+  mapelSlot2: "Mapel 2 (kanan, baris 2)",
+  mapelSlot3: "Mapel 3 (kanan, baris 3)",
+  mapelSlot4: "Mapel 4 (kanan, baris 4)",
+  mapelSlot5: "Mapel 5 (kiri, baris 1)",
+  mapelSlot6: "Mapel 6 (kiri, baris 2)",
+  mapelSlot7: "Mapel 7 (kiri, baris 3)",
+  mapelSlot8: "Mapel 8 (kiri, baris 4)",
+  mapelSlot9: "Mapel 9 (kanan, baris 5)",
+  mapelSlot10: "Mapel 10 (kiri, baris 5)",
+  mapelSlot11: "Mapel 11 (kanan, baris 6)",
+  mapelSlot12: "Mapel 12 (kiri, baris 6)",
+  nilaiSlot1: "Nilai 1 (kanan, baris 1)",
+  nilaiSlot2: "Nilai 2 (kanan, baris 2)",
+  nilaiSlot3: "Nilai 3 (kanan, baris 3)",
+  nilaiSlot4: "Nilai 4 (kanan, baris 4)",
+  nilaiSlot5: "Nilai 5 (kiri, baris 1)",
+  nilaiSlot6: "Nilai 6 (kiri, baris 2)",
+  nilaiSlot7: "Nilai 7 (kiri, baris 3)",
+  nilaiSlot8: "Nilai 8 (kiri, baris 4)",
+  nilaiSlot9: "Nilai 9 (kanan, baris 5)",
+  nilaiSlot10: "Nilai 10 (kiri, baris 5)",
+  nilaiSlot11: "Nilai 11 (kanan, baris 6)",
+  nilaiSlot12: "Nilai 12 (kiri, baris 6)",
 };
 
-// Contoh isi untuk preview editor (teks Arab seperti di sertifikat).
+/** Label ringkas untuk chip/badge editor, menyertakan nama mapel asli bila tersedia. */
+export function getOfflineFieldDisplayLabel(
+  key: string,
+  texts?: Record<string, string> | null,
+): string {
+  if (key.startsWith("mapelSlot")) {
+    const n = key.slice("mapelSlot".length);
+    const nama = texts?.[key]?.trim();
+    return nama ? `Mapel ${n}: ${nama}` : `Mapel ${n}`;
+  }
+  if (key.startsWith("nilaiSlot")) {
+    const n = key.slice("nilaiSlot".length);
+    const nama = texts?.[`mapelSlot${n}`]?.trim();
+    return nama ? `Nilai ${n}: ${nama}` : `Nilai ${n}`;
+  }
+  return OFFLINE_FIELD_LABEL[key] || key;
+}
+
+// Contoh isi untuk preview editor (fallback bila dummyTexts gagal dimuat).
 export const OFFLINE_FIELD_SAMPLE: Record<string, string> = {
-  nama: "أحمد محمد علي",
-  tempatLahir: "جاكرتا، ٠٥ – ١١ – ٢٠٠٠",
+  nama: "Ahmad Ibnu Alwan",
+  tempatLahir: "Wonosobo, 05 - 11 - 2000",
   program: "إعداد أول",
   dufah: "٩٥",
   periode: "١١ أكتوبر إلى ٥ نوفمبر ٢٠٢٦",
   tahunHijriyah: "١٤٤٨",
   tahunMiladiyah: "٢٠٢٦",
-  muaddal: "٩٠",
+  muaddal: "٩٥",
   taqdir: "ممتاز",
   tglCetakHijriyah: "١٤٤٨",
   tglCetakMiladiyah: "٢٠٢٦",
   qr: "QR",
-  nilaiSlot1: "٩٠",
-  nilaiSlot2: "٨٥",
+  mapelSlot1: "النحو",
+  mapelSlot2: "الصرف",
+  mapelSlot3: "المحادثة",
+  mapelSlot4: "القراءة",
+  mapelSlot5: "الاستماع",
+  mapelSlot6: "الإملاء",
+  mapelSlot7: "التعبير",
+  mapelSlot8: "المفردات",
+  mapelSlot9: "البلاغة",
+  mapelSlot10: "الترجمة",
+  mapelSlot11: "الخطابة",
+  mapelSlot12: "القواعد",
+  nilaiSlot1: "٩٥",
+  nilaiSlot2: "٩٥",
   nilaiSlot3: "٩٥",
-  nilaiSlot4: "٨٨",
-  nilaiSlot5: "٩٢",
-  nilaiSlot6: "٩٠",
-  nilaiSlot7: "٨٧",
+  nilaiSlot4: "٩٥",
+  nilaiSlot5: "٩٥",
+  nilaiSlot6: "٩٥",
+  nilaiSlot7: "٩٥",
   nilaiSlot8: "٩٥",
-  nilaiSlot9: "٩٠",
-  nilaiSlot10: "٨٥",
-  nilaiSlot11: "٩٢",
-  nilaiSlot12: "٨٨",
+  nilaiSlot9: "٩٥",
+  nilaiSlot10: "٩٥",
+  nilaiSlot11: "٩٥",
+  nilaiSlot12: "٩٥",
 };
 
-// Posisi awal (tengah field, % dari 210 x 297 mm) — diukur 15 Nov 2026 dari
-// ekspor JPG Canva 1131 x 1600 px. Font default: nama 20pt, lainnya 13pt.
-// Slot nilai: baris 1–3 y-nya SAMA dengan seed lama (66,3/68,9/71,4 —
-// sesuai peta ukur); baris 4–6 mengikuti jarak baris ±2,6% (±7,6 mm).
-// Posisi X kolom skor (kanan 69,7% / kiri 34,0%) adalah ESTIMASI —
-// pembagi kolom di dalam tiap paruh tabel belum terukur pasti (hanya
-// pembagi tengah X ±138,6 mm yang diketahui); admin WAJIB kalibrasi
-// lewat drag di editor sebelum cetak massal.
-export function defaultFieldPositionsOffline(): Record<string, any> {
+// Posisi awal (tengah field, % dari 215 x 330 mm F4 portrait).
+// Font default: nama 20pt, lainnya 13pt.
+// Tabel nilai 2 sisi (RTL): kanan = nama mapel (x ~80%), kiri = nilai (x ~66%)
+// untuk paruh kanan; paruh kiri = nama mapel (x ~47%), nilai (x ~33%).
+// Admin kalibrasi lewat drag / tombol panah keyboard di editor sebelum cetak massal.
+export function defaultFieldPositionsOffline(): Record<string, OfflineFieldCfg> {
   return {
-    nama: { x: 41.1, y: 36.2, fontSize: 20, maxWidth: 23.4 },
-    tempatLahir: { x: 44.1, y: 39.1, fontSize: 13, maxWidth: 25.2 },
-    program: { x: 34.6, y: 41.9, fontSize: 13, maxWidth: 8.8 },
+    nama: { x: 41.1, y: 36.2, fontSize: 20, maxWidth: 35.0 },
+    tempatLahir: { x: 44.1, y: 39.1, fontSize: 13, maxWidth: 32.0 },
+    program: { x: 34.6, y: 41.9, fontSize: 13, maxWidth: 16.0 },
     dufah: { x: 56.4, y: 44.9, fontSize: 13, maxWidth: 12.9 },
-    periode: { x: 28.8, y: 44.9, fontSize: 13, maxWidth: 16.5 },
+    periode: { x: 28.8, y: 44.9, fontSize: 13, maxWidth: 24.0 },
     tahunHijriyah: { x: 57.0, y: 48.1, fontSize: 13, maxWidth: 10.0 },
     tahunMiladiyah: { x: 40.5, y: 48.1, fontSize: 13, maxWidth: 10.0 },
-    muaddal: { x: 43.8, y: 54.2, fontSize: 13, maxWidth: 9.7 },
-    taqdir: { x: 42.9, y: 56.9, fontSize: 13, maxWidth: 9.4 },
-    tglCetakHijriyah: { x: 68.5, y: 79.0, fontSize: 13, maxWidth: 9.0 },
-    tglCetakMiladiyah: { x: 57.0, y: 79.0, fontSize: 13, maxWidth: 9.0 },
+    muaddal: { x: 43.8, y: 54.2, fontSize: 13, maxWidth: 10.0 },
+    taqdir: { x: 42.9, y: 56.9, fontSize: 13, maxWidth: 14.0 },
+    tglCetakHijriyah: { x: 68.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },
+    tglCetakMiladiyah: { x: 57.0, y: 79.0, fontSize: 13, maxWidth: 10.0 },
     qr: {
       x: 20.3,
       y: 66.6,
       fontSize: 13,
-      maxWidth: (OFFLINE_QR_MM / OFFLINE_STAGE_W_MM) * 100,
+      maxWidth: Math.round(((OFFLINE_QR_MM / OFFLINE_STAGE_W_MM) * 100) * 100) / 100,
     },
-    nilaiSlot1: { x: 69.7, y: 66.3, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot2: { x: 69.7, y: 68.9, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot3: { x: 69.7, y: 71.4, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot4: { x: 69.7, y: 73.9, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot5: { x: 34.0, y: 66.3, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot6: { x: 34.0, y: 68.9, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot7: { x: 34.0, y: 71.4, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot8: { x: 34.0, y: 73.9, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot9: { x: 69.7, y: 76.4, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot10: { x: 34.0, y: 76.4, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot11: { x: 69.7, y: 79.0, fontSize: 13, maxWidth: 14.3 },
-    nilaiSlot12: { x: 34.0, y: 79.0, fontSize: 13, maxWidth: 14.3 },
+    // Nama mapel (kanan dari kolom nilai, sesuai RTL)
+    mapelSlot1: { x: 80.5, y: 66.3, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot2: { x: 80.5, y: 68.9, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot3: { x: 80.5, y: 71.4, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot4: { x: 80.5, y: 73.9, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot5: { x: 46.5, y: 66.3, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot6: { x: 46.5, y: 68.9, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot7: { x: 46.5, y: 71.4, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot8: { x: 46.5, y: 73.9, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot9: { x: 80.5, y: 76.4, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot10: { x: 46.5, y: 76.4, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot11: { x: 80.5, y: 79.0, fontSize: 13, maxWidth: 18.0 },
+    mapelSlot12: { x: 46.5, y: 79.0, fontSize: 13, maxWidth: 18.0 },
+    // Nilai mapel
+    nilaiSlot1: { x: 66.5, y: 66.3, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot2: { x: 66.5, y: 68.9, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot3: { x: 66.5, y: 71.4, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot4: { x: 66.5, y: 73.9, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot5: { x: 32.5, y: 66.3, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot6: { x: 32.5, y: 68.9, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot7: { x: 32.5, y: 71.4, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot8: { x: 32.5, y: 73.9, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot9: { x: 66.5, y: 76.4, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot10: { x: 32.5, y: 76.4, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot11: { x: 66.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },
+    nilaiSlot12: { x: 32.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },
   };
 }
 
-// ===== Format angka & tanggal Arab (pure, tanpa server) =====
+// ===== Format angka & tanggal (pure, tanpa server) =====
 
 const BULAN_MASEHI_ARAB = [
   "يناير",
@@ -275,9 +355,26 @@ export function tahunMiladiDari(tanggal: Date): number {
   return Number(parts.find((p) => p.type === "year")?.value || 0);
 }
 
-/** "05 – 11 – 2000" (angka Arab, DD – MM – YYYY, hari/bulan 2 digit) —
- *  tanggal lahir seperti di contoh Canva (angka saja, dipisah strip).
- *  Zona Asia/Jakarta. "" bila tanggal invalid. */
+/** "05 - 11 - 2000" (format Indonesia, digit Latin, DD - MM - YYYY,
+ *  hari/bulan 2 digit). Zona Asia/Jakarta. "" bila tanggal invalid. */
+export function formatTanggalLahirIndo(tanggal: Date): string {
+  if (Number.isNaN(tanggal.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Jakarta",
+  }).formatToParts(tanggal);
+  const ambil = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value || 0);
+  const dd = String(ambil("day")).padStart(2, "0");
+  const mm = String(ambil("month")).padStart(2, "0");
+  const yyyy = String(ambil("year"));
+  return `${dd} - ${mm} - ${yyyy}`;
+}
+
+/** "05 – 11 – 2000" (angka Arab, DD – MM – YYYY, hari/bulan 2 digit).
+ *  Dipertahankan untuk kompatibilitas bila ada kode lain yang memanggilnya. */
 export function formatTanggalLahirArab(tanggal: Date): string {
   if (Number.isNaN(tanggal.getTime())) return "";
   const parts = new Intl.DateTimeFormat("en-US", {

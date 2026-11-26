@@ -7,10 +7,10 @@ import { getDummyPrintData } from "@/lib/syahadah-offline-data";
 export const dynamic = "force-dynamic";
 
 /**
- * Halaman cetak TES syahadah offline (admin) — data DUMMY, nama selalu
- * "Ahmad Ibnu Alwan" di semua program (keputusan user 22 Nov 2026).
- * Untuk mengetes posisi field + desain template program yang dipilih di
- * editor. BUKAN data santri asli (muaddal + nilai ٩٥ semua, tanpa QR).
+ * Halaman cetak TES syahadah offline (admin) — F4 portrait (215 x 330 mm),
+ * data DUMMY ("Ahmad Ibnu Alwan", "Wonosobo, 05 - 11 - 2000", nama mapel
+ * asli program + nilai ٩٥, dan QR preview).
+ * Untuk mengetes posisi field + desain template program yang dipilih di editor.
  * Contoh: /cetak-offline/tes/syahadah-offline-idad-awal
  */
 export default async function CetakOfflineTesPage({

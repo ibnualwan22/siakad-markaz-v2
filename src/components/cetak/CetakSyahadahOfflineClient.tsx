@@ -6,22 +6,23 @@ import {
   OFFLINE_STAGE_H_PX,
   OFFLINE_STAGE_W_MM,
   OFFLINE_STAGE_W_PX,
+  OfflineFieldCfg,
+  defaultFieldPositionsOffline,
 } from "@/lib/syahadah-offline";
-import SyahadahOfflineStage from "@/components/cetak/SyahadahOfflineStage";
+import SyahadahOfflineStage, {
+  OFFLINE_PRINT_CSS,
+} from "@/components/cetak/SyahadahOfflineStage";
+import SyahadahOfflineWorkspace from "@/components/cetak/SyahadahOfflineWorkspace";
 
-// Halaman cetak/unduh syahadah offline (A4 portrait, kertas pre-printed).
-// Panggung dirender komponen bersama SyahadahOfflineStage — SAMA PERSIS
-// dengan preview editor, supaya atur layout = print preview (WYSIWYG).
-// Beda mode:
-// - admin: background tampil di preview, DISEMBUNYIKAN saat print; offset
-//   printer diterapkan ke field; tombol Cetak / PDF. Toggle "Sertakan
-//   desain saat cetak" (default MATI) hanya untuk tes di kertas polos —
-//   perilaku produksi (kertas pre-printed) tidak berubah.
-// - santri: background ikut tercetak & ikut di PNG; tanpa offset; tombol
+// Halaman cetak/unduh syahadah offline (F4 portrait 215 x 330 mm, kertas pre-printed).
+// - mode "admin": memakai SyahadahOfflineWorkspace yang SAMA PERSIS dengan editor
+//   di /admin/syahadah-offline (termasuk Mode Editor opsional + keyboard panah +
+//   CSS print identik) agar hasil edit dan hasil print presisi 1:1.
+// - mode "santri": background ikut tercetak & ikut di PNG; tanpa offset; tombol
 //   Unduh PNG + Cetak / PDF.
 type OfflineTemplate = {
   backgroundUrl: string | null;
-  fieldPositions: Record<string, any>;
+  fieldPositions: Record<string, Partial<OfflineFieldCfg>>;
   locked: boolean;
   offsetX: number;
   offsetY: number;
@@ -37,42 +38,84 @@ export default function CetakSyahadahOfflineClient({
     nama: string;
     texts: Record<string, string>;
     qrDataUrl: string | null;
+    qrUrl?: string | null;
     template: OfflineTemplate | null;
-    // Jumlah slot nilai yang dirender (1..12); default 12 bila tak ada.
     slotCount?: number;
   };
   mode: "admin" | "santri";
 }) {
+  const [positions, setPositions] = useState<
+    Record<string, Partial<OfflineFieldCfg>>
+  >(() => ({
+    ...defaultFieldPositionsOffline(),
+    ...(data.template?.fieldPositions || {}),
+  }));
+  const [offsetX, setOffsetX] = useState<number>(data.template?.offsetX ?? 0);
+  const [offsetY, setOffsetY] = useState<number>(data.template?.offsetY ?? 0);
+
+  // Khusus mode santri (zoom + unduh PNG)
   const wrapRef = useRef<HTMLDivElement>(null);
   const pngRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [pngDownloading, setPngDownloading] = useState(false);
   const [pngError, setPngError] = useState("");
-  // Admin saja: sertakan desain saat cetak (tes kertas polos). Default
-  // MATI — kertas pre-printed, background tidak tercetak.
-  const [cetakDenganDesain, setCetakDenganDesain] = useState(false);
 
   useEffect(() => {
+    if (mode !== "santri") return;
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setScale(el.clientWidth / OFFLINE_STAGE_W_PX);
-    });
+    const update = () => {
+      const style = window.getComputedStyle(el);
+      const padX =
+        (parseFloat(style.paddingLeft) || 0) +
+        (parseFloat(style.paddingRight) || 0);
+      const avail = Math.max(200, el.clientWidth - padX);
+      setScale(Math.min(1, avail / OFFLINE_STAGE_W_PX));
+    };
+    update();
+    const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [mode]);
 
-  // Unduh syahadah penuh (desain + isi) sebagai PNG: render salinan
-  // panggung di luar layar (ukuran penuh 794px, tanpa transform skala)
-  // lalu tangkap html2canvas. Teks Arab dirender mesin browser sehingga
-  // shaping-nya benar.
+  if (mode === "admin") {
+    return (
+      <SyahadahOfflineWorkspace
+        programKey={programKey}
+        titleLabel={`Cetak Syahadah Offline — ${data.nama}`}
+        subtitleLabel={`Program: ${programKey} · F4 Portrait (${OFFLINE_STAGE_W_MM}×${OFFLINE_STAGE_H_MM}mm)`}
+        backHref="/admin/syahadah"
+        backLabel="← Kembali ke Data Syahadah"
+        texts={data.texts}
+        qrDataUrl={data.qrDataUrl}
+        qrUrl={data.qrUrl}
+        backgroundUrl={data.template?.backgroundUrl ?? null}
+        positions={positions}
+        onPositionsChange={setPositions}
+        offsetX={offsetX}
+        offsetY={offsetY}
+        onOffsetXChange={setOffsetX}
+        onOffsetYChange={setOffsetY}
+        locked={data.template?.locked ?? false}
+        canEdit
+        initialEditorActive={false}
+        slotCount={data.slotCount ?? 12}
+      />
+    );
+  }
+
+  // Unduh syahadah penuh (desain + isi) sebagai PNG untuk santri
   const downloadPng = async () => {
     const el = pngRef.current;
     if (!el) return;
     setPngDownloading(true);
     setPngError("");
     try {
-      try { await (document as any).fonts?.ready; } catch { /* abaikan */ }
+      try {
+        await (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts?.ready;
+      } catch {
+        /* abaikan */
+      }
       const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(el, {
         scale: 2,
@@ -81,7 +124,9 @@ export default function CetakSyahadahOfflineClient({
         width: OFFLINE_STAGE_W_PX,
         height: OFFLINE_STAGE_H_PX,
       });
-      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/png"));
+      const blob = await new Promise<Blob | null>((res) =>
+        canvas.toBlob(res, "image/png"),
+      );
       if (!blob) throw new Error("gagal membuat PNG");
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -90,7 +135,9 @@ export default function CetakSyahadahOfflineClient({
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch {
-      setPngError("Gagal mengunduh PNG (kemungkinan gambar template tidak mengizinkan CORS). Silakan pakai tombol Cetak / PDF.");
+      setPngError(
+        "Gagal mengunduh PNG (kemungkinan gambar template tidak mengizinkan CORS). Silakan pakai tombol Cetak / PDF.",
+      );
     } finally {
       setPngDownloading(false);
     }
@@ -99,115 +146,99 @@ export default function CetakSyahadahOfflineClient({
   const stageProps = {
     texts: data.texts,
     qrDataUrl: data.qrDataUrl,
+    qrUrl: data.qrUrl,
     template: data.template,
   };
 
   return (
-    <div className="min-h-screen bg-slate-200 print:bg-white">
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-stage-wrap { transform: none !important; width: 100% !important; }
-          .offline-bg-print-hidden { display: none !important; }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
+    <div className="min-h-screen bg-[#111] print:bg-white offline-print-reset">
+      <style>{OFFLINE_PRINT_CSS}</style>
 
-      <div className="no-print sticky top-0 z-10 bg-white/90 backdrop-blur border-b px-4 py-3 flex items-center justify-between gap-3">
+      <div className="no-print sticky top-0 z-10 bg-neutral-900/95 backdrop-blur border-b border-neutral-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-bold">
-            {mode === "admin" ? "Cetak Syahadah Offline" : "Unduh Syahadah"} — {programKey}
+          <h1 className="font-bold text-white">
+            Unduh Syahadah — {programKey}
           </h1>
-          <p className="text-sm text-slate-500">{data.nama}</p>
-          {mode === "admin" && (
-            <p className="text-xs text-slate-500">
-              {cetakDenganDesain
-                ? "Desain ikut tercetak (tes kertas polos). Matikan lagi untuk kertas pre-printed."
-                : "Cetak di kertas pre-printed (desain tidak ikut tercetak). Pastikan skala print 100%."}
-            </p>
-          )}
-          {mode === "santri" && (
-            <p className="text-xs text-slate-500">
-              Unduhan berisi desain penuh + isi syahadah (A4).
-            </p>
-          )}
-          {pngError && <p className="text-sm text-red-600 mt-1">{pngError}</p>}
+          <p className="text-sm text-slate-300">{data.nama}</p>
+          <p className="text-xs text-slate-400">
+            Unduhan berisi desain penuh + isi syahadah (F4 Portrait{" "}
+            {OFFLINE_STAGE_W_MM}×{OFFLINE_STAGE_H_MM}mm).
+          </p>
+          {pngError && <p className="text-sm text-red-400 mt-1">{pngError}</p>}
         </div>
         <div className="flex gap-2 shrink-0 items-center">
-          {mode === "admin" && (
-            <label className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-sm font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                checked={cetakDenganDesain}
-                onChange={(e) => setCetakDenganDesain(e.target.checked)}
-              />
-              Sertakan desain saat cetak (tes kertas polos)
-            </label>
-          )}
-          {mode === "santri" && (
-            <button
-              onClick={downloadPng}
-              disabled={pngDownloading}
-              className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {pngDownloading ? "Menyiapkan PNG..." : "Unduh PNG"}
-            </button>
-          )}
           <button
-            onClick={() => window.print()}
-            className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+            type="button"
+            onClick={downloadPng}
+            disabled={pngDownloading}
+            className="px-5 py-2 rounded-full bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50"
           >
-            Cetak / PDF
+            {pngDownloading ? "Menyiapkan PNG..." : "Unduh PNG"}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-5 py-2 rounded-full bg-white text-neutral-900 text-sm font-semibold hover:bg-slate-100"
+          >
+            🖨️ Cetak / PDF
           </button>
         </div>
       </div>
 
-      <div ref={wrapRef} className="mx-auto max-w-4xl p-4 print:p-0 print:max-w-none">
+      <div
+        ref={wrapRef}
+        className="offline-print-reset mx-auto max-w-5xl p-4 print:p-0 print:max-w-none"
+      >
         <div
-          className="print-stage-wrap relative overflow-hidden bg-white shadow-lg print:shadow-none"
+          className="offline-print-reset mx-auto"
           style={{
-            width: `${OFFLINE_STAGE_W_MM}mm`,
-            height: `${OFFLINE_STAGE_H_MM}mm`,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            marginBottom: `${-OFFLINE_STAGE_H_MM * (1 - scale)}mm`,
+            width: `${OFFLINE_STAGE_W_MM * scale}mm`,
+            height: `${OFFLINE_STAGE_H_MM * scale}mm`,
           }}
         >
-          <SyahadahOfflineStage
-            {...stageProps}
-            showBackground
-            hideBackgroundOnPrint={mode === "admin" && !cetakDenganDesain}
-            applyOffset={mode === "admin"}
-            showQrPlaceholder={mode === "admin"}
-            slotCount={data.slotCount ?? 12}
-          />
+          <div
+            className="offline-print-stage-wrap relative overflow-hidden bg-white shadow-2xl print:shadow-none"
+            style={{
+              width: `${OFFLINE_STAGE_W_MM}mm`,
+              height: `${OFFLINE_STAGE_H_MM}mm`,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+            }}
+          >
+            <SyahadahOfflineStage
+              {...stageProps}
+              showBackground
+              hideBackgroundOnPrint={false}
+              applyOffset={false}
+              showQrPlaceholder={false}
+              slotCount={data.slotCount ?? 12}
+            />
+          </div>
         </div>
       </div>
 
       {/* Salinan panggung ukuran penuh di luar layar, khusus tangkapan PNG. */}
-      {mode === "santri" && (
-        <div
-          ref={pngRef}
-          aria-hidden
-          className="relative overflow-hidden bg-white"
-          style={{
-            position: "fixed",
-            left: -10000,
-            top: 0,
-            width: `${OFFLINE_STAGE_W_MM}mm`,
-            height: `${OFFLINE_STAGE_H_MM}mm`,
-          }}
-        >
-          <SyahadahOfflineStage
-            {...stageProps}
-            showBackground
-            hideBackgroundOnPrint={false}
-            applyOffset={false}
-            showQrPlaceholder={false}
-            slotCount={data.slotCount ?? 12}
-          />
-        </div>
-      )}
+      <div
+        ref={pngRef}
+        aria-hidden
+        className="no-print relative overflow-hidden bg-white"
+        style={{
+          position: "fixed",
+          left: -10000,
+          top: 0,
+          width: `${OFFLINE_STAGE_W_MM}mm`,
+          height: `${OFFLINE_STAGE_H_MM}mm`,
+        }}
+      >
+        <SyahadahOfflineStage
+          {...stageProps}
+          showBackground
+          hideBackgroundOnPrint={false}
+          applyOffset={false}
+          showQrPlaceholder={false}
+          slotCount={data.slotCount ?? 12}
+        />
+      </div>
     </div>
   );
 }

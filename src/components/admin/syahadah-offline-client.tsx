@@ -52,12 +52,12 @@ export default function SyahadahOfflineClient({
     : 12;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl border p-5 space-y-3">
+    <div className="space-y-6 offline-print-reset">
+      <div className="no-print bg-white rounded-2xl border p-5 space-y-3">
         <h3 className="font-bold">Program</h3>
         <p className="text-xs text-[var(--color-text-muted)]">
           Template syahadah offline dibuat per program. Pilih program, upload
-          desain Canva-nya (A4 portrait), lalu atur posisi field dan kalibrasi.
+          desain ukuran F4 portrait (215 × 330 mm), lalu atur posisi field dan kalibrasi.
         </p>
         <select
           value={program?.id || ""}
@@ -77,20 +77,19 @@ export default function SyahadahOfflineClient({
           </p>
         )}
         {/* Cetak tes DUMMY untuk program yang dipilih: nama selalu
-            "Ahmad Ibnu Alwan" di semua program, nilai ٩٥ semua (bukan data
-            santri asli). Template program harus sudah dibuat di editor ini
-            dulu (upload desain, simpan) supaya desain tampil di preview. */}
+            "Ahmad Ibnu Alwan" di semua program, nilai ٩٥ semua + nama mapel
+            asli program + QR preview. */}
         <a
           href={`/cetak-offline/tes/${programKey}`}
           target="_blank"
           rel="noreferrer"
           className="inline-block px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
         >
-          Cetak Tes (dummy Ahmad Ibnu Alwan)
+          Buka Halaman Cetak Tes (dummy Ahmad Ibnu Alwan)
         </a>
         <p className="text-xs text-[var(--color-text-muted)]">
-          Membuka contoh cetak dummy untuk program {program?.nama_indo} di tab baru
-          — untuk mengetes posisi field + desain di kertas pre-printed.
+          Membuka halaman cetak tes fullscreen untuk program {program?.nama_indo} di tab baru
+          — identik dengan editor di bawah, atau langsung klik tombol Cetak di toolbar editor.
         </p>
       </div>
 
@@ -98,6 +97,7 @@ export default function SyahadahOfflineClient({
         <TemplateSyahadahOfflineTab
           key={programKey}
           programKey={programKey}
+          programLabel={program.nama_indo}
           apiBase="/api/admin/syahadah-offline/template"
           canEdit
           slotCount={tampilCount}

@@ -7,7 +7,7 @@ import { getDummyPrintData } from "@/lib/syahadah-offline-data";
 
 export const dynamic = "force-dynamic";
 
-// Template syahadah offline per program (A4 portrait, pre-printed).
+// Template syahadah offline per program (F4 portrait 215x330mm, pre-printed).
 // programKey: "syahadah-offline-<slug program>", mis. "syahadah-offline-idad-awal".
 // Izin: data_syahadah (sama seperti halaman Data Syahadah).
 const PERMISSION = "data_syahadah";
@@ -40,12 +40,16 @@ export async function GET(request: Request) {
       },
     });
   }
-  // Teks dummy untuk preview editor — SAMA dengan yang dipakai halaman
-  // cetak tes (getDummyPrintData: Ahmad Ibnu Alwan, nilai ٩٥, nama program
-  // asli). Bila programKey tidak cocok program mana pun, null — tab
-  // memakai OFFLINE_FIELD_SAMPLE sebagai fallback.
+  // Teks dummy + QR dummy untuk preview editor — SAMA PERSIS dengan
+  // halaman cetak tes (getDummyPrintData: Ahmad Ibnu Alwan, tempat lahir
+  // format Indonesia, nama mapel asli program + nilai ٩٥, QR verifikasi).
   const dummy = await getDummyPrintData(programKey);
-  return NextResponse.json({ ...tpl, dummyTexts: dummy?.texts ?? null });
+  return NextResponse.json({
+    ...tpl,
+    dummyTexts: dummy?.texts ?? null,
+    dummyQrDataUrl: dummy?.qrDataUrl ?? null,
+    dummyQrUrl: dummy?.qrUrl ?? null,
+  });
 }
 
 // PUT { programKey, nama?, backgroundUrl?, backgroundId?, fieldPositions?,

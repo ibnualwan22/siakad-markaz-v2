@@ -1,6 +1,7 @@
 // Data syahadah offline — SERVER ONLY (mengimpor prisma/app-data/qrcode).
-// Dipakai halaman cetak admin (/cetak-offline/[id]) dan halaman unduh
-// santri (/santri/syahadah-offline/[riwayatId]).
+// Dipakai halaman cetak admin (/cetak-offline/[id]), cetak tes
+// (/cetak-offline/tes/[programKey]), dan halaman unduh santri
+// (/santri/syahadah-offline/[riwayatId]).
 
 import prisma from "@/lib/prisma";
 import { getCertificateData, getTemplateData } from "@/lib/app-data";
@@ -9,7 +10,7 @@ import { toArabDigits } from "@/lib/munaqosah-hufadz";
 import {
   defaultFieldPositionsOffline,
   formatAngkaArab,
-  formatTanggalLahirArab,
+  formatTanggalLahirIndo,
   offlineProgramKey,
   parseTanggalIndo,
   slugifyProgram,
@@ -25,6 +26,7 @@ export type OfflinePrintData = {
   programNamaArab: string;
   texts: Record<string, string>;
   qrDataUrl: string | null;
+  qrUrl: string;
   // SELALU objek (tidak pernah null): bila baris TemplateCetak belum ada,
   // fieldPositions diisi posisi seed default + backgroundUrl null — field
   // tetap tampil, pesan "belum memiliki background" tetap tampil.
@@ -35,13 +37,13 @@ export type OfflinePrintData = {
     offsetX: number;
     offsetY: number;
   };
-  // Jumlah slot nilai yang dirender (nilaiSlot1..slotCount) = jumlah mapel
-  // tampil program itu.
+  // Jumlah slot mapel & nilai yang dirender (slot 1..slotCount) = jumlah
+  // mapel tampil program itu.
   slotCount: number;
 };
 
-/** Ambil QR verifikasi sebagai data URL (gambar, bukan SVG — aman untuk
- *  tangkapan PNG html2canvas). Pola sama seperti syahadah Munaqosah. */
+/** Ambil QR verifikasi sebagai data URL (gambar PNG, aman untuk print dan
+ *  tangkapan PNG html2canvas). Tanpa logo di tengah. */
 async function buildQrDataUrl(verifyUrl: string): Promise<string | null> {
   try {
     const mod: any = await import("qrcode");
@@ -50,7 +52,7 @@ async function buildQrDataUrl(verifyUrl: string): Promise<string | null> {
     return await toDataURL(verifyUrl, {
       margin: 1,
       width: 400,
-      errorCorrectionLevel: "H",
+      errorCorrectionLevel: "M",
     });
   } catch {
     return null;
@@ -84,26 +86,31 @@ export async function getOfflinePrintData(
   const dufahMatch = String(cert.riwayatSantri.dufahNama || "").match(/\d+/);
   const dufah = dufahMatch ? toArabDigits(dufahMatch[0]) : "";
 
-  // Tempat + tanggal lahir ("Wonosobo، ٠٥ – ١١ – ٢٠٠٠") — bila tanggal
-  // lahir kosong/invalid, tempat saja.
+  // Tempat + tanggal lahir format Indonesia: "Wonosobo, 05 - 11 - 2000" —
+  // bila tanggal lahir kosong/invalid, tempat saja.
   const tempat = (cert.masterSantri?.tempatLahir || "").trim();
   const tglLahirRaw = cert.masterSantri?.tanggalLahir;
   const tglLahir = tglLahirRaw ? new Date(tglLahirRaw) : null;
   const tglLahirStr =
     tglLahir && !Number.isNaN(tglLahir.getTime())
-      ? formatTanggalLahirArab(tglLahir)
+      ? formatTanggalLahirIndo(tglLahir)
       : "";
   let tempatLahir = "-";
-  if (tempat && tglLahirStr) tempatLahir = `${tempat}، ${tglLahirStr}`;
+  if (tempat && tglLahirStr) tempatLahir = `${tempat}, ${tglLahirStr}`;
   else if (tempat) tempatLahir = tempat;
   else if (tglLahirStr) tempatLahir = tglLahirStr;
 
-  // Nilai tabel DINAMIS: slot ke-i = mapel tampil ke-i dari nilaiRows
-  // (sudah terfilter tampil_di_syahadah + urutan urutan di
-  // getCertificateData) — tanpa pemetaan manual di template.
+  // Mapel & Nilai tabel DINAMIS: slot ke-i = mapel tampil ke-i dari
+  // nilaiRows (sudah terfilter tampil_di_syahadah + urutan di
+  // getCertificateData) — menampilkan nama mapel Arab & nilai Arab.
+  const mapelSlot: Record<string, string> = {};
   const nilaiSlot: Record<string, string> = {};
   for (let i = 1; i <= 12; i++) {
-    const skor = (cert.nilaiRows || [])[i - 1]?.skor ?? null;
+    const row = (cert.nilaiRows || [])[i - 1];
+    mapelSlot[`mapelSlot${i}`] = row
+      ? row.nama_arab || row.nama_indo || ""
+      : "";
+    const skor = row?.skor ?? null;
     nilaiSlot[`nilaiSlot${i}`] =
       skor === null || skor === undefined ? "" : formatAngkaArab(skor);
   }
@@ -120,11 +127,13 @@ export async function getOfflinePrintData(
     taqdir: cert.averagePredikat?.arab || "",
     tglCetakHijriyah,
     tglCetakMiladiyah,
+    ...mapelSlot,
     ...nilaiSlot,
   };
 
   const baseUrl = await getBaseUrl();
-  const qrDataUrl = await buildQrDataUrl(`${baseUrl}/ijazah/${riwayatId}`);
+  const qrUrl = `${baseUrl}/ijazah/${riwayatId}`;
+  const qrDataUrl = await buildQrDataUrl(qrUrl);
 
   return {
     riwayatId,
@@ -133,6 +142,7 @@ export async function getOfflinePrintData(
     programNamaArab: cert.program.nama_arab || programNamaIndo,
     texts,
     qrDataUrl,
+    qrUrl,
     template: bentukTemplateOffline(template),
     slotCount: (cert.nilaiRows || []).length,
   };
@@ -141,15 +151,11 @@ export async function getOfflinePrintData(
 /** Bentuk objek template offline dari baris TemplateCetak (boleh null):
  *  SELALU objek — bila baris belum ada, field tetap tampil di posisi seed
  *  default dan backgroundUrl null (pesan "belum memiliki background"
- *  tampil). Sebelum revisi ini template null membuat SEMUA field hilang
- *  dari panggung (renderField mengembalikan null bila cfg tidak ada). */
+ *  tampil). Posisi default dipakai sebagai alas agar kunci baru seperti
+ *  mapelSlot1..12 langsung memiliki posisi awal pada template lama. */
 function bentukTemplateOffline(template: any) {
   return {
     backgroundUrl: template?.backgroundUrl ?? null,
-    // Posisi default sebagai alas: template yang tersimpan sebelum revisi
-    // slot dinamis belum punya kunci nilaiSlot1..12 — tanpa alas ini
-    // nilainya tidak terender sampai admin buka + simpan ulang editor
-    // (editor sendiri sudah menggabung seed saat load).
     fieldPositions: {
       ...defaultFieldPositionsOffline(),
       ...((template?.fieldPositions as any) || {}),
@@ -188,7 +194,7 @@ function periodeDanTahun(tpl: TemplateSyahadahMini) {
 }
 
 /** Tanggal cetak = HARI CETAK (bukan tgl_cetak tersimpan), zona WIB —
- *  garis تحريرا hanya berisi TAHUN (keputusan user 22 Nov 2026). */
+ *  garis تحريرا hanya berisi TAHUN. */
 function tahunCetakHariIni() {
   const hariIni = new Date();
   return {
@@ -198,14 +204,11 @@ function tahunCetakHariIni() {
 }
 
 /**
- * Data DUMMY untuk cetak tes template offline — nama SELALU
- * "Ahmad Ibnu Alwan" di semua program (keputusan user 22 Nov 2026).
- * Dipakai route /cetak-offline/tes/[programKey] (admin). BUKAN data
- * santri asli: muaddal + semua nilai ٩٥ (seperti foto mockup), QR null
- * (kotak placeholder tampil di preview, tidak tercetak).
- * Periode + tahun diambil dari baris SyahadahTemplate yang sama dengan
- * jalur asli (bukan hardcode tanggal). null bila programKey tidak cocok
- * dengan program mana pun.
+ * Data DUMMY untuk editor & cetak tes template offline — nama SELALU
+ * "Ahmad Ibnu Alwan" di semua program, tempat & tanggal lahir format
+ * Indonesia "Wonosobo, 05 - 11 - 2000", nama mapel asli program yang
+ * tampil di syahadah + nilai ٩٥, dan QR verifikasi contoh agar tampilan
+ * editor dan cetak tes identik 100% dengan cetak santri asli.
  */
 export async function getDummyPrintData(
   programKey: string,
@@ -213,18 +216,29 @@ export async function getDummyPrintData(
   const slug = programKey.replace(/^syahadah-offline-/, "");
   if (!slug) return null;
 
-  const [programs, tplRow, template] = await Promise.all([
+  const [programs, tplRow, template, baseUrl] = await Promise.all([
     prisma.program.findMany({
       select: {
         nama_indo: true,
         nama_arab: true,
         programMapels: {
-          select: { mapel: { select: { tampil_di_syahadah: true } } },
+          orderBy: { urutan: "asc" },
+          select: {
+            urutan: true,
+            mapel: {
+              select: {
+                nama_indo: true,
+                nama_arab: true,
+                tampil_di_syahadah: true,
+              },
+            },
+          },
         },
       },
     }),
     getTemplateData(),
     prisma.templateCetak.findUnique({ where: { programKey } }),
+    getBaseUrl(),
   ]);
 
   const program = programs.find(
@@ -232,23 +246,29 @@ export async function getDummyPrintData(
   );
   if (!program) return null;
 
-  const tampilCount = program.programMapels.filter(
+  const tampilMapels = program.programMapels.filter(
     (pm) => pm.mapel.tampil_di_syahadah !== false,
-  ).length;
+  );
+  const tampilCount = tampilMapels.length;
 
   const { periode, tahunHijriyah, tahunMiladiyah } = periodeDanTahun(
     tplRow || {},
   );
   const { tglCetakHijriyah, tglCetakMiladiyah } = tahunCetakHariIni();
 
+  const mapelSlot: Record<string, string> = {};
   const nilaiSlot: Record<string, string> = {};
   for (let i = 1; i <= 12; i++) {
+    const pm = tampilMapels[i - 1];
+    mapelSlot[`mapelSlot${i}`] = pm
+      ? pm.mapel.nama_arab || pm.mapel.nama_indo || ""
+      : "";
     nilaiSlot[`nilaiSlot${i}`] = i <= tampilCount ? "٩٥" : "";
   }
 
   const texts: Record<string, string> = {
     nama: "Ahmad Ibnu Alwan",
-    tempatLahir: "Wonosobo، ٠٥ – ١١ – ٢٠٠٠",
+    tempatLahir: "Wonosobo, 05 - 11 - 2000",
     program: program.nama_arab || program.nama_indo || "-",
     dufah: "٩٥",
     periode,
@@ -258,8 +278,12 @@ export async function getDummyPrintData(
     taqdir: "ممتاز",
     tglCetakHijriyah,
     tglCetakMiladiyah,
+    ...mapelSlot,
     ...nilaiSlot,
   };
+
+  const qrUrl = `${baseUrl}/preview`;
+  const qrDataUrl = await buildQrDataUrl(qrUrl);
 
   return {
     riwayatId: `dummy-${programKey}`,
@@ -267,7 +291,8 @@ export async function getDummyPrintData(
     programKey,
     programNamaArab: program.nama_arab || program.nama_indo || "-",
     texts,
-    qrDataUrl: null,
+    qrDataUrl,
+    qrUrl,
     template: bentukTemplateOffline(template),
     slotCount: tampilCount,
   };

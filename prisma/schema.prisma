@@ -59,6 +59,7 @@ model Mapel {
   bankSoalUsbuList   BankSoalUsbu[]
   jenisSoalList      JenisSoal[]
   tasmiConfigList    TasmiConfig[]
+  jadwalSlotMetas    JadwalSlotMeta[]
 }
 
 model ProgramMapel {
@@ -760,6 +761,25 @@ model PengaturanReminderPengajar {
   isActive  Boolean  @default(true)
   updatedAt DateTime @updatedAt
   updatedBy String?
+}
+
+model JadwalSlotMeta {
+  id         String    @id @default(cuid())
+  targetKey  String
+  sesi       SesiKelas
+  mapelId    String?
+  keterangan String?
+  updatedAt  DateTime  @updatedAt
+
+  mapel Mapel? @relation(fields: [mapelId], references: [id], onDelete: SetNull)
+
+  @@unique([targetKey, sesi])
+}
+
+model PengaturanJadwalMengajar {
+  id          Int      @id @default(1)
+  columnOrder Json?
+  updatedAt   DateTime @updatedAt
 }
 
 // ===== SYAHADAH ONLINE (Temporary) =====

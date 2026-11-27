@@ -12,7 +12,8 @@ import {
 import SyahadahOfflineWorkspace from "@/components/cetak/SyahadahOfflineWorkspace";
 
 // Tab editor template syahadah F4 portrait (215 x 330 mm) — mendukung
-// varian Desain Lulus (pre-printed) dan Desain Musyarokah (kertas polos).
+// mode Global Lembaga (menerapkan ke seluruh program di lembaga tsb) maupun
+// mode Per Program (override khusus 1 program).
 export default function TemplateSyahadahOfflineTab({
   programKey,
   baseProgramKey,
@@ -22,6 +23,10 @@ export default function TemplateSyahadahOfflineTab({
   programLabel,
   isMusyarokah = false,
   isHufadz = false,
+  isGlobalLembaga = false,
+  lembagaName,
+  sharedBackgroundUrl,
+  hideUploadCard = false,
 }: {
   programKey: string;
   baseProgramKey?: string;
@@ -31,8 +36,12 @@ export default function TemplateSyahadahOfflineTab({
   programLabel?: string;
   isMusyarokah?: boolean;
   isHufadz?: boolean;
+  isGlobalLembaga?: boolean;
+  lembagaName?: string;
+  sharedBackgroundUrl?: string | null;
+  hideUploadCard?: boolean;
 }) {
-  const [bg, setBg] = useState<string | null>(null);
+  const [bg, setBg] = useState<string | null>(sharedBackgroundUrl ?? null);
   const [positions, setPositions] = useState<
     Record<string, Partial<OfflineFieldCfg>>
   >(() => defaultFieldPositionsOffline());
@@ -58,7 +67,7 @@ export default function TemplateSyahadahOfflineTab({
     const res = await fetch(`${apiBase}?programKey=${programKey}`);
     if (!res.ok) return;
     const tpl = await res.json();
-    setBg(tpl.backgroundUrl);
+    setBg(sharedBackgroundUrl ?? tpl.backgroundUrl ?? null);
     const seed = defaultFieldPositionsOffline();
     setPositions({ ...seed, ...(tpl.fieldPositions || {}) });
     setLocked(tpl.locked === true);
@@ -75,7 +84,7 @@ export default function TemplateSyahadahOfflineTab({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [programKey]);
+  }, [programKey, sharedBackgroundUrl]);
 
   const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,11 +108,7 @@ export default function TemplateSyahadahOfflineTab({
       });
       if (!put.ok) throw new Error("Gagal menyimpan template");
       setBg(url);
-      toast.success(
-        isMusyarokah
-          ? "Background Desain Musyarokah terupload"
-          : "Background Desain Lulus terupload",
-      );
+      toast.success("Background terupload");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Gagal upload");
     } finally {
@@ -149,10 +154,18 @@ export default function TemplateSyahadahOfflineTab({
           fieldPositions: positionsToSave,
           offsetX: ox,
           offsetY: oy,
+          applyToAllPrograms: isGlobalLembaga,
         }),
       });
       if (!res.ok) throw new Error("Gagal menyimpan");
-      toast.success("Layout tersimpan");
+      const result = await res.json();
+      if (isGlobalLembaga && result.propagatedCount > 0) {
+        toast.success(
+          `Layout global tersimpan & langsung diterapkan ke ${result.propagatedCount} program ${lembagaName || ""}`,
+        );
+      } else {
+        toast.success("Layout tersimpan");
+      }
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Gagal menyimpan");
     } finally {
@@ -181,32 +194,66 @@ export default function TemplateSyahadahOfflineTab({
   };
 
   return (
-    <div className="space-y-6 offline-print-reset">
-      {/* Upload Background Card — tidak tercetak */}
-      <div
-        className={`no-print rounded-2xl border p-5 space-y-3 ${
-          isMusyarokah ? "bg-amber-50/40 border-amber-200" : "bg-white"
-        }`}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-bold">
-            {isMusyarokah
-              ? `Background Desain Musyarokah (F4 Portrait — ${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm)`
-              : `Background Desain Lulus (F4 Portrait — ${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm)`}
-          </h3>
+    <div className="space-y-4 offline-print-reset">
+      {/* Bar info / aksi cepat untuk mode Global & Musyarokah */}
+      {hideUploadCard ? (
+        <div className="no-print flex flex-wrap items-center justify-between gap-2 rounded-2xl border bg-slate-50 px-4 py-3 text-xs">
+          <div className="text-slate-700">
+            {isGlobalLembaga ? (
+              <span>
+                🌐 <strong>Mode Layout Global:</strong> Klik{" "}
+                <strong>💾 Simpan Layout</strong> di bawah untuk langsung menerapkan posisi &amp; offset ini ke <strong>semua program {lembagaName}</strong> ({isMusyarokah ? "Musyarokah" : "Lulus"}).
+              </span>
+            ) : (
+              <span>
+                🎯 <strong>Mode Per Program:</strong> Perubahan posisi di sini hanya berlaku untuk <strong>{programLabel}</strong>.
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {canEdit && !locked && isMusyarokah && baseProgramKey && (
               <button
                 type="button"
                 onClick={copyFromLulus}
                 disabled={copyingFromLulus}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50"
               >
                 {copyingFromLulus
                   ? "Menyalin..."
                   : "📋 Salin Posisi dari Desain Lulus"}
               </button>
             )}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={toggleLock}
+                disabled={locking}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold disabled:opacity-50 ${
+                  locked
+                    ? "bg-amber-600 text-white"
+                    : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                }`}
+              >
+                {locking
+                  ? "..."
+                  : locked
+                    ? "🔓 Buka Kunci"
+                    : "🔒 Kunci Layout"}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`no-print rounded-2xl border p-5 space-y-3 ${
+            isMusyarokah ? "bg-amber-50/40 border-amber-200" : "bg-white"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="font-bold">
+              Background Desain (F4 Portrait — {OFFLINE_STAGE_W_MM} ×{" "}
+              {OFFLINE_STAGE_H_MM} mm)
+            </h3>
             {canEdit && (
               <button
                 type="button"
@@ -226,39 +273,26 @@ export default function TemplateSyahadahOfflineTab({
               </button>
             )}
           </div>
+          {canEdit && !locked && (
+            <label className="inline-block px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold cursor-pointer hover:opacity-90">
+              {uploading ? "Mengupload..." : "Upload Desain F4 Baru"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={upload}
+                disabled={uploading}
+              />
+            </label>
+          )}
         </div>
-        {locked && (
-          <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Template terkunci setelah kalibrasi. Buka kunci untuk mengubah
-            desain atau posisi.
-          </p>
-        )}
-        {canEdit && !locked && (
-          <label
-            className={`inline-block px-5 py-2.5 rounded-xl text-white text-sm font-bold cursor-pointer hover:opacity-90 ${
-              isMusyarokah ? "bg-amber-600" : "bg-[var(--color-primary)]"
-            }`}
-          >
-            {uploading
-              ? "Mengupload..."
-              : isMusyarokah
-                ? "Upload Background Musyarokah F4"
-                : "Upload Background Lulus F4"}
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={upload}
-              disabled={uploading}
-            />
-          </label>
-        )}
-        <p className="text-xs text-[var(--color-text-muted)]">
-          {isMusyarokah
-            ? `Khusus Syahadah Musyarokah (kertas polos): background ini OTOMATIS ikut tercetak saat cetak satuan maupun bulk Fase 2. Kolom mapel, nilai, muaddal, dan taqdir otomatis disembunyikan.`
-            : `Ekspor desain ukuran F4 portrait (${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm, JPG/PNG, maks 10MB). Untuk kertas pre-printed, background otomatis disembunyikan saat cetak (kecuali centang "Sertakan desain saat cetak").`}
+      )}
+
+      {locked && (
+        <p className="no-print text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+          Layout terkunci setelah kalibrasi. Klik &ldquo;Buka Kunci&rdquo; untuk mengedit kembali.
         </p>
-      </div>
+      )}
 
       {/* Unified Layout Editor & Print Workspace */}
       <SyahadahOfflineWorkspace

@@ -26,14 +26,14 @@ export default async function AbsensiKelasPage() {
   let allPengajarSesi: any[] = []; // Untuk Admin Backup Mode (PengajarSesi kelas reguler)
   let allPengajarSesiProgram: any[] = []; // Untuk Admin Backup Mode (PengajarSesiProgram level program)
   
-  // Ambil data Taqwim hari ini (kini global: satu tanggal berlaku untuk semua program)
+  // Ambil data Taqwim hari ini (hanya berlaku bila SesiTaqwim.isActive === true)
   const { getTodayWibString, parseWibDateString } = await import("@/lib/absensi");
   const todayWib = parseWibDateString(getTodayWibString());
-  const taqwimToday = await prisma.tanggalTaqwim.findFirst({
-    where: { tanggal: todayWib },
-    select: { id: true }
-  });
-  const isTaqwimToday = !!taqwimToday;
+  const [taqwimConfig, taqwimToday] = await Promise.all([
+    prisma.sesiTaqwim.findFirst({ where: { isActive: true }, select: { id: true } }),
+    prisma.tanggalTaqwim.findFirst({ where: { tanggal: todayWib }, select: { id: true } }),
+  ]);
+  const isTaqwimToday = Boolean(taqwimConfig && taqwimToday);
   
   if (session) {
     if (session.role !== "ADMIN") {
@@ -74,16 +74,34 @@ export default async function AbsensiKelasPage() {
           });
         });
         
-        // Logika Override Taqwim (global: hari taqwim berlaku untuk semua program)
+        // Logika Override Taqwim (global: hari taqwim berlaku untuk program non-Hufadz;
+        // sesi Markaz Hufadz dipertahankan karena jadwalnya berdiri sendiri)
         if (isTaqwimToday) {
+          const hufadzClassIds = new Set<string>();
+          const hufadzProgramIds = new Set<string>();
+          for (const prog of programList) {
+            if ((prog as any).kategori === "HUFADZ") {
+              hufadzProgramIds.add(prog.id);
+              for (const k of prog.kelasList) hufadzClassIds.add(k.id);
+            }
+          }
+          const isHufadzTs = (ts: { kelasId: string; programId?: string }) =>
+            hufadzClassIds.has(ts.kelasId) ||
+            (ts.programId ? hufadzProgramIds.has(ts.programId) : false);
+
           if (session.kelasId) {
-            // Wali Kelas: hapus SEMUA SESI_1 reguler karena hari ini digantikan Taqwim,
-            // lalu pasang SESI_1 khusus untuk kelasnya (Taqwim)
-            teacherSessions = teacherSessions.filter(ts => ts.sesi !== "SESI_1");
-            teacherSessions.push({ sesi: "SESI_1", kelasId: session.kelasId });
+            // Wali Kelas: hapus SESI_1 reguler non-Hufadz lalu pasang SESI_1 khusus kelasnya (Taqwim)
+            teacherSessions = teacherSessions.filter(
+              (ts) => ts.sesi !== "SESI_1" || isHufadzTs(ts),
+            );
+            if (!teacherSessions.some((ts) => ts.sesi === "SESI_1" && ts.kelasId === session.kelasId)) {
+              teacherSessions.push({ sesi: "SESI_1", kelasId: session.kelasId });
+            }
           } else {
-            // Bukan wali kelas: tidak ada sesi mengajar di hari taqwim
-            teacherSessions = teacherSessions.filter(ts => ts.sesi !== "SESI_1");
+            // Bukan wali kelas: hapus SESI_1 non-Hufadz saja
+            teacherSessions = teacherSessions.filter(
+              (ts) => ts.sesi !== "SESI_1" || isHufadzTs(ts),
+            );
           }
         }
 

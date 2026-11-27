@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         user: { select: { id: true, nama: true, username: true, kelasId: true } },
-        kelas: { select: { id: true, nama: true, program: { select: { id: true, nama_indo: true } } } },
+        kelas: { select: { id: true, nama: true, program: { select: { id: true, nama_indo: true, kategori: true } } } },
         pengajarDigantikan: { select: { id: true, nama: true } },
         beritaAcara: true,
       }
@@ -66,11 +66,15 @@ export async function GET(request: Request) {
       }
     });
 
-    // Taqwim kini global: deteksi berdasarkan TANGGAL, bukan konfigurasi per program.
-    // (Sebelumnya label & skip ALPHA memakai "program punya config aktif" sehingga bocor ke hari biasa
-    //  dan ALPHA hilang total untuk program-program tersebut.)
-    const tanggalTaqwimList = await prisma.tanggalTaqwim.findMany({ select: { tanggal: true } });
-    const taqwimDateSet = new Set(tanggalTaqwimList.map(t => t.tanggal.toISOString().split("T")[0]));
+    // Taqwim hanya berlaku bila SesiTaqwim sedang aktif (isActive = true).
+    // Jika admin sudah menonaktifkan Sesi Taqwim, tanggal di TanggalTaqwim tidak dianggap taqwim lagi.
+    const [sesiTaqwimAktif, tanggalTaqwimList] = await Promise.all([
+      prisma.sesiTaqwim.findFirst({ where: { isActive: true }, select: { id: true } }),
+      prisma.tanggalTaqwim.findMany({ select: { tanggal: true } }),
+    ]);
+    const taqwimDateSet = sesiTaqwimAktif
+      ? new Set(tanggalTaqwimList.map(t => t.tanggal.toISOString().split("T")[0]))
+      : new Set<string>();
 
     // Fetch kelas-kelas yang punya ketua kelas aktif (beritaAcara aktif)
     const activeKetuaList = await prisma.ketuaKelas.findMany({
@@ -91,8 +95,9 @@ export async function GET(request: Request) {
       const terlambatMenit = r.terlambatMenit ?? 0;
 
       const tglStr = r.tanggal.toISOString().split("T")[0];
-      // Record taqwim = SESI_1 yang diinput pada tanggal taqwim (SESI_1 "dipinjam" jadi sesi taqwim)
-      const isTaqwimRecord = r.sesi === "SESI_1" && taqwimDateSet.has(tglStr);
+      // Record taqwim = SESI_1 pada tanggal taqwim aktif, khusus program non-Hufadz
+      const isHufadzRecord = (r.kelas.program as any)?.kategori === "HUFADZ";
+      const isTaqwimRecord = !isHufadzRecord && r.sesi === "SESI_1" && taqwimDateSet.has(tglStr);
       // Apakah pengisi adalah wali kelas dari kelas tersebut
       const isWaliKelas = !!(r.user as any).kelasId && (r.user as any).kelasId === r.kelasId;
 

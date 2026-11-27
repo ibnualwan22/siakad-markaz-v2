@@ -23,6 +23,7 @@ export const OFFLINE_STAGE_H_PX = Math.round(
 export const OFFLINE_QR_MM = 24;
 
 export const OFFLINE_PROGRAM_KEY_PREFIX = "syahadah-offline-";
+export const OFFLINE_LEMBAGA_KEY_PREFIX = "syahadah-offline-lembaga-";
 export const OFFLINE_MUSYAROKAH_SUFFIX = "-musyarokah";
 
 // Font default semua field teks offline: "Amiri" (naskh, sudah dimuat
@@ -55,6 +56,35 @@ export function offlineProgramKey(namaIndo: string): string {
 
 export function offlineMusyarokahProgramKey(namaIndo: string): string {
   return offlineProgramKey(namaIndo) + OFFLINE_MUSYAROKAH_SUFFIX;
+}
+
+/** Key template global per lembaga (1 background untuk semua program dalam lembaga tsb). */
+export function offlineLembagaKey(
+  lembaga: LembagaId,
+  isMusyarokah: boolean = false,
+): string {
+  const slug = lembaga.toLowerCase();
+  return (
+    OFFLINE_LEMBAGA_KEY_PREFIX +
+    slug +
+    (isMusyarokah ? OFFLINE_MUSYAROKAH_SUFFIX : "")
+  );
+}
+
+export function isLembagaGlobalKey(programKey: string): boolean {
+  return programKey.startsWith(OFFLINE_LEMBAGA_KEY_PREFIX);
+}
+
+export function lembagaFromGlobalKey(programKey: string): LembagaId | null {
+  if (!isLembagaGlobalKey(programKey)) return null;
+  const raw = programKey
+    .replace(/^syahadah-offline-lembaga-/, "")
+    .replace(/-musyarokah$/, "")
+    .toUpperCase();
+  if (raw === "ARABIYAH" || raw === "TURATS" || raw === "HUFADZ") {
+    return raw;
+  }
+  return null;
 }
 
 export function isMusyarokahProgramKey(programKey: string): boolean {

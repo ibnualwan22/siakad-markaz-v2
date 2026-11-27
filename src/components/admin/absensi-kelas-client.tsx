@@ -211,6 +211,22 @@ function programIdDariKelas(programList: any[], kelasId: string | null): string 
   return prog ? prog.id : null;
 }
 
+function isKelasHufadz(programList: any[], kelasId: string | null | undefined): boolean {
+  if (!kelasId || kelasId === "ALL" || kelasId === "UNASSIGNED") return false;
+  if (kelasId.startsWith("PROGRAM_")) {
+    const pid = kelasId.replace("PROGRAM_", "");
+    const prog = programList.find((p: any) => p.id === pid);
+    return prog?.kategori === "HUFADZ";
+  }
+  const prog = programList.find((p: any) => p.kelasList.some((k: any) => k.id === kelasId));
+  return prog?.kategori === "HUFADZ";
+}
+
+function sesiSortOrder(sesiKey: string): number {
+  const n = parseInt((sesiKey || "").replace("SESI_", ""), 10);
+  return Number.isNaN(n) ? 99 : n;
+}
+
 function menitWibSekarang(): number {
   const [hh, mm] = getWibTimeNow().split(":").map(Number);
   return hh * 60 + mm;
@@ -344,6 +360,26 @@ export function AbsensiKelasClient({
   const [isSaving, setIsSaving] = useState(false);
 
   const isTeacher = userRole !== "ADMIN" && allowedClassIds !== null;
+
+  // Pisahkan jadwal pengajar: Markaz Hufadz vs Reguler/Turats
+  const hufadzSessions = useMemo(() => {
+    return teacherSessions
+      .filter((ts) => isKelasHufadz(programList, ts.kelasId))
+      .sort((a, b) => sesiSortOrder(a.sesi) - sesiSortOrder(b.sesi) || a.kelasId.localeCompare(b.kelasId));
+  }, [teacherSessions, programList]);
+
+  const regularSessions = useMemo(() => {
+    return teacherSessions.filter((ts) => !isKelasHufadz(programList, ts.kelasId));
+  }, [teacherSessions, programList]);
+
+  const hasHufadzSchedule = isTeacher && hufadzSessions.length > 0;
+  const isPureHufadzTeacher = hasHufadzSchedule && regularSessions.length === 0;
+
+  // Mode khusus Markaz Hufadz: nonaktifkan auto-switch, tampilkan filter sesi terjadwal Hufadz saja
+  const [isHufadzMode, setIsHufadzMode] = useState(false);
+  const isHufadzModeRef = useRef(false);
+  const [activeRegularAlert, setActiveRegularAlert] = useState<{ sesi: string; kelasId: string } | null>(null);
+
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const activeSessionRef = useRef<string | null>(null);
   const loadedSessionRef = useRef({ sesi: "", kelasId: "" });
@@ -402,6 +438,56 @@ export function AbsensiKelasClient({
   useEffect(() => { isBadalModeRef.current = isBadalMode; }, [isBadalMode]);
   useEffect(() => { isAsistenModeRef.current = isAsistenMode; }, [isAsistenMode]);
   useEffect(() => { isRecoveryModeRef.current = isRecoveryMode; }, [isRecoveryMode]);
+  useEffect(() => { isHufadzModeRef.current = isHufadzMode; }, [isHufadzMode]);
+
+  const enterHufadzMode = (target?: { sesi: string; kelasId: string }) => {
+    const pick = target || hufadzSessions[0];
+    if (!pick) return;
+    setIsHufadzMode(true);
+    setIsBadalMode(false);
+    setIsAsistenMode(false);
+    setIsRecoveryMode(false);
+    setActiveSession(pick.sesi);
+    setSesi(pick.sesi as SesiKelas);
+    setKelasId(pick.kelasId);
+    setActiveClassId(pick.kelasId);
+  };
+
+  const exitHufadzMode = () => {
+    setIsHufadzMode(false);
+    setIsBadalMode(false);
+    setIsAsistenMode(false);
+    if (activeRegularAlert) {
+      setActiveSession(activeRegularAlert.sesi);
+      setSesi(activeRegularAlert.sesi as SesiKelas);
+      setKelasId(activeRegularAlert.kelasId);
+      setActiveClassId(activeRegularAlert.kelasId);
+    } else if (activeSessionsList.length > 0) {
+      const nextS = activeSessionsList[0];
+      const match = regularSessions.find((ts) => ts.sesi === nextS);
+      setActiveSession(nextS);
+      setSesi(nextS as SesiKelas);
+      setKelasId(match ? match.kelasId : "");
+      setActiveClassId(match ? match.kelasId : null);
+    } else {
+      setActiveSession(null);
+      setSesi("" as SesiKelas);
+      setActiveClassId(null);
+    }
+  };
+
+  const selectHufadzAssignment = (val: string) => {
+    const [nextSesi, ...rest] = val.split("|");
+    const nextKelasId = rest.join("|");
+    if (!nextSesi || !nextKelasId) return;
+    setIsBadalMode(false);
+    setIsAsistenMode(false);
+    setIsSaved(false);
+    setActiveSession(nextSesi);
+    setSesi(nextSesi as SesiKelas);
+    setKelasId(nextKelasId);
+    setActiveClassId(nextKelasId);
+  };
 
   const viewTasrih = async (nomorTasrih: string) => {
     try {
@@ -478,23 +564,53 @@ export function AbsensiKelasClient({
         // Pilihan awal dinilai per-penugasan (sesi + program kelasnya): penugasan
         // yang jendelanya sendiri sedang terbuka didahulukan atas gabungan
         // kunci sesi lintas program.
-        let initialAssignment: { sesi: string; kelasId: string } | null = null;
+        let initialRegularAssignment: { sesi: string; kelasId: string } | null = null;
         if (isTeacher && currentActive) {
           const curVal = menitWibSekarang();
-          const kandidat = teacherSessions
+          const kandidat = regularSessions
             .filter(ts => activeSesis.includes(ts.sesi))
             .filter(ts => {
               const win = resolveSesiWindow(data, ts.sesi, programIdDariKelas(programList, ts.kelasId), `${y}-${m}-${d}`);
               return win ? isWithinWindow(win, curVal) : false;
             })
-            .sort((a, b) => a.sesi.localeCompare(b.sesi));
-          if (kandidat.length > 0) initialAssignment = kandidat[0];
+            .sort((a, b) => sesiSortOrder(a.sesi) - sesiSortOrder(b.sesi));
+          if (kandidat.length > 0) initialRegularAssignment = kandidat[0];
         }
-        const initialSesi = initialAssignment ? initialAssignment.sesi : currentActive;
+
+        if (isTeacher && hasHufadzSchedule) {
+          // 1) Murni pengajar Hufadz -> langsung masuk mode Hufadz (tanpa auto-switch)
+          // 2) Merangkap Hufadz + lembaga lain:
+          //    - Jika saat ini ADA jadwal reguler aktif -> buka Absen Reguler + tampilkan tombol "Buka Absen Kelas Hufadz"
+          //    - Jika TIDAK ada jadwal reguler aktif -> langsung buka Absen Kelas Hufadz
+          if (isPureHufadzTeacher || !initialRegularAssignment) {
+            const firstHufadz = hufadzSessions[0];
+            setIsHufadzMode(true);
+            setActiveRegularAlert(initialRegularAssignment);
+            if (firstHufadz) {
+              setSesi(firstHufadz.sesi as SesiKelas);
+              setActiveSession(firstHufadz.sesi);
+              setKelasId(firstHufadz.kelasId);
+              setActiveClassId(firstHufadz.kelasId);
+            }
+            setHasCheckedSession(true);
+            return;
+          } else {
+            setIsHufadzMode(false);
+            setActiveRegularAlert(initialRegularAssignment);
+            setSesi(initialRegularAssignment.sesi as SesiKelas);
+            setActiveSession(initialRegularAssignment.sesi);
+            setKelasId(initialRegularAssignment.kelasId);
+            setActiveClassId(initialRegularAssignment.kelasId);
+            setHasCheckedSession(true);
+            return;
+          }
+        }
+
+        const initialSesi = initialRegularAssignment ? initialRegularAssignment.sesi : currentActive;
 
         if (isTeacher) {
           if (initialSesi) {
-            const teachingThisSession = initialAssignment || teacherSessions.find(ts => ts.sesi === initialSesi);
+            const teachingThisSession = initialRegularAssignment || regularSessions.find(ts => ts.sesi === initialSesi);
             setSesi(initialSesi as SesiKelas);
             if (teachingThisSession) {
               setKelasId(teachingThisSession.kelasId);
@@ -508,7 +624,7 @@ export function AbsensiKelasClient({
         setHasCheckedSession(true);
       })
       .catch(() => setHasCheckedSession(true));
-  }, [isTeacher, teacherSessions]);
+  }, [isTeacher, teacherSessions, hasHufadzSchedule, isPureHufadzTeacher, hufadzSessions, regularSessions]);
 
   // Gerbang auto-switch sesi: sesi dianggap selesai bila form pengajar sudah
   // tersimpan (isSaved). Tanpa syarat semua santri tertandai — keputusan
@@ -568,7 +684,9 @@ export function AbsensiKelasClient({
       const prevSession = activeSessionRef.current;
       const prevClassId = activeClassIdRef.current;
 
-      const activeAssignments = teacherSessions.filter(ts => activeSesis.includes(ts.sesi));
+      // Evaluasi auto-switch HANYA untuk jadwal reguler/non-Hufadz agar
+      // jadwal Markaz Hufadz tidak saling bentrok dengan jam global.
+      const activeAssignments = regularSessions.filter(ts => activeSesis.includes(ts.sesi));
 
       // Saring assignment ke jendelanya sendiri (sesi + program): override sesi
       // di program lain tidak ikut menentukan nasib penugasan ini. Bila tidak
@@ -580,6 +698,16 @@ export function AbsensiKelasClient({
       };
       const activeAssignmentsByWindow = activeAssignments.filter(dalamJendelaSendiri);
       const assignmentsUntukKeputusan = activeAssignmentsByWindow.length > 0 ? activeAssignmentsByWindow : activeAssignments;
+
+      // Update info banner jika ada sesi lembaga lain (non-Hufadz) yang aktif saat ini
+      setActiveRegularAlert(assignmentsUntukKeputusan.length > 0 ? assignmentsUntukKeputusan[0] : null);
+
+      // ANTI KETIMPA TAMPILAN: selama pengajar berada di Mode Markaz Hufadz,
+      // hentikan auto-switch sepenuhnya (tidak pernah melempar/mengganti layar).
+      if (isHufadzModeRef.current) {
+        return;
+      }
+
       const prevWin = prevSession ? resolveSesiWindow(jadwalSesiList, prevSession, programIdDariKelas(programList, prevClassId), tanggal) : null;
       const prevMasihAktif = !!prevSession && activeSesis.includes(prevSession) && (prevWin ? isWithinWindow(prevWin, curVal) : true);
 
@@ -593,7 +721,7 @@ export function AbsensiKelasClient({
             nextSesi = prevSession;
             nextKelasId = prevClassId;
           } else {
-            const teachesPrev = teacherSessions.some(ts => ts.sesi === prevSession);
+            const teachesPrev = regularSessions.some(ts => ts.sesi === prevSession);
             if (teachesPrev) {
               const currentAssignmentIdx = assignmentsUntukKeputusan.findIndex(a => a.sesi === prevSession && a.kelasId === prevClassId);
 
@@ -653,7 +781,7 @@ export function AbsensiKelasClient({
             setKelasId(nextKelasId);
             setActiveClassId(nextKelasId);
           } else {
-            const fallback = teacherSessions.find(ts => ts.sesi === nextSesi);
+            const fallback = regularSessions.find(ts => ts.sesi === nextSesi);
             if (fallback) {
               setKelasId(fallback.kelasId);
               setActiveClassId(fallback.kelasId);
@@ -672,7 +800,7 @@ export function AbsensiKelasClient({
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [isTeacher, jadwalSesiList, teacherSessions]); // ← activeSession DIHAPUS dari deps
+  }, [isTeacher, jadwalSesiList, regularSessions]); // ← activeSession DIHAPUS dari deps
 
   // Interval countdown untuk mode Admin (non-teacher) — teacher sudah punya interval di atas
   useEffect(() => {
@@ -1222,6 +1350,25 @@ export function AbsensiKelasClient({
 
   return (
     <div className="space-y-6">
+      {/* Banner info lembut saat di Mode Hufadz dan sesi lembaga lain sedang aktif (tidak memaksa pindah) */}
+      {isTeacher && isHufadzMode && !isPureHufadzTeacher && activeRegularAlert && (
+        <section className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-sky-900">
+            🔔 Jadwal lembaga lain sedang berlangsung:{" "}
+            <strong>
+              {activeRegularAlert.sesi.replace("_", " ")} — {namaKelasDariId(activeRegularAlert.kelasId)}
+            </strong>
+            . Tampilan Hufadz tidak akan berpindah otomatis sampai Anda klik pindah.
+          </p>
+          <button
+            type="button"
+            onClick={exitHufadzMode}
+            className="shrink-0 rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-sky-700 transition-colors"
+          >
+            Pindah ke Absen Reguler →
+          </button>
+        </section>
+      )}
       {/* Fase 1: banner mode pemulihan draf */}
       {isTeacher && isRecoveryMode && (
         <section className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1262,8 +1409,131 @@ export function AbsensiKelasClient({
       )}
       <section className="overflow-hidden neu-card-white">
         <div className="flex flex-col gap-4 border-b border-[var(--color-surface-dark)] p-6 md:flex-row md:items-end md:justify-between bg-[var(--color-surface-light)]">
-          {isTeacher ? (
+          {isTeacher && isHufadzMode ? (
+            <div className="flex flex-col gap-3 w-full md:w-auto">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 border border-emerald-200 px-3 py-1 text-xs font-black uppercase tracking-wider text-emerald-800">
+                  📖 Mode Markaz Hufadz · Tanpa Auto-Switch
+                </span>
+                <span className="text-xs font-bold text-[var(--color-primary)] bg-[var(--color-primary-50)] px-3 py-1 rounded-full border border-[var(--color-primary-100)]">
+                  {tanggal ? tanggal.split("-").reverse().join("-") : ""}
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-end gap-3 flex-wrap">
+                <div className="w-full sm:w-auto min-w-[260px]">
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
+                    Pilih Sesi &amp; Kelas Hufadz Anda
+                  </label>
+                  <select
+                    value={sesi && kelasId ? `${sesi}|${kelasId}` : ""}
+                    onChange={(e) => selectHufadzAssignment(e.target.value)}
+                    className="w-full rounded-2xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-bold text-[var(--color-text)] outline-none transition focus:border-emerald-600"
+                  >
+                    {hufadzSessions.map((ts) => {
+                      const kLabel = ts.isProgramLevel
+                        ? `Program ${ts.programNama || ts.kelasId}`
+                        : namaKelasDariId(ts.kelasId);
+                      return (
+                        <option key={`${ts.sesi}|${ts.kelasId}`} value={`${ts.sesi}|${ts.kelasId}`}>
+                          {ts.sesi.replace("_", " ")} — {kLabel}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {activeSession && jadwalSesiList && (
+                  <div className="text-xs font-medium text-[var(--color-text-muted)] bg-[var(--color-secondary)] px-3 py-2.5 rounded-xl border border-[var(--color-surface)]">
+                    Jam Sesi:{" "}
+                    <strong className="text-[var(--color-text)]">
+                      {(() => {
+                        const resolvedClassId = activeClassId || kelasId;
+                        const pId = programIdDariKelas(programList, resolvedClassId);
+                        let j: any = null;
+                        if (pId && jadwalSesiList.sesiTambahan) {
+                          j = jadwalSesiList.sesiTambahan.find((x: any) => x.sesi === activeSession && x.programId === pId);
+                        }
+                        if (!j) j = jadwalSesiList.globalSesi?.find((x: any) => x.sesi === activeSession);
+                        return j ? `${j.jamBuka} - ${j.jamTutup}` : "-";
+                      })()}
+                    </strong>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                {isBadalMode ? (
+                  <button
+                    onClick={() => {
+                      const first = hufadzSessions[0];
+                      setIsBadalMode(false);
+                      if (first) {
+                        setActiveClassId(first.kelasId);
+                        setKelasId(first.kelasId);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-surface-dark)] rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    Batal Badal
+                  </button>
+                ) : isAsistenMode ? (
+                  <button
+                    onClick={() => {
+                      const first = hufadzSessions[0];
+                      setIsAsistenMode(false);
+                      if (first) {
+                        setActiveClassId(first.kelasId);
+                        setKelasId(first.kelasId);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text)] border border-[var(--color-surface-dark)] rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    Batal Asisten
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowBadalModal(true)}
+                      className="flex items-center gap-2 text-xs font-bold text-[var(--color-warning)] bg-[var(--color-warning-light)] border border-[var(--color-warning)] rounded-lg px-3 py-1.5 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Jadi Guru Badal
+                    </button>
+                    <button
+                      onClick={() => setShowAsistenModal(true)}
+                      className="flex items-center gap-2 text-xs font-bold text-teal-600 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg px-3 py-1.5 transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Jadi Asisten
+                    </button>
+                  </>
+                )}
+
+                {!isPureHufadzTeacher && (
+                  <button
+                    type="button"
+                    onClick={exitHufadzMode}
+                    className="flex items-center gap-1.5 text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    ← Mode Reguler (Auto)
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : isTeacher ? (
             <div className="flex flex-col gap-2 w-full md:w-auto">
+              {hasHufadzSchedule && (
+                <div className="mb-1">
+                  <button
+                    type="button"
+                    onClick={() => enterHufadzMode()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+                  >
+                    📖 Buka Absen Kelas Hufadz ({hufadzSessions.length} Sesi)
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)] w-24">Tanggal</span>
                 <span className="text-sm font-bold text-[var(--color-primary)] bg-[var(--color-primary-50)] px-3 py-1 rounded-lg border border-[var(--color-primary-50)]">
@@ -1489,7 +1759,7 @@ export function AbsensiKelasClient({
           </div>
         </div>
 
-        {isTeacher && hasCheckedSession && !activeSession ? (
+        {isTeacher && !isHufadzMode && hasCheckedSession && !activeSession ? (
           <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-[var(--color-surface-dark)] px-6 text-center shadow-sm max-w-4xl mx-auto my-8">
             {isResting ? (
               <>
@@ -1538,7 +1808,7 @@ export function AbsensiKelasClient({
               </>
             )}
           </div>
-        ) : isTeacher && hasCheckedSession && activeSession && !teacherSessions.some(ts => ts.sesi === activeSession) && !isBadalMode && !isAsistenMode ? (
+        ) : isTeacher && !isHufadzMode && hasCheckedSession && activeSession && !regularSessions.some(ts => ts.sesi === activeSession) && !isBadalMode && !isAsistenMode ? (
           <div className="flex flex-col items-center justify-center p-12 text-center rounded-3xl bg-[var(--color-surface)] border border-[var(--color-surface-dark)] border-dashed">
             <div className="w-16 h-16 rounded-full bg-[var(--color-surface-dark)] flex items-center justify-center mb-4">
               <Clock className="w-8 h-8 text-[var(--color-text-muted)]" />

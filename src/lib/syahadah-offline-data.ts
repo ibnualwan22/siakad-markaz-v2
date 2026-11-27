@@ -36,7 +36,10 @@ import {
   defaultFieldPositionsOffline,
   formatAngkaArab,
   formatTanggalLahirIndo,
+  isLembagaGlobalKey,
   isMusyarokahProgramKey,
+  lembagaFromGlobalKey,
+  offlineLembagaKey,
   offlineMusyarokahProgramKey,
   offlineProgramKey,
   parseTanggalIndo,
@@ -47,6 +50,7 @@ import {
   tahunMiladiDari,
   tanpaTahunAkhir,
 } from "@/lib/syahadah-offline";
+import { lembagaLabel } from "@/lib/lembaga";
 
 export type OfflinePrintData = {
   riwayatId: string;
@@ -97,29 +101,39 @@ async function buildQrDataUrl(verifyUrl: string): Promise<string | null> {
 }
 
 /** Bentuk objek template offline dari baris TemplateCetak (boleh null).
- *  Bila template musyarokah belum ada, posisi field & offset fallback dari
- *  fallbackTemplate (template Lulus program yang sama), sementara
- *  backgroundUrl tetap dari template musyarokah itu sendiri. */
-function bentukTemplateOffline(template: any, fallbackTemplate?: any) {
-  const posSource =
-    template?.fieldPositions && Object.keys(template.fieldPositions).length > 0
-      ? template.fieldPositions
-      : fallbackTemplate?.fieldPositions || {};
+ *  - Background: utamakan background global lembaga (1 upload per lembaga per varian),
+ *    fallback ke background program jika sudah pernah diupload sebelumnya.
+ *  - Posisi & offset: utamakan posisi khusus program, fallback ke layout global lembaga,
+ *    lalu fallbackTemplate (Lulus), lalu posisi default. */
+function bentukTemplateOffline(
+  template: any,
+  fallbackTemplate?: any,
+  lembagaTemplate?: any,
+) {
+  const hasPos = (t: any) =>
+    Boolean(t?.fieldPositions && Object.keys(t.fieldPositions).length > 0);
+  const posSource = hasPos(template)
+    ? template.fieldPositions
+    : hasPos(lembagaTemplate)
+      ? lembagaTemplate.fieldPositions
+      : hasPos(fallbackTemplate)
+        ? fallbackTemplate.fieldPositions
+        : {};
+  const offsetSource = hasPos(template)
+    ? template
+    : hasPos(lembagaTemplate)
+      ? lembagaTemplate
+      : fallbackTemplate;
   return {
-    backgroundUrl: template?.backgroundUrl ?? null,
+    backgroundUrl:
+      lembagaTemplate?.backgroundUrl ?? template?.backgroundUrl ?? null,
     fieldPositions: {
       ...defaultFieldPositionsOffline(),
       ...posSource,
     },
     locked: (template as any)?.locked ?? false,
-    offsetX:
-      template?.offsetX !== undefined && template?.offsetX !== null
-        ? Number(template.offsetX) || 0
-        : Number(fallbackTemplate?.offsetX) || 0,
-    offsetY:
-      template?.offsetY !== undefined && template?.offsetY !== null
-        ? Number(template.offsetY) || 0
-        : Number(fallbackTemplate?.offsetY) || 0,
+    offsetX: Number(offsetSource?.offsetX) || 0,
+    offsetY: Number(offsetSource?.offsetY) || 0,
   };
 }
 
@@ -226,12 +240,14 @@ export async function getOfflinePrintData(
   const programKey = isMusyarokah
     ? offlineMusyarokahProgramKey(programNamaIndo)
     : baseProgramKey;
+  const lembagaKey = offlineLembagaKey(lembaga, isMusyarokah);
 
-  const [template, fallbackTemplate] = await Promise.all([
+  const [template, fallbackTemplate, lembagaTemplate] = await Promise.all([
     prisma.templateCetak.findUnique({ where: { programKey } }),
     isMusyarokah
       ? prisma.templateCetak.findUnique({ where: { programKey: baseProgramKey } })
       : Promise.resolve(null),
+    prisma.templateCetak.findUnique({ where: { programKey: lembagaKey } }),
   ]);
 
   const tpl = cert.template || {};
@@ -293,7 +309,7 @@ export async function getOfflinePrintData(
     texts,
     qrDataUrl,
     qrUrl,
-    template: bentukTemplateOffline(template, fallbackTemplate),
+    template: bentukTemplateOffline(template, fallbackTemplate, lembagaTemplate),
     slotCount,
   };
 }
@@ -345,6 +361,142 @@ export async function getDummyPrintData(
   programKey: string,
 ): Promise<OfflinePrintData | null> {
   const isMusyarokah = isMusyarokahProgramKey(programKey);
+
+  // Mode Global Lembaga: `syahadah-offline-lembaga-<arabiyah|turats|hufadz>[-musyarokah]`
+  if (isLembagaGlobalKey(programKey)) {
+    const lembaga = lembagaFromGlobalKey(programKey);
+    if (!lembaga) return null;
+    const isHufadz = lembaga === "HUFADZ";
+    const baseLembagaKey = offlineLembagaKey(lembaga, false);
+
+    const [programs, tplRow, template, fallbackTemplate, baseUrl] =
+      await Promise.all([
+        prisma.program.findMany({
+          select: {
+            nama_indo: true,
+            nama_arab: true,
+            kategori: true,
+            programMapels: {
+              orderBy: { urutan: "asc" },
+              select: {
+                urutan: true,
+                mapel: {
+                  select: {
+                    nama_indo: true,
+                    nama_arab: true,
+                    tampil_di_syahadah: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { nama_indo: "asc" },
+        }),
+        getTemplateData(),
+        prisma.templateCetak.findUnique({ where: { programKey } }),
+        isMusyarokah
+          ? prisma.templateCetak.findUnique({ where: { programKey: baseLembagaKey } })
+          : Promise.resolve(null),
+        getBaseUrl(),
+      ]);
+
+    // Pilih program perwakilan dari lembaga ini (yang mapel tampilnya paling banyak agar semua slot terlihat saat kalibrasi global)
+    const lembagaPrograms = programs.filter(
+      (p) => lembagaFromProgramKategori(p.kategori) === lembaga,
+    );
+    const sampleProgram = [...lembagaPrograms].sort((a, b) => {
+      const ca = a.programMapels.filter((pm) => pm.mapel.tampil_di_syahadah !== false).length;
+      const cb = b.programMapels.filter((pm) => pm.mapel.tampil_di_syahadah !== false).length;
+      return cb - ca;
+    })[0];
+
+    const { periode, tahunHijriyah, tahunMiladiyah } = periodeDanTahun(tplRow || {});
+    const { tglCetakHijriyah, tglCetakMiladiyah } = tahunCetakHariIni();
+    const { namaArab: namaMudirArab, signatureUrl } = resolveMudirForLembaga(
+      tplRow as any,
+      lembaga,
+    );
+
+    const mapelSlot: Record<string, string> = {};
+    const nilaiSlot: Record<string, string> = {};
+    let tampilCount = 0;
+
+    if (isHufadz) {
+      tampilCount = MUNAQOSAH_NILAI_FIELDS.length;
+      MUNAQOSAH_NILAI_FIELDS.forEach((f, idx) => {
+        mapelSlot[`mapelSlot${idx + 1}`] = f.arab;
+        nilaiSlot[`nilaiSlot${idx + 1}`] = "٩٥";
+      });
+      for (let i = MUNAQOSAH_NILAI_FIELDS.length + 1; i <= 12; i++) {
+        mapelSlot[`mapelSlot${i}`] = "";
+        nilaiSlot[`nilaiSlot${i}`] = "";
+      }
+    } else if (sampleProgram) {
+      const tampilMapels = sampleProgram.programMapels.filter(
+        (pm) => pm.mapel.tampil_di_syahadah !== false,
+      );
+      tampilCount = tampilMapels.length;
+      for (let i = 1; i <= 12; i++) {
+        const pm = tampilMapels[i - 1];
+        mapelSlot[`mapelSlot${i}`] = pm
+          ? pm.mapel.nama_arab || pm.mapel.nama_indo || ""
+          : "";
+        nilaiSlot[`nilaiSlot${i}`] = i <= tampilCount ? "٩٥" : "";
+      }
+    } else {
+      tampilCount = 8;
+      for (let i = 1; i <= 12; i++) {
+        mapelSlot[`mapelSlot${i}`] = i <= 8 ? `المادة ${toArabDigits(i)}` : "";
+        nilaiSlot[`nilaiSlot${i}`] = i <= 8 ? "٩٥" : "";
+      }
+    }
+
+    const texts: Record<string, string> = {
+      nama: "Ahmad Ibnu Alwan",
+      tempatLahir: "Wonosobo, 05 - 11 - 2000",
+      program: sampleProgram?.nama_arab || sampleProgram?.nama_indo || lembagaLabel(lembaga),
+      dufah: "٩٥",
+      periode,
+      tahunHijriyah,
+      tahunMiladiyah,
+      juz: isHufadz ? "٣٠، ٢٩، ١" : "",
+      muaddal: "٩٥",
+      taqdir: "ممتاز",
+      tglCetakHijriyah,
+      tglCetakMiladiyah,
+      namaMudir: namaMudirArab,
+      ...mapelSlot,
+      ...nilaiSlot,
+    };
+
+    if (isMusyarokah) {
+      clearMusyarokahScoreFields(texts);
+    }
+
+    const qrUrl = `${baseUrl}/preview`;
+    const qrDataUrl = await buildQrDataUrl(qrUrl);
+
+    return {
+      riwayatId: `dummy-${programKey}`,
+      nama: "Ahmad Ibnu Alwan",
+      programKey,
+      programNamaArab: sampleProgram?.nama_arab || lembagaLabel(lembaga),
+      programNamaIndo: `Global ${lembagaLabel(lembaga)}`,
+      kelasNama: "Preview Global",
+      gender: "BANIN",
+      nilaiAkumulatif: 95,
+      lembaga,
+      isMusyarokah,
+      isHufadz,
+      signatureUrl,
+      texts,
+      qrDataUrl,
+      qrUrl,
+      template: bentukTemplateOffline(template, fallbackTemplate, template),
+      slotCount: tampilCount,
+    };
+  }
+
   const slug = baseSlugFromOfflineKey(programKey);
   if (!slug) return null;
 
@@ -387,6 +539,9 @@ export async function getDummyPrintData(
 
   const lembaga: LembagaId = lembagaFromProgramKategori(program.kategori);
   const isHufadz = lembaga === "HUFADZ";
+  const lembagaTemplate = await prisma.templateCetak.findUnique({
+    where: { programKey: offlineLembagaKey(lembaga, isMusyarokah) },
+  });
 
   const { periode, tahunHijriyah, tahunMiladiyah } = periodeDanTahun(
     tplRow || {},
@@ -466,7 +621,7 @@ export async function getDummyPrintData(
     texts,
     qrDataUrl,
     qrUrl,
-    template: bentukTemplateOffline(template, fallbackTemplate),
+    template: bentukTemplateOffline(template, fallbackTemplate, lembagaTemplate),
     slotCount: tampilCount,
   };
 }
@@ -849,11 +1004,13 @@ export async function getBulkOfflinePrintData(params: {
     const programKey = isMusyarokahMode
       ? offlineMusyarokahProgramKey(programNamaIndo)
       : baseProgramKey;
+    const lembagaKey = offlineLembagaKey(rowLembaga, isMusyarokahMode);
 
     const tplMain = templateByKey.get(programKey) ?? null;
     const tplFallback = isMusyarokahMode
       ? templateByKey.get(baseProgramKey) ?? null
       : null;
+    const tplLembaga = templateByKey.get(lembagaKey) ?? null;
 
     const { namaArab: namaMudirArab, signatureUrl } = resolveMudirForLembaga(
       tplRow as any,
@@ -908,7 +1065,7 @@ export async function getBulkOfflinePrintData(params: {
       // Di bulk print gunakan SVG ringan via qrUrl agar 200+ lembar cepat dimuat
       qrDataUrl: null,
       qrUrl,
-      template: bentukTemplateOffline(tplMain, tplFallback),
+      template: bentukTemplateOffline(tplMain, tplFallback, tplLembaga),
       slotCount,
     });
   }

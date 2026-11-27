@@ -128,34 +128,75 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-      // Resolusi program dari kelasId payload (untuk override sesi program)
+      // Resolusi program dari kelasId payload (untuk override sesi program & pengecualian Hufadz)
       let programIdValidasi: string | null = null;
+      let isHufadzProgram = false;
       if (kelasId && kelasId.startsWith("PROGRAM_")) {
-        programIdValidasi = kelasId.replace("PROGRAM_", "");
+        const pid = kelasId.replace("PROGRAM_", "");
+        programIdValidasi = pid;
+        const prog = await prisma.program.findUnique({
+          where: { id: pid },
+          select: { kategori: true },
+        });
+        isHufadzProgram = prog?.kategori === "HUFADZ";
       } else if (kelasId && kelasId !== "ALL" && kelasId !== "UNASSIGNED") {
-        const kls = await prisma.kelas.findUnique({ where: { id: kelasId }, select: { programId: true } });
+        const kls = await prisma.kelas.findUnique({
+          where: { id: kelasId },
+          select: { programId: true, program: { select: { kategori: true } } },
+        });
         programIdValidasi = kls?.programId ?? null;
+        isHufadzProgram = kls?.program?.kategori === "HUFADZ";
       }
-      const jendela = await resolveSesiWindowServer(sesi, programIdValidasi, parsedDate);
-      if (jendela) {
-        const kini = menitWibSekarang();
-        const akhirJendela = jendela.tutupMenit + jendela.toleransiMenit;
-        if (kini < jendela.bukaMenit || kini > akhirJendela) {
-          // Jatah simpan susulan: khusus payload bertanda susulan (jalur
-          // pemulihan draf Fase 1), paling lambat 60 menit setelah jendela
-          // berakhir, tetap di hari yang sama.
-          if (payload.susulan === true && kini > akhirJendela && kini <= akhirJendela + 60) {
-            simpanSusulan = true;
-          } else {
+
+      // Khusus Markaz Hufadz: jam belajarnya berbeda dari sesi global, sehingga
+      // validasi jendela jam buka/tutup dilewati (tetap wajib hari ini & wajib
+      // terjadwal di kelas/sesi Hufadz tsb atau mode Badal/Asisten).
+      if (isHufadzProgram) {
+        const isBadalOrAsisten = Boolean(absenPengajar?.isBadal || absenPengajar?.isAsisten);
+        if (!isBadalOrAsisten) {
+          const [assignedKelas, assignedProgram] = await Promise.all([
+            kelasId && !kelasId.startsWith("PROGRAM_")
+              ? prisma.pengajarSesi.findFirst({
+                  where: { userId: userSession.userId, kelasId, sesi: sesi as any },
+                  select: { id: true },
+                })
+              : Promise.resolve(null),
+            programIdValidasi
+              ? prisma.pengajarSesiProgram.findFirst({
+                  where: { userId: userSession.userId, programId: programIdValidasi, sesi: sesi as any },
+                  select: { id: true },
+                })
+              : Promise.resolve(null),
+          ]);
+          if (!assignedKelas && !assignedProgram) {
             return NextResponse.json(
-              { error: `Di luar jendela sesi. Simpan absen ${(sesi as string).replace("_", " ")} hanya dapat dilakukan pukul ${formatMenit(jendela.bukaMenit)}\u2013${formatMenit(akhirJendela)}.` },
+              { error: "Anda tidak terjadwal mengajar pada sesi dan kelas Markaz Hufadz ini." },
               { status: 403 }
             );
           }
         }
+      } else {
+        const jendela = await resolveSesiWindowServer(sesi, programIdValidasi, parsedDate);
+        if (jendela) {
+          const kini = menitWibSekarang();
+          const akhirJendela = jendela.tutupMenit + jendela.toleransiMenit;
+          if (kini < jendela.bukaMenit || kini > akhirJendela) {
+            // Jatah simpan susulan: khusus payload bertanda susulan (jalur
+            // pemulihan draf Fase 1), paling lambat 60 menit setelah jendela
+            // berakhir, tetap di hari yang sama.
+            if (payload.susulan === true && kini > akhirJendela && kini <= akhirJendela + 60) {
+              simpanSusulan = true;
+            } else {
+              return NextResponse.json(
+                { error: `Di luar jendela sesi. Simpan absen ${(sesi as string).replace("_", " ")} hanya dapat dilakukan pukul ${formatMenit(jendela.bukaMenit)}\u2013${formatMenit(akhirJendela)}.` },
+                { status: 403 }
+              );
+            }
+          }
+        }
+        // Jendela tidak ter-resolve (sesi tak terkonfigurasi) -> simpan diizinkan:
+        // validasi tidak boleh memblokir sesi yang memang tidak punya konfigurasi.
       }
-      // Jendela tidak ter-resolve (sesi tak terkonfigurasi) -> simpan diizinkan:
-      // validasi tidak boleh memblokir sesi yang memang tidak punya konfigurasi.
     }
 
     // --- AUTO-JIT IZIN LOGIC ---
@@ -443,32 +484,44 @@ export async function POST(request: Request) {
         let jadwalBuka: string | null = null;
         let graceMenit = 5;
 
-        // Prioritas 1: Hari taqwim -> pakai jam & toleransi taqwim global.
-        // (Bug sebelumnya: taqwim dibandingkan dengan jam sesi biasa sehingga wali kelas
-        //  selalu tercatat telat saat mengisi di jam taqwim.)
-        const taqwimConfig = await prisma.sesiTaqwim.findFirst({ where: { isActive: true } });
-        if (taqwimConfig && (sesi as string) === "SESI_1") {
-          const taqwimDate = await prisma.tanggalTaqwim.findFirst({ where: { tanggal: parsedDate } });
-          if (taqwimDate) {
-            jadwalBuka = taqwimConfig.jamBuka;
-            graceMenit = taqwimConfig.toleransiMenit ?? 15;
+        const kelasInfo = actualKelasId
+          ? await prisma.kelas.findUnique({
+              where: { id: actualKelasId },
+              select: { programId: true, program: { select: { kategori: true } } },
+            })
+          : null;
+        const isActualHufadz = kelasInfo?.program?.kategori === "HUFADZ";
+
+        if (isActualHufadz) {
+          // Khusus Markaz Hufadz: jam belajarnya berbeda dari sesi global Arabiyah.
+          // Hanya hitung keterlambatan jika ada SesiTambahanProgram khusus untuk program Hufadz ini.
+          if (kelasInfo?.programId) {
+            const tambahan = await prisma.sesiTambahanProgram.findFirst({
+              where: { programId: kelasInfo.programId, sesi: sesi as any, isActive: true },
+            });
+            if (tambahan) jadwalBuka = tambahan.jamBuka;
           }
-        }
-
-        // Prioritas 2: Resolve jadwal buka dari JadwalSesi / SesiTambahanProgram
-        if (!jadwalBuka) {
-          const jadwalSesi = await prisma.jadwalSesi.findUnique({ where: { sesi: sesi as any } });
-          jadwalBuka = jadwalSesi?.jamBuka ?? null;
-
-          // Fallback: SesiTambahanProgram
-          if (!jadwalBuka && actualKelasId) {
-            const kelas = await prisma.kelas.findUnique({ where: { id: actualKelasId }, select: { programId: true } });
-            if (kelas?.programId) {
-              const tambahan = await prisma.sesiTambahanProgram.findFirst({
-                where: { programId: kelas.programId, sesi: sesi as any, isActive: true }
-              });
-              if (tambahan) jadwalBuka = tambahan.jamBuka;
+        } else {
+          // Prioritas 1: Hari taqwim -> pakai jam & toleransi taqwim global.
+          const taqwimConfig = await prisma.sesiTaqwim.findFirst({ where: { isActive: true } });
+          if (taqwimConfig && (sesi as string) === "SESI_1") {
+            const taqwimDate = await prisma.tanggalTaqwim.findFirst({ where: { tanggal: parsedDate } });
+            if (taqwimDate) {
+              jadwalBuka = taqwimConfig.jamBuka;
+              graceMenit = taqwimConfig.toleransiMenit ?? 15;
             }
+          }
+
+          // Prioritas 2: Resolve jadwal buka dari SesiTambahanProgram -> JadwalSesi global
+          if (!jadwalBuka && kelasInfo?.programId) {
+            const tambahan = await prisma.sesiTambahanProgram.findFirst({
+              where: { programId: kelasInfo.programId, sesi: sesi as any, isActive: true },
+            });
+            if (tambahan) jadwalBuka = tambahan.jamBuka;
+          }
+          if (!jadwalBuka) {
+            const jadwalSesi = await prisma.jadwalSesi.findUnique({ where: { sesi: sesi as any } });
+            jadwalBuka = jadwalSesi?.jamBuka ?? null;
           }
         }
 

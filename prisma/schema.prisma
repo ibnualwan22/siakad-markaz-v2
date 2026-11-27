@@ -89,6 +89,7 @@ model SantriInternal {
   noWaWali              String?
   kabupaten             String?
   passwordHash          String?
+  wifiPasswordHash        String?  // Hash bcrypt sandi WiFi santri (nanti)
   bulanKe               Int                 @default(0)
   isAktif               Boolean             @default(true)
   isCheckedOut          Boolean             @default(false)
@@ -1425,6 +1426,18 @@ model WifiSakanConfig {
   sakan     String   @unique  // Nama sakan, cocok dengan SantriInternal.sakan
   enabled   Boolean  @default(false)
   profileId String?  // Profil default untuk sakan ini
+}
+
+model WifiMacBinding {
+  id         String   @id @default(cuid())
+  ownerType  String   // "SANTRI" | "CIVITAS"
+  ownerId    String   @unique // NIS santri (SantriInternal.id) atau username civitas (lowercase)
+  macAddress String   // Normalisasi: HURUF BESAR, dipisah titik dua
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  lastSeenAt DateTime @default(now())
+
+  @@index([macAddress])
 }
 
 // ============================================

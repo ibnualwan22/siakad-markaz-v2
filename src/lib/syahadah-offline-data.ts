@@ -162,6 +162,81 @@ function clearMusyarokahScoreFields(texts: Record<string, string>) {
   }
 }
 
+/** Konversi angka Arab (٠-٩) ke digit Latin (0-9) untuk parsing. */
+function arabicToLatinDigits(s: string): string {
+  const map = "٠١٢٣٤٥٦٧٨٩";
+  return s.replace(/[٠-٩]/g, (ch) => String(map.indexOf(ch)));
+}
+
+/**
+ * Format field `dufah` syahadah F4 offline:
+ * - Program non-Akbarnas: 1 angka duf'ah ("Duf'ah 95" -> "٩٥").
+ * - Program Akbarnas (2 bulan): 2 duf'ah dipisah garis "-" tanpa "إلى" (mis. "٩٤ - ٩٥").
+ *   Prioritas: kolom `teks_dufah_akbarnas_arab` di Pengaturan Syahadah;
+ *   jika kosong, otomatis ambil rentang duf'ah dari histori riwayat Akbarnas santri
+ *   (atau fallback [dufah - 1, dufah]).
+ */
+function formatDufahField(params: {
+  isAkbarnas: boolean;
+  dufahNama?: string | null;
+  teksDufahAkbarnasArab?: string | null;
+  akbarnasDufahNames?: string[];
+}): string {
+  const { isAkbarnas, dufahNama, teksDufahAkbarnasArab, akbarnasDufahNames } = params;
+
+  if (!isAkbarnas) {
+    const m = String(dufahNama || "").match(/\d+/);
+    return m ? toArabDigits(m[0]) : "";
+  }
+
+  // 1. Cek pengaturan `teks_dufah_akbarnas_arab`
+  const custom = (teksDufahAkbarnasArab || "").trim();
+  if (custom) {
+    const latin = arabicToLatinDigits(custom);
+    const nums = latin.match(/\d+/g);
+    if (nums && nums.length >= 2) {
+      return `${toArabDigits(nums[0])} - ${toArabDigits(nums[nums.length - 1])}`;
+    }
+    // Jika admin mengisi teks bebas tanpa 2 angka, tetap ganti "إلى"/"الى" menjadi "-"
+    const cleaned = custom
+      .replace(/^الدفعة\s*/u, "")
+      .replace(/\s*(إلى|الى)\s*/gu, " - ")
+      .trim();
+    return toArabDigits(cleaned);
+  }
+
+  // 2. Fallback dari histori riwayat Akbarnas santri (2 bulan)
+  if (akbarnasDufahNames && akbarnasDufahNames.length > 0) {
+    const nums = [
+      ...new Set(
+        akbarnasDufahNames
+          .map((n) => {
+            const m = String(n || "").match(/\d+/);
+            return m ? parseInt(m[0], 10) : NaN;
+          })
+          .filter((x) => !Number.isNaN(x)),
+      ),
+    ].sort((a, b) => a - b);
+    if (nums.length >= 2) {
+      return `${toArabDigits(nums[0])} - ${toArabDigits(nums[nums.length - 1])}`;
+    }
+    if (nums.length === 1) {
+      return `${toArabDigits(Math.max(1, nums[0] - 1))} - ${toArabDigits(nums[0])}`;
+    }
+  }
+
+  // 3. Fallback akhir dari dufahNama saat ini
+  const curMatch = String(dufahNama || "").match(/\d+/);
+  if (curMatch) {
+    const curNum = parseInt(curMatch[0], 10);
+    if (!Number.isNaN(curNum) && curNum > 1) {
+      return `${toArabDigits(curNum - 1)} - ${toArabDigits(curNum)}`;
+    }
+    return toArabDigits(curMatch[0]);
+  }
+  return "٩٤ - ٩٥";
+}
+
 /**
  * Susun semua isi field syahadah offline untuk satu riwayat.
  * `id` boleh riwayatId atau santriId (getCertificateData menyelesaikan
@@ -258,9 +333,25 @@ export async function getOfflinePrintData(
     lembaga,
   );
 
-  // Duf'ah sebagai angka ("Duf'ah 95" -> "٩٥").
-  const dufahMatch = String(cert.riwayatSantri.dufahNama || "").match(/\d+/);
-  const dufah = dufahMatch ? toArabDigits(dufahMatch[0]) : "";
+  // Duf'ah: program reguler = 1 angka ("٩٥"); khusus Akbarnas = 2 duf'ah dipisah garis ("٩٤ - ٩٥")
+  const isAkbarnas = programNamaIndo.toLowerCase().includes("akbarnas");
+  let akbarnasDufahNames: string[] = [];
+  if (isAkbarnas && !(tpl?.teks_dufah_akbarnas_arab || "").trim()) {
+    const hist = await prisma.riwayatSantri.findMany({
+      where: {
+        santriId,
+        program: { nama_indo: { contains: "akbarnas", mode: "insensitive" } },
+      },
+      select: { dufahNama: true },
+    });
+    akbarnasDufahNames = hist.map((h) => h.dufahNama);
+  }
+  const dufah = formatDufahField({
+    isAkbarnas,
+    dufahNama: cert.riwayatSantri.dufahNama,
+    teksDufahAkbarnasArab: tpl?.teks_dufah_akbarnas_arab,
+    akbarnasDufahNames,
+  });
 
   const tempatLahir = formatTempatTanggalLahir(
     cert.masterSantri?.tempatLahir,
@@ -580,11 +671,20 @@ export async function getDummyPrintData(
     }
   }
 
+  const isAkbarnasDummy = (program.nama_indo || "").toLowerCase().includes("akbarnas");
+  const dummyDufah = isAkbarnasDummy
+    ? formatDufahField({
+        isAkbarnas: true,
+        dufahNama: "Duf'ah 95",
+        teksDufahAkbarnasArab: (tplRow as any)?.teks_dufah_akbarnas_arab,
+      })
+    : "٩٥";
+
   const texts: Record<string, string> = {
     nama: "Ahmad Ibnu Alwan",
     tempatLahir: "Wonosobo, 05 - 11 - 2000",
     program: program.nama_arab || program.nama_indo || "-",
-    dufah: "٩٥",
+    dufah: dummyDufah,
     periode,
     tahunHijriyah,
     tahunMiladiyah,
@@ -1017,8 +1117,14 @@ export async function getBulkOfflinePrintData(params: {
       rowLembaga,
     );
 
-    const dufahMatch = String(riwayat.dufahNama || "").match(/\d+/);
-    const dufah = dufahMatch ? toArabDigits(dufahMatch[0]) : "";
+    const dufah = formatDufahField({
+      isAkbarnas,
+      dufahNama: riwayat.dufahNama,
+      teksDufahAkbarnasArab: (tplRow as any)?.teks_dufah_akbarnas_arab,
+      akbarnasDufahNames: isAkbarnas
+        ? (akbarnasHistBySantri.get(riwayat.santriId) ?? []).map((h) => h.dufahNama)
+        : undefined,
+    });
     const tempatLahir = formatTempatTanggalLahir(
       master?.tempatLahir ?? riwayat.santri?.tempat_lahir,
       master?.tanggalLahir ?? riwayat.santri?.tanggal_lahir,

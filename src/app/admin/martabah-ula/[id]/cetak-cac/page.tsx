@@ -1,8 +1,8 @@
-import { getCertificateData } from "@/lib/app-data";
-import { getBaseUrl } from "@/lib/base-url";
 import { notFound } from "next/navigation";
-import { SyahadahEditor } from "@/components/syahadah-editor";
-import { getMartabahCacLayout } from "@/lib/syahadah-layout";
+import { requirePermission } from "@/lib/permission";
+import { NON_KELAS_KEY_CAC } from "@/lib/syahadah-non-kelas";
+import { getNonKelasSinglePrintData } from "@/lib/syahadah-non-kelas-data";
+import SyahadahNonKelasWorkspace from "@/components/cetak/SyahadahNonKelasWorkspace";
 
 export const dynamic = "force-dynamic";
 
@@ -11,36 +11,31 @@ export default async function CetakCacPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("martabah_ula");
   const { id } = await params;
-  const data = await getCertificateData(id);
 
-  if (!data) {
-    notFound();
-  }
-
-  const baseUrl = await getBaseUrl();
-  // Here, qr code goes to the special CAC verification page
-  const qrUrl = `${baseUrl}/cac/${data.riwayatSantri?.id}`;
-
-  const riwayatId = data.riwayatSantri?.id ?? null;
-  const programId = data.program?.id ?? null;
-
-  const layout = await getMartabahCacLayout();
+  const data = await getNonKelasSinglePrintData(NON_KELAS_KEY_CAC, id);
+  if (!data) notFound();
 
   return (
-    <SyahadahEditor
-      qrUrl={qrUrl}
-      data={data as any}
-      initialLayout={layout}
-      riwayatId={riwayatId}
-      programId={programId}
-      mode="per-santri"
-      isMartabah={true}
-      isCac={true}
+    <SyahadahNonKelasWorkspace
+      programKey={data.programKey}
+      titleLabel={`Cetak Sertifikat CAC — ${data.nama}`}
       backHref="/admin/martabah-ula"
       backLabel="← Kembali ke Martabah Ula"
-      titleLabel="Layout Editor — Sertifikat CAC"
-      isTurats={false}
+      texts={data.texts}
+      qrUrl={data.qrUrl}
+      signatureUrl={data.signatureUrl}
+      stampUrl={data.stampUrl}
+      backgroundUrl={data.template.backgroundUrl}
+      positions={data.template.fieldPositions}
+      offsetX={data.template.offsetX}
+      offsetY={data.template.offsetY}
+      locked={data.template.locked}
+      canEdit
+      initialEditorActive={false}
+      showPngButton
+      fileBaseName={`cac-${data.nama}`}
     />
   );
 }

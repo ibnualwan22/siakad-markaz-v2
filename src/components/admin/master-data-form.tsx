@@ -336,10 +336,10 @@ export function MasterDataForm({
               />
             </label>
             <label className="space-y-2 text-sm font-semibold text-[var(--color-text)]">
-              <span>Teks Duf&apos;ah Akbarnas (Arab)</span>
+              <span>Teks Duf&apos;ah Akbarnas (Arab — dipisah garis)</span>
               <input
                 dir="rtl"
-                placeholder="Contoh: الدفعة ٨٩ إلى ٩٠"
+                placeholder="Contoh: ٩٤ - ٩٥"
                 value={templateState.teks_dufah_akbarnas_arab ?? ""}
                 onChange={(event) =>
                   setTemplateState((current) => ({

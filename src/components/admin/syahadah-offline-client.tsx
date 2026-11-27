@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import TemplateSyahadahOfflineTab from "./template-syahadah-offline-tab";
+import SyahadahNonKelasPanel from "./syahadah-non-kelas-panel";
+import type { NonKelasCatalogItem } from "@/lib/syahadah-non-kelas-data";
 import {
   OFFLINE_STAGE_H_MM,
   OFFLINE_STAGE_W_MM,
@@ -42,9 +44,14 @@ type LayoutScope = "global" | "program";
 
 export default function SyahadahOfflineClient({
   programs,
+  nonKelasCatalog = [],
+  initialMainTab = "kelas",
 }: {
   programs: OfflineProgramOption[];
+  nonKelasCatalog?: NonKelasCatalogItem[];
+  initialMainTab?: "kelas" | "non-kelas";
 }) {
+  const [mainTab, setMainTab] = useState<"kelas" | "non-kelas">(initialMainTab);
   const [lembaga, setLembaga] = useState<LembagaId>("ARABIYAH");
   const [variant, setVariant] = useState<DesignVariant>("lulus");
   const [scope, setScope] = useState<LayoutScope>("global");
@@ -167,6 +174,36 @@ export default function SyahadahOfflineClient({
 
   return (
     <div className="space-y-6 offline-print-reset">
+      {/* Main Tab Switcher: Syahadah Kelas vs Syahadah Non-Kelas */}
+      <div className="no-print flex flex-wrap gap-2 rounded-2xl border bg-white p-2.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setMainTab("kelas")}
+          className={`flex-1 min-w-[220px] rounded-xl px-4 py-3 text-sm font-bold transition ${
+            mainTab === "kelas"
+              ? "bg-[var(--color-primary)] text-white shadow-sm"
+              : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          🎓 Syahadah Kelas (F4 Portrait · 3 Lembaga)
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab("non-kelas")}
+          className={`flex-1 min-w-[220px] rounded-xl px-4 py-3 text-sm font-bold transition ${
+            mainTab === "non-kelas"
+              ? "bg-indigo-600 text-white shadow-sm"
+              : "bg-slate-50 text-slate-700 hover:bg-slate-100"
+          }`}
+        >
+          🏆 Syahadah Non-Kelas (F4 Landscape · {nonKelasCatalog.length} Jenis)
+        </button>
+      </div>
+
+      {mainTab === "non-kelas" ? (
+        <SyahadahNonKelasPanel catalog={nonKelasCatalog} />
+      ) : (
+        <>
       {/* Card 1: Pilih Lembaga & Varian Desain */}
       <div className="no-print bg-white rounded-2xl border p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -409,6 +446,8 @@ export default function SyahadahOfflineClient({
         sharedBackgroundUrl={lembagaBgUrl}
         hideUploadCard
       />
+        </>
+      )}
     </div>
   );
 }

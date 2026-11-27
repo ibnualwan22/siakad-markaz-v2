@@ -1,8 +1,12 @@
-import { getCertificateData } from "@/lib/app-data";
-import { getBaseUrl } from "@/lib/base-url";
 import { notFound } from "next/navigation";
-import { SyahadahEditor } from "@/components/syahadah-editor";
-import { getMartabahLayout } from "@/lib/syahadah-layout";
+import { getCertificateData } from "@/lib/app-data";
+import { requirePermission } from "@/lib/permission";
+import {
+  NON_KELAS_KEY_MARTABAH_ARABIYAH,
+  NON_KELAS_KEY_MARTABAH_TURATS,
+} from "@/lib/syahadah-non-kelas";
+import { getNonKelasSinglePrintData } from "@/lib/syahadah-non-kelas-data";
+import SyahadahNonKelasWorkspace from "@/components/cetak/SyahadahNonKelasWorkspace";
 
 export const dynamic = "force-dynamic";
 
@@ -11,35 +15,39 @@ export default async function CetakMartabahPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requirePermission("martabah_ula");
   const { id } = await params;
-  const data = await getCertificateData(id);
 
-  if (!data) {
-    notFound();
-  }
+  const cert: any = await getCertificateData(id);
+  if (!cert || !cert.program) notFound();
 
-  const baseUrl = await getBaseUrl();
-  const qrUrl = `${baseUrl}/ijazah/${id}`;
+  const isTurats = cert.program?.kategori === "TURATS";
+  const programKey = isTurats
+    ? NON_KELAS_KEY_MARTABAH_TURATS
+    : NON_KELAS_KEY_MARTABAH_ARABIYAH;
 
-  const riwayatId = data.riwayatSantri?.id ?? null;
-  const programId = data.program?.id ?? null;
-  const isTurats = (data.program as any)?.kategori === "TURATS";
-
-  const layout = await getMartabahLayout(isTurats);
+  const data = await getNonKelasSinglePrintData(programKey, id);
+  if (!data) notFound();
 
   return (
-    <SyahadahEditor
-      qrUrl={qrUrl}
-      data={data as any}
-      initialLayout={layout}
-      riwayatId={riwayatId}
-      programId={programId}
-      mode="per-santri"
-      isMartabah={true}
+    <SyahadahNonKelasWorkspace
+      programKey={data.programKey}
+      titleLabel={`Cetak ${data.jenisLabel} — ${data.nama}`}
       backHref="/admin/martabah-ula"
       backLabel="← Kembali ke Martabah Ula"
-      titleLabel="Layout Editor — Sertifikat Penghargaan"
-      isTurats={isTurats}
+      texts={data.texts}
+      qrUrl={data.qrUrl}
+      signatureUrl={data.signatureUrl}
+      stampUrl={data.stampUrl}
+      backgroundUrl={data.template.backgroundUrl}
+      positions={data.template.fieldPositions}
+      offsetX={data.template.offsetX}
+      offsetY={data.template.offsetY}
+      locked={data.template.locked}
+      canEdit
+      initialEditorActive={false}
+      showPngButton
+      fileBaseName={`martabah-${data.nama}`}
     />
   );
 }

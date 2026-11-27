@@ -55,6 +55,12 @@ export default function DaftarUjianSantriPage() {
       // Simpan data soal ke localStorage agar aman dan tidak perlu fetch lagi di page ujian jika tab ter-close
       localStorage.setItem(`exam_${data.sesiId}`, JSON.stringify(data));
       
+      // Tutup keyboard HP & reset posisi scroll sebelum pindah ke layar ujian
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      window.scrollTo(0, 0);
+
       toast.success("Berhasil masuk. Memulai mode ujian fullscreen...");
       setIsModalOpen(false);
       

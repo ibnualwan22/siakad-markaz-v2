@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Metadata } from "next";
 import { RekapFilterClient } from "@/components/admin/rekap-filter-client";
 import { RekapPengajarClient } from "@/components/admin/rekap-pengajar-client";
+import { ReminderPengajarToggle } from "@/components/admin/reminder-pengajar-toggle";
 import { getSession } from "@/lib/auth";
 
 import prisma from "@/lib/prisma";
@@ -15,9 +16,24 @@ export const dynamic = "force-dynamic";
 
 export default async function RekapPengajarPage() {
   await requirePermission("rekap_pengajar");
-  const hasEditPerm = await checkPermission("rekap_pengajar_edit");
+  const [hasEditPerm, hasReminderTogglePerm] = await Promise.all([
+    checkPermission("rekap_pengajar_edit"),
+    checkPermission("reminder_pengajar_toggle"),
+  ]);
   const session = await getSession();
   const userRole = session?.role || "";
+
+  let reminderConfig: { isActive: boolean; updatedAt: Date; updatedBy: string | null } | null = null;
+  if (hasReminderTogglePerm) {
+    try {
+      reminderConfig = await prisma.pengaturanReminderPengajar.findUnique({
+        where: { id: 1 },
+        select: { isActive: true, updatedAt: true, updatedBy: true },
+      });
+    } catch {
+      reminderConfig = null;
+    }
+  }
 
   // Ambil daftar pengajar untuk dropdown badal
   const pengajarListRaw = await prisma.user.findMany({
@@ -34,9 +50,17 @@ export default async function RekapPengajarPage() {
           Rekap Absen Pengajar
         </h1>
         <p className="text-sm text-[var(--color-text-muted)] max-w-2xl">
-          Laporan kehadiran dan kelengkapan atribut asatidzah (pengajar) berdasarkan Usbu' (Pekan).
+          Laporan kehadiran dan kelengkapan atribut asatidzah (pengajar) berdasarkan Usbu&apos; (Pekan).
         </p>
       </div>
+
+      {hasReminderTogglePerm && (
+        <ReminderPengajarToggle
+          initialActive={reminderConfig ? reminderConfig.isActive : true}
+          initialUpdatedAt={reminderConfig?.updatedAt ? reminderConfig.updatedAt.toISOString() : null}
+          initialUpdatedBy={reminderConfig?.updatedBy ?? null}
+        />
+      )}
 
       <Suspense fallback={<div className="animate-pulse p-4 text-[var(--color-text-subtle)] font-medium">Memuat Filter...</div>}>
         <RekapFilterClient type="pengajar" title="Rincian Absen Pengajar" useUsbu={true} />

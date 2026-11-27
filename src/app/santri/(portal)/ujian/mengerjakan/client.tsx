@@ -13,7 +13,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 }
 
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Clock, ShieldAlert, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Send, Grid3X3, Maximize2, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -54,6 +54,8 @@ export default function ClientMengerjakanUjian({
   const [secureMode, setSecureMode] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewportStyle, setViewportStyle] = useState<CSSProperties | undefined>(undefined);
+  const [viewportWidth, setViewportWidth] = useState<number | null>(null);
 
   // Anti-cheat refs
   const hasSubmitted = useRef(false);
@@ -509,12 +511,89 @@ export default function ClientMengerjakanUjian({
     return () => clearInterval(interval);
   }, [hasStarted, sesiId, router]);
 
-  // Track Fullscreen status for fallback UI
+  // Sinkronkan container ujian dengan ukuran visualViewport aktual.
+  // Mengatasi footer/navigasi terpotong saat transisi fullscreen Android Chrome (bug 100dvh),
+  // maupun saat browser HP terlanjur ter-zoom / mode Situs Desktop.
   useEffect(() => {
-    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    if (!hasStarted || typeof window === "undefined") {
+      setViewportStyle(undefined);
+      return;
+    }
+
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const syncViewport = () => {
+      const vv = window.visualViewport;
+      const innerW = window.innerWidth;
+      const innerH = window.innerHeight;
+
+      if (!vv || vv.width < 100 || vv.height < 100) {
+        setViewportWidth(innerW);
+        setViewportStyle(undefined);
+        return;
+      }
+
+      const isZoomedOrOffset =
+        Math.abs(vv.scale - 1) > 0.02 ||
+        Math.abs(vv.offsetTop) > 0.5 ||
+        Math.abs(vv.offsetLeft) > 0.5 ||
+        Math.abs(vv.width - innerW) > 1.5;
+
+      const visibleW = Math.round(isZoomedOrOffset ? vv.width : Math.min(vv.width, innerW));
+      const visibleH = Math.round(isZoomedOrOffset ? vv.height : Math.min(vv.height, innerH));
+
+      setViewportWidth(visibleW);
+
+      if (isZoomedOrOffset) {
+        setViewportStyle({
+          top: `${vv.offsetTop}px`,
+          left: `${vv.offsetLeft}px`,
+          right: "auto",
+          bottom: "auto",
+          width: `${visibleW}px`,
+          height: `${visibleH}px`,
+        });
+      } else {
+        setViewportStyle({
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: "auto",
+          height: `${visibleH}px`,
+        });
+      }
+    };
+
+    const syncViewportSettled = () => {
+      syncViewport();
+      timers.push(setTimeout(syncViewport, 150));
+      timers.push(setTimeout(syncViewport, 450));
+    };
+
+    // Track Fullscreen status for fallback UI + reflow setelah animasi fullscreen
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      baselineHeightRef.current = window.innerHeight;
+      syncViewportSettled();
+    };
+
+    syncViewportSettled();
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", syncViewport);
+    vv?.addEventListener("scroll", syncViewport);
+    window.addEventListener("resize", syncViewport);
+    window.addEventListener("orientationchange", syncViewportSettled);
     document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      vv?.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("scroll", syncViewport);
+      window.removeEventListener("resize", syncViewport);
+      window.removeEventListener("orientationchange", syncViewportSettled);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, [hasStarted]);
 
   const enterFullscreen = () => {
     const elem = document.documentElement;
@@ -527,6 +606,10 @@ export default function ClientMengerjakanUjian({
   };
 
   const handleMulai = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    window.scrollTo(0, 0);
     baselineHeightRef.current = window.innerHeight;
     enterFullscreen();
     setHasStarted(true);
@@ -935,10 +1018,16 @@ export default function ClientMengerjakanUjian({
     return Answered && (savedVer < curVer);
   });
   const canSubmit = raguList.length === 0 && unansweredList.length === 0 && unsavedList.length === 0;
+  // Tampilkan sidebar desktop hanya bila lebar visual >= 1024px.
+  // Mencegah HP (landscape 800-930px, DPI kecil, atau mode Situs Desktop 980px) kehilangan tombol navigasi Grid3X3.
+  const isCompactLayout = viewportWidth !== null ? viewportWidth < 1024 : null;
 
   if (showSummary) {
     return (
-      <div className="fixed inset-0 h-[100dvh] touch-manipulation bg-gray-50 flex flex-col font-sans z-50 overflow-hidden">
+      <div
+        className="fixed inset-0 touch-manipulation bg-gray-50 flex flex-col font-sans z-50 overflow-hidden"
+        style={viewportStyle}
+      >
         <style dangerouslySetInnerHTML={{
           __html: `
           aside { display: none !important; }
@@ -947,8 +1036,14 @@ export default function ClientMengerjakanUjian({
           .santri-mobile-menu-btn { display: none !important; }
           html, body { overflow: hidden !important; overscroll-behavior: none; touch-action: manipulation; }
         `}} />
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto p-4 md:p-8 flex items-start justify-center"
+          style={{
+            paddingTop: "max(1rem, env(safe-area-inset-top))",
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
+        >
+          <div className="my-auto bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-xl">
             <h1 className="text-xl md:text-2xl font-bold font-display text-gray-800 mb-6 pb-4 border-b">Ringkasan Ujian</h1>
 
             <div className="grid grid-cols-3 gap-3 mb-6">
@@ -1072,7 +1167,10 @@ export default function ClientMengerjakanUjian({
   }
 
   return (
-    <div className="fixed inset-0 h-[100dvh] touch-manipulation bg-gray-50 flex flex-col md:flex-row font-sans selection:bg-blue-100 overflow-hidden z-50">
+    <div
+      className={`fixed inset-0 touch-manipulation bg-gray-50 flex ${isCompactLayout === false ? "flex-row" : isCompactLayout === null ? "flex-col lg:flex-row" : "flex-col"} font-sans selection:bg-blue-100 overflow-hidden z-50`}
+      style={viewportStyle}
+    >
 
       {/* Hide Global Navigasi Saat CBT + kunci overflow & cegah double-tap zoom iOS */}
       {hasStarted && !hasSubmitted.current && !showSummary && (
@@ -1087,7 +1185,7 @@ export default function ClientMengerjakanUjian({
       )}
 
       {/* LEFT: Soal Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden px-0 bg-white">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full overflow-hidden px-0 bg-white">
 
         {/* Banner Simulasi (hanya tampil di /simulasi-ujian) */}
         {isSimulation && (
@@ -1100,7 +1198,14 @@ export default function ClientMengerjakanUjian({
         )}
 
         {/* Header - Timer */}
-        <div className="bg-white px-3 sm:px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0">
+        <div
+          className="bg-white px-3 sm:px-4 md:px-6 py-2.5 md:py-4 border-b flex justify-between items-center shadow-sm z-10 shrink-0"
+          style={isCompactLayout === false ? undefined : {
+            paddingTop: "max(0.625rem, env(safe-area-inset-top))",
+            paddingLeft: "max(0.75rem, env(safe-area-inset-left))",
+            paddingRight: "max(0.75rem, env(safe-area-inset-right))",
+          }}
+        >
           <div className="flex min-w-0 items-center gap-2 md:gap-3">
             <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-[var(--color-primary)] text-white font-bold text-sm md:text-lg rounded-lg md:rounded-xl flex items-center justify-center shadow-sm">
               {currentTypeIdx}
@@ -1126,13 +1231,17 @@ export default function ClientMengerjakanUjian({
               </button>
             )}
 
-            {/* Mobile Nav Toggle */}
-            <button
-              onClick={() => setShowMobileNav(!showMobileNav)}
-              className="md:hidden p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-            >
-              <Grid3X3 size={18} />
-            </button>
+            {/* Mobile / Compact Nav Toggle */}
+            {isCompactLayout !== false && (
+              <button
+                onClick={() => setShowMobileNav(!showMobileNav)}
+                className={`${isCompactLayout === null ? "lg:hidden " : ""}p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition`}
+                aria-label="Navigasi Soal"
+                title="Navigasi Soal"
+              >
+                <Grid3X3 size={18} />
+              </button>
+            )}
             {/* Reserve the save indicator's width so typing cannot reflow the header. */}
             <div
               className={`flex w-11 shrink-0 items-center justify-center gap-1 px-1 py-1 bg-orange-100 text-orange-700 rounded-lg text-[10px] font-bold tabular-nums ${unsavedCount > 0 ? "animate-pulse" : "invisible"}`}
@@ -1148,10 +1257,18 @@ export default function ClientMengerjakanUjian({
           </div>
         </div>
 
-        {/* Mobile Navigator Overlay */}
-        {showMobileNav && (
-          <div className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileNav(false)}>
-            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        {/* Mobile / Compact Navigator Overlay */}
+        {showMobileNav && isCompactLayout !== false && (
+          <div
+            className={`${isCompactLayout === null ? "lg:hidden " : ""}fixed inset-0 z-50 bg-black/50 backdrop-blur-sm`}
+            style={viewportStyle}
+            onClick={() => setShowMobileNav(false)}
+          >
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl p-5 max-h-[70vh] overflow-y-auto"
+              style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-gray-800">Navigasi Soal</h3>
                 <button onClick={() => setShowMobileNav(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={18} /></button>
@@ -1216,7 +1333,7 @@ export default function ClientMengerjakanUjian({
         )}
 
         {/* Soal Content */}
-        <div className="flex-1 overflow-y-auto w-full md:w-4/5 mx-auto p-4 md:p-8 scroll-smooth pb-8">
+        <div className={`flex-1 min-h-0 overflow-y-auto ${isCompactLayout === false ? "w-4/5 p-8" : isCompactLayout === null ? "w-full lg:w-4/5 p-4 lg:p-8" : "w-full p-4"} mx-auto scroll-smooth pb-8`}>
           
           {failedSaveCount > 0 && (
             <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 md:mb-6 rounded-r-xl shadow-sm animate-pulse">
@@ -1283,7 +1400,14 @@ export default function ClientMengerjakanUjian({
         </div>
 
         {/* Footer Navigation Area */}
-        <div className="w-full shrink-0 bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]">
+        <div
+          className="w-full shrink-0 bg-white border-t p-3 sm:p-4 flex gap-2 md:gap-4 justify-between items-center z-20 shadow-[0_-10px_40px_-5px_rgba(0,0,0,0.05)]"
+          style={isCompactLayout === false ? undefined : {
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+            paddingLeft: "max(0.75rem, env(safe-area-inset-left))",
+            paddingRight: "max(0.75rem, env(safe-area-inset-right))",
+          }}
+        >
           <button
             onClick={() => setCurrentIdx(Math.max(0, currentIdx - 1))}
             disabled={currentIdx === 0}
@@ -1297,7 +1421,7 @@ export default function ClientMengerjakanUjian({
             className={`px-3 md:px-5 py-2.5 sm:py-3 rounded-xl font-bold flex gap-1 sm:gap-2 items-center transition border flex-1 sm:flex-none justify-center text-[11px] sm:text-sm ${soal.rpiId === 'RAGU' ? 'bg-orange-50 border-orange-300 text-orange-600' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             {soal.rpiId === 'RAGU' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-            Ragu<span className="hidden sm:inline">-Ragu</span>
+            <span>Ragu<span className="hidden sm:inline">-Ragu</span></span>
           </button>
 
           <button
@@ -1316,8 +1440,8 @@ export default function ClientMengerjakanUjian({
         </div>
       </div>
 
-      {/* RIGHT: Grid Navigasi Soal (Desktop only by default, but hidden correctly in footer block on mobile if we wanted) */}
-      <div className="hidden md:flex flex-col w-80 lg:w-88 bg-white border-l h-full sticky top-0 shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.02)]">
+      {/* RIGHT: Grid Navigasi Soal (Desktop >= 1024px visual viewport) */}
+      <div className={`${isCompactLayout === true ? "hidden" : isCompactLayout === false ? "flex" : "hidden lg:flex"} flex-col w-80 lg:w-88 bg-white border-l h-full sticky top-0 shrink-0 shadow-[-5px_0_15px_-5px_rgba(0,0,0,0.02)]`}>
         <div className="p-5 border-b bg-gray-50/50">
           <h3 className="font-bold font-display text-gray-800">Navigasi Pengerjaan</h3>
           <div className="flex items-center gap-2 mt-2 pt-2 border-t">

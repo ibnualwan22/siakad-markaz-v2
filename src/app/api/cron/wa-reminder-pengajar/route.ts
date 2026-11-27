@@ -44,6 +44,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // ─── 0. Cek saklar aktif/nonaktif reminder pengajar ──────────────────────
+    let reminderAktif = true;
+    try {
+      const reminderConfig = await prisma.pengaturanReminderPengajar.findUnique({
+        where: { id: 1 },
+      });
+      if (reminderConfig && !reminderConfig.isActive) {
+        reminderAktif = false;
+      }
+    } catch (cfgErr) {
+      console.warn("Gagal membaca PengaturanReminderPengajar, fallback aktif:", cfgErr);
+    }
+
+    if (!reminderAktif) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        disabled: true,
+        message: "Reminder pengajar sedang dinonaktifkan. Tidak ada pesan yang dikirim.",
+        totalKirim: 0,
+        totalSkip: 0,
+      });
+    }
+
     const todayStr = getTodayWibString();
     const todayDate = parseWibDateString(todayStr);
     const nowMinutes = getCurrentWibMinutes();

@@ -755,6 +755,13 @@ model ReminderLog {
   @@unique([userId, tanggal, sesi])
 }
 
+model PengaturanReminderPengajar {
+  id        Int      @id @default(1)
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
 // ===== SYAHADAH ONLINE (Temporary) =====
 
 model ProgramOnline {

@@ -11,23 +11,26 @@ import {
 } from "@/lib/syahadah-offline";
 import SyahadahOfflineWorkspace from "@/components/cetak/SyahadahOfflineWorkspace";
 
-// Tab "Template Offline" syahadah F4 portrait (215 x 330 mm, kertas pre-printed).
-// Menggunakan SyahadahOfflineWorkspace yang SAMA PERSIS dengan halaman cetak
-// (/cetak-offline/[id] & /cetak-offline/tes/[programKey]), sehingga layout yang
-// diatur di sini 100% identik dengan hasil print (WYSIWYG), lengkap dengan
-// kontrol keyboard panah + Shift (5x cepat) seperti /layout-editor.
+// Tab editor template syahadah F4 portrait (215 x 330 mm) — mendukung
+// varian Desain Lulus (pre-printed) dan Desain Musyarokah (kertas polos).
 export default function TemplateSyahadahOfflineTab({
   programKey,
+  baseProgramKey,
   apiBase,
   canEdit,
   slotCount = 12,
   programLabel,
+  isMusyarokah = false,
+  isHufadz = false,
 }: {
   programKey: string;
+  baseProgramKey?: string;
   apiBase: string;
   canEdit: boolean;
   slotCount?: number;
   programLabel?: string;
+  isMusyarokah?: boolean;
+  isHufadz?: boolean;
 }) {
   const [bg, setBg] = useState<string | null>(null);
   const [positions, setPositions] = useState<
@@ -37,6 +40,7 @@ export default function TemplateSyahadahOfflineTab({
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
   const [uploading, setUploading] = useState(false);
+  const [copyingFromLulus, setCopyingFromLulus] = useState(false);
   const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
   const [dummyTexts, setDummyTexts] = useState<Record<string, string> | null>(
@@ -44,6 +48,10 @@ export default function TemplateSyahadahOfflineTab({
   );
   const [dummyQrDataUrl, setDummyQrDataUrl] = useState<string | null>(null);
   const [dummyQrUrl, setDummyQrUrl] = useState<string | null>(null);
+  const [dummySignatureUrl, setDummySignatureUrl] = useState<string | null>(
+    null,
+  );
+  const [resolvedSlotCount, setResolvedSlotCount] = useState(slotCount);
   const [loadSeq, setLoadSeq] = useState(0);
 
   const load = async () => {
@@ -59,6 +67,8 @@ export default function TemplateSyahadahOfflineTab({
     setDummyTexts(tpl.dummyTexts ?? null);
     setDummyQrDataUrl(tpl.dummyQrDataUrl ?? null);
     setDummyQrUrl(tpl.dummyQrUrl ?? null);
+    setDummySignatureUrl(tpl.dummySignatureUrl ?? null);
+    if (typeof tpl.slotCount === "number") setResolvedSlotCount(tpl.slotCount);
     setLoadSeq((n) => n + 1);
   };
 
@@ -89,12 +99,38 @@ export default function TemplateSyahadahOfflineTab({
       });
       if (!put.ok) throw new Error("Gagal menyimpan template");
       setBg(url);
-      toast.success("Background terupload");
+      toast.success(
+        isMusyarokah
+          ? "Background Desain Musyarokah terupload"
+          : "Background Desain Lulus terupload",
+      );
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Gagal upload");
     } finally {
       setUploading(false);
       e.target.value = "";
+    }
+  };
+
+  const copyFromLulus = async () => {
+    if (!baseProgramKey) return;
+    setCopyingFromLulus(true);
+    try {
+      const res = await fetch(`${apiBase}?programKey=${baseProgramKey}`);
+      if (!res.ok) throw new Error("Gagal memuat Desain Lulus");
+      const baseTpl = await res.json();
+      const seed = defaultFieldPositionsOffline();
+      setPositions({ ...seed, ...(baseTpl.fieldPositions || {}) });
+      setOffsetX(Number(baseTpl.offsetX) || 0);
+      setOffsetY(Number(baseTpl.offsetY) || 0);
+      setLoadSeq((n) => n + 1);
+      toast.success(
+        "Posisi field & offset disalin dari Desain Lulus (klik Simpan Layout untuk menyimpan)",
+      );
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal menyalin posisi");
+    } finally {
+      setCopyingFromLulus(false);
     }
   };
 
@@ -147,29 +183,49 @@ export default function TemplateSyahadahOfflineTab({
   return (
     <div className="space-y-6 offline-print-reset">
       {/* Upload Background Card — tidak tercetak */}
-      <div className="no-print bg-white rounded-2xl border p-5 space-y-3">
+      <div
+        className={`no-print rounded-2xl border p-5 space-y-3 ${
+          isMusyarokah ? "bg-amber-50/40 border-amber-200" : "bg-white"
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="font-bold">
-            Background Desain (F4 Portrait — {OFFLINE_STAGE_W_MM} ×{" "}
-            {OFFLINE_STAGE_H_MM} mm)
+            {isMusyarokah
+              ? `Background Desain Musyarokah (F4 Portrait — ${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm)`
+              : `Background Desain Lulus (F4 Portrait — ${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm)`}
           </h3>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={toggleLock}
-              disabled={locking}
-              className={`px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 ${locked
-                ? "bg-amber-600 text-white"
-                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+          <div className="flex flex-wrap items-center gap-2">
+            {canEdit && !locked && isMusyarokah && baseProgramKey && (
+              <button
+                type="button"
+                onClick={copyFromLulus}
+                disabled={copyingFromLulus}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {copyingFromLulus
+                  ? "Menyalin..."
+                  : "📋 Salin Posisi dari Desain Lulus"}
+              </button>
+            )}
+            {canEdit && (
+              <button
+                type="button"
+                onClick={toggleLock}
+                disabled={locking}
+                className={`px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50 ${
+                  locked
+                    ? "bg-amber-600 text-white"
+                    : "bg-slate-200 text-slate-700 hover:bg-slate-300"
                 }`}
-            >
-              {locking
-                ? "Menyimpan..."
-                : locked
-                  ? "🔓 Buka Kunci Template"
-                  : "🔒 Kunci Template"}
-            </button>
-          )}
+              >
+                {locking
+                  ? "Menyimpan..."
+                  : locked
+                    ? "🔓 Buka Kunci Template"
+                    : "🔒 Kunci Template"}
+              </button>
+            )}
+          </div>
         </div>
         {locked && (
           <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -178,8 +234,16 @@ export default function TemplateSyahadahOfflineTab({
           </p>
         )}
         {canEdit && !locked && (
-          <label className="inline-block px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-bold cursor-pointer hover:opacity-90">
-            {uploading ? "Mengupload..." : "Upload Desain F4 Baru"}
+          <label
+            className={`inline-block px-5 py-2.5 rounded-xl text-white text-sm font-bold cursor-pointer hover:opacity-90 ${
+              isMusyarokah ? "bg-amber-600" : "bg-[var(--color-primary)]"
+            }`}
+          >
+            {uploading
+              ? "Mengupload..."
+              : isMusyarokah
+                ? "Upload Background Musyarokah F4"
+                : "Upload Background Lulus F4"}
             <input
               type="file"
               accept="image/*"
@@ -190,22 +254,24 @@ export default function TemplateSyahadahOfflineTab({
           </label>
         )}
         <p className="text-xs text-[var(--color-text-muted)]">
-          Ekspor desain ukuran F4 portrait ({OFFLINE_STAGE_W_MM} ×{" "}
-          {OFFLINE_STAGE_H_MM} mm, JPG/PNG), maksimal 10MB. Background ini
-          HANYA untuk acuan di editor &amp; unduhan santri — saat mencetak di
-          kertas pre-printed, background otomatis disembunyikan (kecuali centang
-          &ldquo;Sertakan desain saat cetak&rdquo;).
+          {isMusyarokah
+            ? `Khusus Syahadah Musyarokah (kertas polos): background ini OTOMATIS ikut tercetak saat cetak satuan maupun bulk Fase 2. Kolom mapel, nilai, muaddal, dan taqdir otomatis disembunyikan.`
+            : `Ekspor desain ukuran F4 portrait (${OFFLINE_STAGE_W_MM} × ${OFFLINE_STAGE_H_MM} mm, JPG/PNG, maks 10MB). Untuk kertas pre-printed, background otomatis disembunyikan saat cetak (kecuali centang "Sertakan desain saat cetak").`}
         </p>
       </div>
 
-      {/* Unified Layout Editor & Print Workspace (sama persis dengan halaman cetak) */}
+      {/* Unified Layout Editor & Print Workspace */}
       <SyahadahOfflineWorkspace
         programKey={programKey}
         apiBase={apiBase}
-        titleLabel={`Layout Editor Offline — ${programLabel || programKey}`}
+        titleLabel={`Layout Syahadah — ${programLabel || programKey}`}
         texts={dummyTexts ?? OFFLINE_FIELD_SAMPLE}
         qrDataUrl={dummyQrDataUrl}
         qrUrl={dummyQrUrl}
+        signatureUrl={dummySignatureUrl}
+        isMusyarokah={isMusyarokah}
+        isHufadz={isHufadz}
+        defaultCetakDenganDesain={isMusyarokah}
         backgroundUrl={bg}
         positions={positions}
         onPositionsChange={setPositions}
@@ -218,7 +284,7 @@ export default function TemplateSyahadahOfflineTab({
         locking={locking}
         canEdit={canEdit}
         initialEditorActive
-        slotCount={slotCount}
+        slotCount={resolvedSlotCount}
         onSave={savePositions}
         saving={saving}
         embedded

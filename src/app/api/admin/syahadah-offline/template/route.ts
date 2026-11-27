@@ -1,23 +1,28 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { checkPermission } from "@/lib/permission";
-import { defaultFieldPositionsOffline } from "@/lib/syahadah-offline";
+import { hasAnyPermission } from "@/lib/permission";
+import {
+  baseSlugFromOfflineKey,
+  defaultFieldPositionsOffline,
+  isMusyarokahProgramKey,
+} from "@/lib/syahadah-offline";
 import { getDummyPrintData } from "@/lib/syahadah-offline-data";
 
 export const dynamic = "force-dynamic";
 
-// Template syahadah offline per program (F4 portrait 215x330mm, pre-printed).
-// programKey: "syahadah-offline-<slug program>", mis. "syahadah-offline-idad-awal".
-// Izin: data_syahadah (sama seperti halaman Data Syahadah).
-const PERMISSION = "data_syahadah";
-
-// GET ?programKey=syahadah-offline-idad-awal — ambil template
-// (buat default bila belum ada).
-export async function GET(request: Request) {
+// Template syahadah offline per program (F4 portrait 215x330mm).
+// - Lulus:      "syahadah-offline-<slug>"
+// - Musyarokah: "syahadah-offline-<slug>-musyarokah"
+async function isAuthorized() {
   const session = await getSession();
-  const hasPerm = await checkPermission(PERMISSION);
-  if (!session || !hasPerm) {
+  if (!session) return false;
+  return hasAnyPermission("data_syahadah", "layout_syahadah");
+}
+
+// GET ?programKey=syahadah-offline-idad-awal[|-musyarokah]
+export async function GET(request: Request) {
+  if (!(await isAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,32 +37,53 @@ export async function GET(request: Request) {
 
   let tpl = await prisma.templateCetak.findUnique({ where: { programKey } });
   if (!tpl) {
+    // Bila ini template Musyarokah baru, salin posisi & offset awal dari template Lulus-nya
+    let seedPositions: any = defaultFieldPositionsOffline();
+    let seedOffsetX = 0;
+    let seedOffsetY = 0;
+    if (isMusyarokahProgramKey(programKey)) {
+      const baseKey = `syahadah-offline-${baseSlugFromOfflineKey(programKey)}`;
+      const baseTpl = await prisma.templateCetak.findUnique({
+        where: { programKey: baseKey },
+      });
+      if (baseTpl?.fieldPositions) {
+        seedPositions = {
+          ...defaultFieldPositionsOffline(),
+          ...(baseTpl.fieldPositions as any),
+        };
+        seedOffsetX = Number((baseTpl as any).offsetX) || 0;
+        seedOffsetY = Number((baseTpl as any).offsetY) || 0;
+      }
+    }
+
     tpl = await prisma.templateCetak.create({
       data: {
         programKey,
         nama: `Syahadah Offline ${programKey.replace("syahadah-offline-", "")}`,
-        fieldPositions: defaultFieldPositionsOffline(),
+        fieldPositions: seedPositions,
+        offsetX: seedOffsetX,
+        offsetY: seedOffsetY,
       },
     });
   }
-  // Teks dummy + QR dummy untuk preview editor — SAMA PERSIS dengan
-  // halaman cetak tes (getDummyPrintData: Ahmad Ibnu Alwan, tempat lahir
-  // format Indonesia, nama mapel asli program + nilai ٩٥, QR verifikasi).
+
   const dummy = await getDummyPrintData(programKey);
   return NextResponse.json({
     ...tpl,
     dummyTexts: dummy?.texts ?? null,
     dummyQrDataUrl: dummy?.qrDataUrl ?? null,
     dummyQrUrl: dummy?.qrUrl ?? null,
+    dummySignatureUrl: dummy?.signatureUrl ?? null,
+    isMusyarokah: dummy?.isMusyarokah ?? isMusyarokahProgramKey(programKey),
+    isHufadz: dummy?.isHufadz ?? false,
+    slotCount: dummy?.slotCount ?? 12,
   });
 }
 
 // PUT { programKey, nama?, backgroundUrl?, backgroundId?, fieldPositions?,
 //       isActive?, locked?, offsetX?, offsetY? }
 export async function PUT(request: Request) {
-  const session = await getSession();
-  const hasPerm = await checkPermission(PERMISSION);
-  if (!session || !hasPerm) {
+  if (!(await isAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

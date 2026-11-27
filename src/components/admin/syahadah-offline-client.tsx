@@ -2,16 +2,17 @@
 
 import { useMemo, useState } from "react";
 import TemplateSyahadahOfflineTab from "./template-syahadah-offline-tab";
-import { offlineProgramKey } from "@/lib/syahadah-offline";
+import {
+  offlineMusyarokahProgramKey,
+  offlineProgramKey,
+} from "@/lib/syahadah-offline";
+import { lembagaFromProgramKategori, lembagaLabel } from "@/lib/lembaga";
 
 export type OfflineProgramOption = {
   id: string;
   nama_indo: string;
   nama_arab: string;
   kategori?: string;
-  // Bentuk terserialisasi dari getProgramCatalog() / serializeProgram()
-  // (src/lib/app-data.ts): mapelList diratakan, TANPA `.mapel` bersarang.
-  // Jangan pakai `programMapels` — field itu tidak ada di katalog ini.
   mapelList: Array<{
     id: string;
     nama_indo: string;
@@ -27,80 +28,156 @@ export type OfflineProgramOption = {
   }>;
 };
 
-// Pemilih program + tab editor template offline. Satu template per program;
-// template dibuat otomatis (posisi awal dari peta terukur) saat pertama
-// kali program dipilih.
+type DesignVariant = "lulus" | "musyarokah";
+
 export default function SyahadahOfflineClient({
   programs,
 }: {
   programs: OfflineProgramOption[];
 }) {
-  const [programId, setProgramId] = useState<string>(programs[0]?.id || "");
+  // Urutkan program: Arabiyah -> Turats -> Hufadz lalu nama
+  const sortedPrograms = useMemo(() => {
+    const rank = (kat?: string) => {
+      const l = lembagaFromProgramKategori(kat);
+      return l === "ARABIYAH" ? 0 : l === "TURATS" ? 1 : 2;
+    };
+    return [...programs].sort(
+      (a, b) =>
+        rank(a.kategori) - rank(b.kategori) ||
+        a.nama_indo.localeCompare(b.nama_indo, "id"),
+    );
+  }, [programs]);
+
+  const [programId, setProgramId] = useState<string>(sortedPrograms[0]?.id || "");
+  const [variant, setVariant] = useState<DesignVariant>("lulus");
 
   const program = useMemo(
-    () => programs.find((p) => p.id === programId) || programs[0],
-    [programs, programId],
+    () => sortedPrograms.find((p) => p.id === programId) || sortedPrograms[0],
+    [sortedPrograms, programId],
   );
 
-  const programKey = program ? offlineProgramKey(program.nama_indo) : "";
-  // Jumlah slot nilai = jumlah mapel tampil program terpilih (I'dad Awal:
-  // 5, Shifr: 7, Akbarnas: 12) — editor hanya menampilkan slot itu.
+  const lembaga = program
+    ? lembagaFromProgramKategori(program.kategori)
+    : "ARABIYAH";
+  const isHufadz = lembaga === "HUFADZ";
+  const isMusyarokah = variant === "musyarokah";
+
+  const baseProgramKey = program ? offlineProgramKey(program.nama_indo) : "";
+  const programKey = program
+    ? isMusyarokah
+      ? offlineMusyarokahProgramKey(program.nama_indo)
+      : baseProgramKey
+    : "";
+
   const tampilCount = program
-    ? (program.mapelList ?? []).filter(
-        (m) => m.tampil_di_syahadah !== false,
-      ).length
+    ? isHufadz
+      ? 4
+      : (program.mapelList ?? []).filter((m) => m.tampil_di_syahadah !== false)
+          .length
     : 12;
 
   return (
     <div className="space-y-6 offline-print-reset">
-      <div className="no-print bg-white rounded-2xl border p-5 space-y-3">
-        <h3 className="font-bold">Program</h3>
-        <p className="text-xs text-[var(--color-text-muted)]">
-          Template syahadah offline dibuat per program. Pilih program, upload
-          desain ukuran F4 portrait (215 × 330 mm), lalu atur posisi field dan kalibrasi.
-        </p>
-        <select
-          value={program?.id || ""}
-          onChange={(e) => setProgramId(e.target.value)}
-          className="w-full max-w-md px-3 py-2 border rounded-xl font-bold"
-        >
-          {programs.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nama_indo}
-              {p.nama_arab ? ` — ${p.nama_arab}` : ""}
-            </option>
-          ))}
-        </select>
-        {program && (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Template key: <code>{programKey}</code>
-          </p>
-        )}
-        {/* Cetak tes DUMMY untuk program yang dipilih: nama selalu
-            "Ahmad Ibnu Alwan" di semua program, nilai ٩٥ semua + nama mapel
-            asli program + QR preview. */}
-        <a
-          href={`/cetak-offline/tes/${programKey}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
-        >
-          Buka Halaman Cetak Tes (dummy Ahmad Ibnu Alwan)
-        </a>
-        <p className="text-xs text-[var(--color-text-muted)]">
-          Membuka halaman cetak tes fullscreen untuk program {program?.nama_indo} di tab baru
-          — identik dengan editor di bawah, atau langsung klik tombol Cetak di toolbar editor.
-        </p>
+      <div className="no-print bg-white rounded-2xl border p-5 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2 flex-1 min-w-[260px]">
+            <h3 className="font-bold text-base">Pilih Program &amp; Varian Desain</h3>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Setiap program memiliki 2 template F4 portrait (215 × 330 mm):{" "}
+              <strong>Desain Lulus</strong> (kertas pre-printed) dan{" "}
+              <strong>Desain Musyarokah</strong> (kertas polos, tanpa tabel mapel/nilai/predikat).
+            </p>
+            <select
+              value={program?.id || ""}
+              onChange={(e) => setProgramId(e.target.value)}
+              className="w-full max-w-lg px-3.5 py-2.5 border rounded-xl font-bold bg-slate-50 focus:bg-white outline-none focus:border-[var(--color-primary)]"
+            >
+              {sortedPrograms.map((p) => {
+                const l = lembagaFromProgramKategori(p.kategori);
+                return (
+                  <option key={p.id} value={p.id}>
+                    [{lembagaLabel(l)}] {p.nama_indo}
+                    {p.nama_arab ? ` — ${p.nama_arab}` : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {program && (
+            <div className="flex flex-col items-end gap-1.5">
+              <a
+                href={`/cetak-offline/tes/${programKey}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm"
+              >
+                🖨️ Buka Halaman Cetak Tes ({isMusyarokah ? "Musyarokah" : "Lulus"})
+              </a>
+              <p className="text-[11px] text-[var(--color-text-muted)]">
+                Key: <code>{programKey}</code>
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* 2 Design Tabs: Lulus vs Musyarokah */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setVariant("lulus")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold border transition ${
+              variant === "lulus"
+                ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <span>Desain Lulus (Non-Musyarokah)</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                variant === "lulus"
+                  ? "bg-white/20 text-white"
+                  : "bg-slate-200 text-slate-600"
+              }`}
+            >
+              Kertas Pre-Printed
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setVariant("musyarokah")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold border transition ${
+              variant === "musyarokah"
+                ? "bg-amber-600 text-white border-amber-600 shadow-sm"
+                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+            }`}
+          >
+            <span>Desain Musyarokah</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                variant === "musyarokah"
+                  ? "bg-white/20 text-white"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              Kertas Polos · Tanpa Nilai
+            </span>
+          </button>
+        </div>
       </div>
 
       {program && (
         <TemplateSyahadahOfflineTab
           key={programKey}
           programKey={programKey}
-          programLabel={program.nama_indo}
+          baseProgramKey={baseProgramKey}
+          programLabel={`${program.nama_indo} (${isMusyarokah ? "Musyarokah" : "Lulus"})`}
           apiBase="/api/admin/syahadah-offline/template"
           canEdit
           slotCount={tampilCount}
+          isMusyarokah={isMusyarokah}
+          isHufadz={isHufadz}
         />
       )}
     </div>

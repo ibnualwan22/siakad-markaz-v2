@@ -152,12 +152,11 @@ const navigationGroups: NavGroup[] = [
   {
     title: "Syahadah & Wisuda",
     items: [
-      { href: "/admin/syahadah", label: "Data Syahadah", icon: GraduationCap, permissionId: "data_syahadah", keywords: "ijazah sertifikat cetak" },
-      { href: "/admin/syahadah-offline", label: "Syahadah Offline", icon: GraduationCap, permissionId: "data_syahadah", keywords: "cetak f4 kertas blangko" },
+      { href: "/admin/syahadah", label: "Data Syahadah", icon: GraduationCap, permissionId: "data_syahadah", keywords: "ijazah sertifikat cetak bulk" },
+      { href: "/admin/syahadah-offline", label: "Layout Syahadah", icon: Palette, permissionId: ["data_syahadah", "layout_syahadah"], keywords: "desain template f4 kertas blangko musyarokah" },
       { href: "/admin/akbarnas-mc", label: "Layout Syahadah MC", icon: GraduationCap, permissionId: "data_syahadah", keywords: "akbarnas" },
       { href: "/admin/syahadah-online", label: "Syahadah Online", icon: GraduationCap, permissionId: "syahadah_online", keywords: "kursus online" },
-      { href: "/layout-editor", label: "Layout Syahadah", icon: Palette, permissionId: "layout_syahadah", keywords: "desain template" },
-      { href: "/admin/master-data", label: "Pengaturan Syahadah", icon: Settings, permissionId: "pengaturan_syahadah", keywords: "program mapel kkm" },
+      { href: "/admin/master-data", label: "Pengaturan Syahadah", icon: Settings, permissionId: "pengaturan_syahadah", keywords: "program mapel kkm mudir ttd" },
       { href: "/admin/martabah-ula", label: "Martabah Ula", icon: Medal, permissionId: "martabah_ula", keywords: "juara peringkat terbaik" },
       { href: "/admin/haflah-wada", label: "Haflah Wada'", icon: Armchair, permissionId: "haflah_wada", keywords: "wisuda perpisahan kursi" },
       { href: "/admin/thalib-mitsali", label: "Thalib Mitsali", icon: Trophy, permissionId: "thalib_mitsali", keywords: "santri teladan" },

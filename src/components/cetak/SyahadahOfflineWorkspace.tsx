@@ -55,6 +55,10 @@ export type SyahadahOfflineWorkspaceProps = {
   texts: Record<string, string>;
   qrDataUrl: string | null;
   qrUrl?: string | null;
+  signatureUrl?: string | null;
+  isMusyarokah?: boolean;
+  isHufadz?: boolean;
+  defaultCetakDenganDesain?: boolean;
   backgroundUrl: string | null;
   positions: OfflinePositionsMap;
   onPositionsChange: (next: OfflinePositionsMap) => void;
@@ -97,6 +101,10 @@ export default function SyahadahOfflineWorkspace({
   texts,
   qrDataUrl,
   qrUrl,
+  signatureUrl,
+  isMusyarokah = false,
+  isHufadz = false,
+  defaultCetakDenganDesain,
   backgroundUrl,
   positions,
   onPositionsChange,
@@ -122,7 +130,9 @@ export default function SyahadahOfflineWorkspace({
   const [stepSize, setStepSize] = useState<number>(1);
   const [zoom, setZoom] = useState<"fit" | 50 | 75 | 100>("fit");
   const [showOffset, setShowOffset] = useState(true);
-  const [cetakDenganDesain, setCetakDenganDesain] = useState(false);
+  const [cetakDenganDesain, setCetakDenganDesain] = useState(
+    defaultCetakDenganDesain ?? isMusyarokah,
+  );
   const [fitScale, setFitScale] = useState(1);
   const [internalSaving, setInternalSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -170,8 +180,11 @@ export default function SyahadahOfflineWorkspace({
   const saving = externalSaving ?? internalSaving;
 
   const visibleKeys = useMemo(
-    () => OFFLINE_FIELD_KEYS.filter((k) => isOfflineFieldVisible(k, slotCount)),
-    [slotCount],
+    () =>
+      OFFLINE_FIELD_KEYS.filter((k) =>
+        isOfflineFieldVisible(k, slotCount, { isMusyarokah, isHufadz }),
+      ),
+    [slotCount, isMusyarokah, isHufadz],
   );
 
   const infoKeys = useMemo(
@@ -962,6 +975,9 @@ export default function SyahadahOfflineWorkspace({
                 texts={texts}
                 qrDataUrl={qrDataUrl}
                 qrUrl={qrUrl}
+                signatureUrl={signatureUrl}
+                isMusyarokah={isMusyarokah}
+                isHufadz={isHufadz}
                 template={{
                   backgroundUrl,
                   fieldPositions: positions,

@@ -18,6 +18,14 @@ export async function PUT(request: Request) {
         jabatan_mudir_arab?: string;
         teks_dufah_akbarnas_arab?: string;
         teks_dufah_arab?: string;
+        nama_mudir_turats?: string;
+        nama_mudir_turats_arab?: string;
+        jabatan_mudir_turats?: string;
+        nama_mudir_hufadz_indo?: string;
+        nama_mudir_hufadz_arab?: string;
+        ttd_mudir_arabiyah_url?: string | null;
+        ttd_mudir_turats_url?: string | null;
+        ttd_mudir_hufadz_url?: string | null;
       };
     };
 
@@ -57,6 +65,14 @@ export async function PUT(request: Request) {
         jabatan_mudir_arab: payload.template?.jabatan_mudir_arab?.trim() || "مدير مركز العربية",
         teks_dufah_akbarnas_arab: payload.template?.teks_dufah_akbarnas_arab?.trim() || null,
         teks_dufah_arab: payload.template?.teks_dufah_arab?.trim() || null,
+        nama_mudir_turats: payload.template?.nama_mudir_turats?.trim() || null,
+        nama_mudir_turats_arab: payload.template?.nama_mudir_turats_arab?.trim() || null,
+        jabatan_mudir_turats: payload.template?.jabatan_mudir_turats?.trim() || null,
+        nama_mudir_hufadz_indo: payload.template?.nama_mudir_hufadz_indo?.trim() || null,
+        nama_mudir_hufadz_arab: payload.template?.nama_mudir_hufadz_arab?.trim() || null,
+        ttd_mudir_arabiyah_url: payload.template?.ttd_mudir_arabiyah_url?.trim() || null,
+        ttd_mudir_turats_url: payload.template?.ttd_mudir_turats_url?.trim() || null,
+        ttd_mudir_hufadz_url: payload.template?.ttd_mudir_hufadz_url?.trim() || null,
       };
 
       if (existingTemplate) {
@@ -75,6 +91,9 @@ export async function PUT(request: Request) {
 
     revalidatePath("/admin/dashboard");
     revalidatePath("/admin/master-data");
+    revalidatePath("/admin/syahadah");
+    revalidatePath("/admin/syahadah-offline");
+    revalidatePath("/admin/munaqosah-hufadz");
 
     return NextResponse.json({ success: true });
   } catch (error) {

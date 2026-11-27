@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { checkPermission } from "@/lib/permission";
+import { hasAnyPermission } from "@/lib/permission";
 import { cloudinary } from "@/lib/cloudinary";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // syahadah offline ke Cloudinary.
 export async function POST(request: Request) {
   const session = await getSession();
-  const hasPerm = await checkPermission("data_syahadah");
+  const hasPerm = await hasAnyPermission("data_syahadah", "layout_syahadah");
   if (!session || !hasPerm) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

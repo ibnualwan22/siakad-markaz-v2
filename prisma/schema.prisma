@@ -238,10 +238,18 @@ model SyahadahTemplate {
   onlineLayoutData         Json?
   // Turats-specific fields
   nama_mudir_turats        String?
+  nama_mudir_turats_arab   String?
   jabatan_mudir_turats     String?
   tgl_cetak_turats         String?
   tgl_mulai_turats         String?
   tgl_selesai_turats       String?
+  // Hufadz-specific fields
+  nama_mudir_hufadz_indo   String?
+  nama_mudir_hufadz_arab   String?
+  // Upload TTD Mudir per lembaga (Cloudinary URL; null = fallback default)
+  ttd_mudir_arabiyah_url   String?
+  ttd_mudir_turats_url     String?
+  ttd_mudir_hufadz_url     String?
 }
 
 // Penanda syahadah ditahan untuk prosesi Haflah Wada' (per santri per dufah).

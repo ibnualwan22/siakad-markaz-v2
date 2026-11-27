@@ -141,6 +141,9 @@ export default function SyahadahOfflineStage({
   qrDataUrl,
   qrUrl,
   template,
+  signatureUrl,
+  isMusyarokah = false,
+  isHufadz = false,
   showBackground = true,
   hideBackgroundOnPrint = false,
   applyOffset = false,
@@ -156,6 +159,9 @@ export default function SyahadahOfflineStage({
   qrDataUrl: string | null;
   qrUrl?: string | null;
   template: OfflineStageTemplate | null;
+  signatureUrl?: string | null;
+  isMusyarokah?: boolean;
+  isHufadz?: boolean;
   showBackground?: boolean;
   hideBackgroundOnPrint?: boolean;
   applyOffset?: boolean;
@@ -230,7 +236,7 @@ export default function SyahadahOfflineStage({
   };
 
   const renderField = (key: string) => {
-    if (!isOfflineFieldVisible(key, slotCount)) return null;
+    if (!isOfflineFieldVisible(key, slotCount, { isMusyarokah, isHufadz })) return null;
     const cfg = fields[key];
     if (!cfg) return null;
 
@@ -306,7 +312,7 @@ export default function SyahadahOfflineStage({
           {badge && <span className="offline-field-badge no-print">{badge}</span>}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/signature.png"
+            src={signatureUrl || "/images/signature.png"}
             alt="Tanda tangan mudir"
             draggable={false}
             className="block w-full h-auto"

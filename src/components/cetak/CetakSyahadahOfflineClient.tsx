@@ -39,6 +39,9 @@ export default function CetakSyahadahOfflineClient({
     texts: Record<string, string>;
     qrDataUrl: string | null;
     qrUrl?: string | null;
+    signatureUrl?: string | null;
+    isMusyarokah?: boolean;
+    isHufadz?: boolean;
     template: OfflineTemplate | null;
     slotCount?: number;
   };
@@ -82,13 +85,17 @@ export default function CetakSyahadahOfflineClient({
     return (
       <SyahadahOfflineWorkspace
         programKey={programKey}
-        titleLabel={`Cetak Syahadah Offline — ${data.nama}`}
+        titleLabel={`Cetak Syahadah ${data.isMusyarokah ? "Musyarokah" : "Lulus"} — ${data.nama}`}
         subtitleLabel={`Program: ${programKey} · F4 Portrait (${OFFLINE_STAGE_W_MM}×${OFFLINE_STAGE_H_MM}mm)`}
         backHref="/admin/syahadah"
         backLabel="← Kembali ke Data Syahadah"
         texts={data.texts}
         qrDataUrl={data.qrDataUrl}
         qrUrl={data.qrUrl}
+        signatureUrl={data.signatureUrl}
+        isMusyarokah={Boolean(data.isMusyarokah)}
+        isHufadz={Boolean(data.isHufadz)}
+        defaultCetakDenganDesain={Boolean(data.isMusyarokah)}
         backgroundUrl={data.template?.backgroundUrl ?? null}
         positions={positions}
         onPositionsChange={setPositions}
@@ -147,6 +154,9 @@ export default function CetakSyahadahOfflineClient({
     texts: data.texts,
     qrDataUrl: data.qrDataUrl,
     qrUrl: data.qrUrl,
+    signatureUrl: data.signatureUrl,
+    isMusyarokah: Boolean(data.isMusyarokah),
+    isHufadz: Boolean(data.isHufadz),
     template: data.template,
   };
 

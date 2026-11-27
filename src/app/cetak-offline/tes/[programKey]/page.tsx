@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { checkPermission } from "@/lib/permission";
+import { hasAnyPermission } from "@/lib/permission";
 import CetakSyahadahOfflineClient from "@/components/cetak/CetakSyahadahOfflineClient";
 import { getDummyPrintData } from "@/lib/syahadah-offline-data";
 
@@ -20,7 +20,7 @@ export default async function CetakOfflineTesPage({
 }) {
   const session = await getSession();
   if (!session) redirect("/login");
-  const hasPerm = await checkPermission("data_syahadah");
+  const hasPerm = await hasAnyPermission("data_syahadah", "layout_syahadah");
   if (!hasPerm) redirect("/login");
 
   const { programKey } = await params;

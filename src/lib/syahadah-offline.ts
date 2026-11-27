@@ -6,6 +6,7 @@
 // tanpa skala yang berubah antara layar dan print (WYSIWYG).
 
 import { toArabDigits } from "@/lib/munaqosah-hufadz";
+import type { LembagaId } from "@/lib/lembaga";
 
 // Ukuran kertas cetak F4 portrait (mm).
 export const OFFLINE_STAGE_W_MM = 215;
@@ -22,6 +23,7 @@ export const OFFLINE_STAGE_H_PX = Math.round(
 export const OFFLINE_QR_MM = 24;
 
 export const OFFLINE_PROGRAM_KEY_PREFIX = "syahadah-offline-";
+export const OFFLINE_MUSYAROKAH_SUFFIX = "-musyarokah";
 
 // Font default semua field teks offline: "Amiri" (naskh, sudah dimuat
 // layout root via Google Fonts). Lotus Linotype Light yang dipakai desain
@@ -51,6 +53,87 @@ export function offlineProgramKey(namaIndo: string): string {
   return OFFLINE_PROGRAM_KEY_PREFIX + slugifyProgram(namaIndo);
 }
 
+export function offlineMusyarokahProgramKey(namaIndo: string): string {
+  return offlineProgramKey(namaIndo) + OFFLINE_MUSYAROKAH_SUFFIX;
+}
+
+export function isMusyarokahProgramKey(programKey: string): boolean {
+  return programKey.endsWith(OFFLINE_MUSYAROKAH_SUFFIX);
+}
+
+export function baseSlugFromOfflineKey(programKey: string): string {
+  return programKey
+    .replace(/^syahadah-offline-/, "")
+    .replace(/-musyarokah$/, "");
+}
+
+/** Pilih nama mudir Arab + URL tanda tangan sesuai lembaga (Markaz Arabiyah / Turats / Hufadz). */
+export function resolveMudirForLembaga(
+  tpl: {
+    nama_mudir_arab?: string | null;
+    nama_mudir_turats?: string | null;
+    nama_mudir_turats_arab?: string | null;
+    nama_mudir_hufadz_arab?: string | null;
+    ttd_mudir_arabiyah_url?: string | null;
+    ttd_mudir_turats_url?: string | null;
+    ttd_mudir_hufadz_url?: string | null;
+  } | null | undefined,
+  lembaga: LembagaId,
+): { namaArab: string; signatureUrl: string } {
+  const fallbackNama = (tpl?.nama_mudir_arab || "").trim() || "اسم المدير";
+  if (lembaga === "TURATS") {
+    return {
+      namaArab:
+        (tpl?.nama_mudir_turats_arab || "").trim() ||
+        (tpl?.nama_mudir_turats || "").trim() ||
+        fallbackNama,
+      signatureUrl:
+        (tpl?.ttd_mudir_turats_url || "").trim() || "/images/signature-turats.png",
+    };
+  }
+  if (lembaga === "HUFADZ") {
+    return {
+      namaArab: (tpl?.nama_mudir_hufadz_arab || "").trim() || fallbackNama,
+      signatureUrl:
+        (tpl?.ttd_mudir_hufadz_url || "").trim() || "/images/signature.png",
+    };
+  }
+  return {
+    namaArab: fallbackNama,
+    signatureUrl:
+      (tpl?.ttd_mudir_arabiyah_url || "").trim() || "/images/signature.png",
+  };
+}
+
+/**
+ * Urutan resmi Data Syahadah & Cetak Bulk (per kelas):
+ * 1. BANIN — LULUS (nilai akumulatif tertinggi -> terendah, seri -> abjad)
+ * 2. BANIN — MUSYAROKAH (nilai akumulatif tertinggi -> terendah, seri -> abjad)
+ * 3. BANIN — TIDAK_LULUS (hanya di tabel)
+ * 4. BANAT — LULUS (nilai tertinggi -> terendah)
+ * 5. BANAT — MUSYAROKAH (nilai tertinggi -> terendah)
+ * 6. BANAT — TIDAK_LULUS (hanya di tabel)
+ */
+export function sortSyahadahSantri<
+  T extends {
+    gender: string;
+    statusKelulusan: string;
+    nilaiAkumulatif: number;
+    nama: string;
+  },
+>(rows: T[]): T[] {
+  const genderRank = (g: string) => (g === "BANIN" ? 0 : g === "BANAT" ? 1 : 2);
+  const statusRank = (s: string) =>
+    s === "LULUS" ? 0 : s === "MUSYAROKAH" ? 1 : 2;
+  return [...rows].sort(
+    (a, b) =>
+      genderRank(a.gender) - genderRank(b.gender) ||
+      statusRank(a.statusKelulusan) - statusRank(b.statusKelulusan) ||
+      b.nilaiAkumulatif - a.nilaiAkumulatif ||
+      a.nama.localeCompare(b.nama, "id"),
+  );
+}
+
 export type OfflineFieldCfg = {
   x: number; // persen dari lebar (215mm)
   y: number; // persen dari tinggi (330mm)
@@ -75,6 +158,7 @@ export const OFFLINE_FIELD_KEYS = [
   "periode",
   "tahunHijriyah",
   "tahunMiladiyah",
+  "juz",
   "muaddal",
   "taqdir",
   "tglCetakHijriyah",
@@ -110,8 +194,27 @@ export const OFFLINE_FIELD_KEYS = [
 
 export type OfflineFieldKey = (typeof OFFLINE_FIELD_KEYS)[number];
 
-/** Cek apakah field tampil untuk program dengan jumlah mapel tampil = slotCount. */
-export function isOfflineFieldVisible(key: string, slotCount: number): boolean {
+/** Cek apakah field tampil untuk program dengan jumlah mapel tampil = slotCount.
+ *  - isMusyarokah: menyembunyikan nama mapel, nilai mapel, muaddal, dan taqdir.
+ *  - isHufadz: menampilkan field tambahan `juz`. */
+export function isOfflineFieldVisible(
+  key: string,
+  slotCount: number,
+  opts?: { isMusyarokah?: boolean; isHufadz?: boolean },
+): boolean {
+  if (key === "juz") {
+    return Boolean(opts?.isHufadz);
+  }
+  if (opts?.isMusyarokah) {
+    if (
+      key === "muaddal" ||
+      key === "taqdir" ||
+      key.startsWith("mapelSlot") ||
+      key.startsWith("nilaiSlot")
+    ) {
+      return false;
+    }
+  }
   if (key.startsWith("nilaiSlot")) {
     const n = parseInt(key.slice("nilaiSlot".length), 10);
     return !Number.isNaN(n) && n <= slotCount;
@@ -131,6 +234,7 @@ export const OFFLINE_FIELD_LABEL: Record<string, string> = {
   periode: "Fatrat (Periode)",
   tahunHijriyah: "Tahun Hijriyah",
   tahunMiladiyah: "Tahun Masehi",
+  juz: "Juz Hafalan (Hufadz)",
   muaddal: "Muaddal (Rata-rata)",
   taqdir: "Taqdir (Predikat)",
   tglCetakHijriyah: "Tgl Cetak Hijriyah",
@@ -191,6 +295,7 @@ export const OFFLINE_FIELD_SAMPLE: Record<string, string> = {
   periode: "١١ أكتوبر إلى ٥ نوفمبر ٢٠٢٦",
   tahunHijriyah: "١٤٤٨",
   tahunMiladiyah: "٢٠٢٦",
+  juz: "٣٠، ٢٩، ١",
   muaddal: "٩٥",
   taqdir: "ممتاز",
   tglCetakHijriyah: "١٤٤٨",
@@ -238,6 +343,7 @@ export function defaultFieldPositionsOffline(): Record<string, OfflineFieldCfg> 
     periode: { x: 28.8, y: 44.9, fontSize: 13, maxWidth: 24.0 },
     tahunHijriyah: { x: 57.0, y: 48.1, fontSize: 13, maxWidth: 10.0 },
     tahunMiladiyah: { x: 40.5, y: 48.1, fontSize: 13, maxWidth: 10.0 },
+    juz: { x: 43.8, y: 51.2, fontSize: 13, maxWidth: 24.0 },
     muaddal: { x: 43.8, y: 54.2, fontSize: 13, maxWidth: 10.0 },
     taqdir: { x: 42.9, y: 56.9, fontSize: 13, maxWidth: 14.0 },
     tglCetakHijriyah: { x: 68.5, y: 79.0, fontSize: 13, maxWidth: 10.0 },

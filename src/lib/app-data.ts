@@ -5,6 +5,12 @@ import { formatDateIndo, getPredikat, getPredikatTurats, translateDateToArabic }
 import { getMasterSantriById, getMasterSantriList } from "@/lib/santri-api";
 import { getActiveDufahName } from "@/lib/absensi";
 import { calcAkbarnasGabungan, calcAkbarnasMapelAverage, calcAkumulatif, calcMapelNilaiAkhir, calcMapelNilaiAkhirUsbuain2, applyNilaiTambahan } from "@/lib/grade-calculator";
+import {
+  hitungNilaiAkhir as hitungNilaiAkhirHufadz,
+  isMusyarokah as isMusyarokahHufadz,
+  predikatArab as predikatArabHufadz,
+  predikatIndo as predikatIndoHufadz,
+} from "@/lib/munaqosah-hufadz";
 
 const programInclude = {
   programMapels: {
@@ -182,10 +188,17 @@ function buildDefaultTemplate() {
     teks_dufah_arab: null,
     // Turats defaults
     nama_mudir_turats: "Ustadz Abdul Wahhab, M.Pd.",
+    nama_mudir_turats_arab: null,
     jabatan_mudir_turats: "Direktur Markaz Turats",
     tgl_cetak_turats: null,
     tgl_mulai_turats: null,
     tgl_selesai_turats: null,
+    // Hufadz & TTD per lembaga defaults
+    nama_mudir_hufadz_indo: null,
+    nama_mudir_hufadz_arab: null,
+    ttd_mudir_arabiyah_url: null,
+    ttd_mudir_turats_url: null,
+    ttd_mudir_hufadz_url: null,
   };
 }
 
@@ -260,7 +273,7 @@ export async function getTemplateData() {
 }
 
 export const getDashboardSantriRows = cache(async function getDashboardSantriRows() {
-  const [masterSantriList, initialRiwayatList, activeDufahName] = await Promise.all([
+  const [masterSantriList, initialRiwayatList, activeDufahName, munaqosahList] = await Promise.all([
     getMasterSantriList(),
     prisma.riwayatSantri.findMany({
       include: {
@@ -272,7 +285,18 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
       },
     }),
     getActiveDufahName(),
+    prisma.munaqosahHufadz.findMany({
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
+
+  const munaqosahByKey = new Map<string, (typeof munaqosahList)[0]>();
+  const munaqosahLatestBySantri = new Map<string, (typeof munaqosahList)[0]>();
+  for (const m of munaqosahList) {
+    const key = `${m.santriId}_${m.dufahNama}`;
+    if (!munaqosahByKey.has(key)) munaqosahByKey.set(key, m);
+    if (!munaqosahLatestBySantri.has(m.santriId)) munaqosahLatestBySantri.set(m.santriId, m);
+  }
 
   let riwayatList = [...initialRiwayatList];
   const toCreate: any[] = [];
@@ -482,7 +506,48 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
           })
       );
       const isTurats = (program as any)?.kategori === "TURATS";
-      const averagePredikat = isTurats ? getPredikatTurats(Math.round(average)) : getPredikat(Math.round(average));
+      const isHufadz = (program as any)?.kategori === "HUFADZ";
+
+      let finalStatus: "LULUS" | "MUSYAROKAH" | "TIDAK_LULUS" =
+        program && hasCompleteNilai ? status : "TIDAK_LULUS";
+      let finalAverage = average;
+      let finalNilaiAkumulatif = nilaiAkumulatif;
+      let finalAveragePredikat: { arab: string; indo: string } = isTurats
+        ? getPredikatTurats(Math.round(average))
+        : getPredikat(Math.round(average));
+      let finalCanPrintSyahadah =
+        Boolean(program) && hasCompleteNilai && status !== "TIDAK_LULUS";
+      let finalCanViewIjazah = Boolean(program) && hasCompleteNilai;
+      let juzTeks: string | null = null;
+
+      if (isHufadz) {
+        const munaqosah =
+          munaqosahByKey.get(`${masterSantri.id}_${targetDufah}`) ??
+          (activeDufahName
+            ? munaqosahByKey.get(`${masterSantri.id}_${activeDufahName}`)
+            : undefined) ??
+          munaqosahLatestBySantri.get(masterSantri.id);
+        if (munaqosah) {
+          const nilaiHufadz = hitungNilaiAkhirHufadz(munaqosah);
+          finalStatus = isMusyarokahHufadz(nilaiHufadz) ? "MUSYAROKAH" : "LULUS";
+          finalAverage = nilaiHufadz;
+          finalNilaiAkumulatif = nilaiHufadz;
+          finalAveragePredikat = {
+            arab: predikatArabHufadz(nilaiHufadz) ?? "",
+            indo: predikatIndoHufadz(nilaiHufadz) ?? "",
+          };
+          finalCanPrintSyahadah = true;
+          finalCanViewIjazah = true;
+          juzTeks = munaqosah.juzTeks;
+        } else {
+          finalStatus = "TIDAK_LULUS";
+          finalAverage = 0;
+          finalNilaiAkumulatif = 0;
+          finalAveragePredikat = { arab: "", indo: "" };
+          finalCanPrintSyahadah = false;
+          finalCanViewIjazah = false;
+        }
+      }
 
       const isUsbuain = !isAkbarnas && effectiveUsbuainMode > 0;
 
@@ -495,28 +560,26 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
         programId: isUsbuain ? "USBUAIN_GROUP" : (program?.id ?? null),
         kelasNama: kelas?.nama ?? "-",
         kelasId: kelas?.id ?? null,
-        statusKelulusan: program && hasCompleteNilai ? status : "TIDAK_LULUS",
+        statusKelulusan: finalStatus,
         isTasmi: riwayat?.is_tasmi ?? false,
         isAktif: masterSantri.isAktif,
         isCheckedOut: masterSantri.isCheckedOut,
-        canPrintSyahadah:
-          Boolean(program) &&
-          hasCompleteNilai &&
-          status !== "TIDAK_LULUS",
+        canPrintSyahadah: finalCanPrintSyahadah,
         // Bulan pertama Akbarnas: tombol cetak di Data Syahadah
         // mengarah ke syahadah MC (bukan syahadah kelulusan) — regulasi
         // baru Nov 2026. Di bulan pertama, MC-lah syahadahnya.
         canPrintMcSyahadah,
         mcRiwayatId: canPrintMcSyahadah ? (riwayat?.id ?? null) : null,
-        canViewIjazah: Boolean(program) && hasCompleteNilai,
+        canViewIjazah: finalCanViewIjazah,
         dufahNama: masterSantri.dufahNama,
         riwayatId: riwayat?.id ?? null,
-        average,
-        averagePredikat,
-        nilaiAkumulatif,
+        average: finalAverage,
+        averagePredikat: finalAveragePredikat,
+        nilaiAkumulatif: finalNilaiAkumulatif,
         isBulanPertamaAkbarnas,
         programKategori: isUsbuain ? "USBUAIN" : ((program as any)?.kategori ?? "REGULER"),
         bulanKe: masterSantri.bulanKe,
+        juzTeks,
       };
     })
     .sort((left: any, right: any) => left.nama.localeCompare(right.nama, "id"));

@@ -7,9 +7,13 @@ const publicRoutes = ['/login', '/api/auth/login', '/tauzi/login', '/simulasi-uj
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Biarkan route publik dan aset statis lewat
+  // Biarkan route publik, Captive Portal WiFi, dan aset statis lewat tanpa cek cookie SIAKAD
   if (
     publicRoutes.includes(pathname) ||
+    pathname.startsWith('/wifi') ||
+    pathname.startsWith('/wifidog') ||
+    pathname.startsWith('/auth/wifidogAuth') ||
+    pathname.startsWith('/api/wifi/') ||
     pathname.startsWith('/_next/') ||
     pathname.includes('.')
   ) {

@@ -29,8 +29,14 @@ export default async function JadwalMengajarPage() {
     pengaturanJadwal,
   ] = await Promise.all([
     prisma.program.findMany({
+      where: {
+        kelasList: {
+          some: { isActive: true, isDeleted: false },
+        },
+      },
       include: {
         kelasList: {
+          where: { isActive: true, isDeleted: false },
           orderBy: { nama: "asc" },
           select: {
             id: true,
@@ -48,6 +54,9 @@ export default async function JadwalMengajarPage() {
       orderBy: { nama_indo: "asc" },
     }),
     prisma.pengajarSesi.findMany({
+      where: {
+        kelas: { isActive: true, isDeleted: false },
+      },
       include: {
         user: { select: { id: true, nama: true, role: true } },
       },

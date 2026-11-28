@@ -20,7 +20,7 @@ export default async function AbsensiKegiatanPage() {
   const [masterSantri, kegiatanList, kelasList] = await Promise.all([
     getMasterSantriList(),
     prisma.kategoriKegiatan.findMany({ orderBy: { nama: "asc" } }),
-    prisma.kelas.findMany({ orderBy: { nama: "asc" }, select: { id: true, nama: true } }),
+    prisma.kelas.findMany({ where: { isActive: true, isDeleted: false }, orderBy: { nama: "asc" }, select: { id: true, nama: true } }),
   ]);
 
   const sakanSet = new Set<string>();

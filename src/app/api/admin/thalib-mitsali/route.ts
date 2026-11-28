@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     );
 
     const kelasList = await prisma.kelas.findMany({
+      where: { isActive: true, isDeleted: false },
       include: {
         waliKelas: true,
         program: {

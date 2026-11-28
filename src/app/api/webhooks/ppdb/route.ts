@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { jalankanSyncSantri } from "@/lib/sync-santri";
+import { buildProgramMaps, resolveProgramSiakad } from "@/lib/program-resolve";
 
 const WEBHOOK_SECRET = process.env.PPDB_WEBHOOK_SECRET;
 
@@ -96,8 +97,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Opsional: fetch programAktif ke PPDB jika dibutuhkan
-      let mappedProgId = null;
+      // Fetch programAktif + siakadProgramNama dari PPDB dengan helper mapping tunggal
+      let mappedProgId: string | null = null;
       try {
         const PPDB_BASE_URL = process.env.PPDB_BASE_URL || 'https://ppdb.markazarabiyah.site';
         const PPDB_SIAKAD_KEY = process.env.PPDB_SIAKAD_API_KEY || '';
@@ -109,15 +110,23 @@ export async function POST(req: NextRequest) {
           if (resProg.ok) {
             const progData = await resProg.json();
             const progName = progData?.data?.programAktif;
-            if (progName) {
-              const program = await prisma.program.findFirst({
-                where: { nama_indo: { equals: progName, mode: 'insensitive' } }
+            const siakadProgName = progData?.data?.siakadProgramNama;
+            const kategoriProgram = progData?.data?.kategoriProgram;
+            if (progName || siakadProgName || kategoriProgram) {
+              const allProgs = await prisma.program.findMany({
+                select: { id: true, nama_indo: true, kategori: true },
               });
-              if (program) mappedProgId = program.id;
+              const resolved = resolveProgramSiakad(
+                buildProgramMaps(allProgs),
+                progName,
+                kategoriProgram,
+                siakadProgName,
+              );
+              if (resolved) mappedProgId = resolved;
             }
           }
         }
-      } catch (e) {
+      } catch {
         // ignore error
       }
 

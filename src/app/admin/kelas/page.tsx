@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default async function NamaKelasPage() {
   await requirePermission("ruang_kelas");
-  const programList = await getProgramCatalog();
+  const programList = await getProgramCatalog({ includeInactiveKelas: true });
 
   return (
     <div className="space-y-6">

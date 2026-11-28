@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, X, Save, AlertCircle, Check, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Save, AlertCircle, Check, Loader2, Power, PowerOff } from "lucide-react";
 
 type ProgramItem = {
   id: string;
@@ -11,6 +11,7 @@ type ProgramItem = {
   kelasList: Array<{
     id: string;
     nama: string;
+    isActive?: boolean;
   }>;
 };
 
@@ -122,6 +123,8 @@ export function KelasClient({ programList }: { programList: ProgramItem[] }) {
 
   // Inline add state per program
   const [inlineAddProgramId, setInlineAddProgramId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
 
   const openEditModal = (id: string, nama: string, programId: string) => {
     setModalMode("edit");
@@ -158,26 +161,111 @@ export function KelasClient({ programList }: { programList: ProgramItem[] }) {
     });
   };
 
-  const handleDelete = async (id: string, nama: string) => {
-    if (!confirm(`Hapus kelas "${nama}"?`)) return;
-
+  const handleToggleActive = async (id: string, nama: string, nextActive: boolean) => {
+    setNoticeMsg(null);
     startTransition(async () => {
-      const res = await fetch(`/api/admin/kelas?id=${id}`, { method: "DELETE" });
+      const res = await fetch("/api/admin/kelas", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, isActive: nextActive }),
+      });
 
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        alert(data?.error || "Gagal menghapus.");
+        alert(data?.error || `Gagal mengubah status kelas "${nama}".`);
         return;
       }
 
+      if (data?.message) setNoticeMsg(data.message);
       router.refresh();
     });
   };
 
+  const handleDelete = async (id: string, nama: string) => {
+    if (
+      !confirm(
+        `Hapus kelas "${nama}" dari daftar?\n\nCatatan: Jika kelas ini pernah digunakan oleh santri/absensi lama, seluruh data riwayat & nilainya akan tetap aman utuh (tidak ikut terhapus).`
+      )
+    ) {
+      return;
+    }
+
+    setNoticeMsg(null);
+    startTransition(async () => {
+      const res = await fetch(`/api/admin/kelas?id=${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        alert(data?.error || "Gagal menghapus.");
+        return;
+      }
+
+      if (data?.message) setNoticeMsg(data.message);
+      router.refresh();
+    });
+  };
+
+  const totalAktif = programList.reduce(
+    (sum, p) => sum + p.kelasList.filter((k) => k.isActive !== false).length,
+    0
+  );
+  const totalNonaktif = programList.reduce(
+    (sum, p) => sum + p.kelasList.filter((k) => k.isActive === false).length,
+    0
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* Filter bar Aktif / Nonaktif */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-3.5 border border-[var(--color-surface-dark)] shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              { key: "ALL", label: `Semua (${totalAktif + totalNonaktif})` },
+              { key: "ACTIVE", label: `Aktif (${totalAktif})` },
+              { key: "INACTIVE", label: `Nonaktif (${totalNonaktif})` },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition border ${
+                statusFilter === tab.key
+                  ? "bg-[var(--color-primary)] text-white border-transparent shadow-sm"
+                  : "bg-[var(--color-secondary)] text-[var(--color-text-muted)] border-[var(--color-surface-dark)] hover:bg-[var(--color-surface)]"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] font-medium text-[var(--color-text-muted)]">
+          Kelas <strong>Nonaktif</strong> otomatis disembunyikan dari Alokasi Kelas, Absen, Jadwal Mengajar, Input Nilai &amp; Cetak Usbu&apos; tanpa mengubah riwayat.
+        </p>
+      </div>
+
+      {noticeMsg && (
+        <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-xs font-semibold text-emerald-800 flex items-center justify-between gap-3">
+          <span>{noticeMsg}</span>
+          <button
+            type="button"
+            onClick={() => setNoticeMsg(null)}
+            className="text-emerald-600 hover:text-emerald-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {programList.map((program) => (
+        {programList.map((program) => {
+          const visibleKelas = program.kelasList.filter((k) => {
+            if (statusFilter === "ACTIVE") return k.isActive !== false;
+            if (statusFilter === "INACTIVE") return k.isActive === false;
+            return true;
+          });
+          return (
           <div key={program.id} className="neu-card-white p-6">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -197,35 +285,64 @@ export function KelasClient({ programList }: { programList: ProgramItem[] }) {
             </div>
 
             <div className="space-y-2">
-              {program.kelasList.length === 0 ? (
-                <p className="text-sm italic text-[var(--color-text-subtle)]">Belum ada ruangan</p>
+              {visibleKelas.length === 0 ? (
+                <p className="text-sm italic text-[var(--color-text-subtle)]">
+                  {program.kelasList.length === 0 ? "Belum ada ruangan" : "Tidak ada kelas sesuai filter"}
+                </p>
               ) : (
-                program.kelasList.map((kelas) => (
+                visibleKelas.map((kelas) => {
+                  const isAktif = kelas.isActive !== false;
+                  return (
                   <div
                     key={kelas.id}
-                    className="flex items-center justify-between rounded-2xl bg-[var(--color-secondary)] p-3 border border-[var(--color-surface)] transition-colors hover:border-[var(--color-surface-dark)]"
+                    className={`flex items-center justify-between gap-2 rounded-2xl px-3.5 py-2.5 border transition-colors ${
+                      isAktif
+                        ? "bg-[var(--color-secondary)] border-[var(--color-surface)] hover:border-[var(--color-surface-dark)]"
+                        : "bg-gray-100/80 border-dashed border-gray-300 opacity-80"
+                    }`}
                   >
-                    <span className="font-semibold text-[var(--color-text)]">{kelas.nama}</span>
-                    <div className="flex items-center gap-1 opacity-60 transition-opacity hover:opacity-100">
+                    <span
+                      className={`font-semibold text-sm leading-snug min-w-0 flex-1 break-words ${
+                        isAktif ? "text-[var(--color-text)]" : "text-gray-500 line-through"
+                      }`}
+                    >
+                      {kelas.nama}
+                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(kelas.id, kelas.nama, !isAktif)}
+                        disabled={isPending}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-bold flex items-center gap-1 transition disabled:opacity-50 ${
+                          isAktif
+                            ? "bg-emerald-100 text-emerald-700 hover:bg-amber-100 hover:text-amber-800 border border-emerald-200 hover:border-amber-200"
+                            : "bg-gray-200 text-gray-600 hover:bg-emerald-100 hover:text-emerald-700 border border-gray-300 hover:border-emerald-200"
+                        }`}
+                        title={isAktif ? "Status Aktif — klik untuk nonaktifkan" : "Status Nonaktif — klik untuk aktifkan kembali"}
+                      >
+                        {isAktif ? <Power className="h-3 w-3" /> : <PowerOff className="h-3 w-3" />}
+                        <span>{isAktif ? "Aktif" : "Nonaktif"}</span>
+                      </button>
                       <button
                         onClick={() => openEditModal(kelas.id, kelas.nama, program.id)}
                         disabled={isPending}
-                        className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dark)] hover:text-[var(--color-primary)] disabled:opacity-50"
+                        className="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dark)] hover:text-[var(--color-primary)] disabled:opacity-50"
                         title="Edit"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleDelete(kelas.id, kelas.nama)}
                         disabled={isPending}
-                        className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)] disabled:opacity-50"
-                        title="Hapus"
+                        className="rounded-lg p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-danger-light)] hover:text-[var(--color-danger)] disabled:opacity-50"
+                        title="Hapus kelas (riwayat lama tetap aman)"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -241,7 +358,8 @@ export function KelasClient({ programList }: { programList: ProgramItem[] }) {
               />
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Edit Modal */}

@@ -22,6 +22,29 @@ const programInclude = {
     },
   },
   kelasList: {
+    where: {
+      isActive: true,
+      isDeleted: false,
+    },
+    orderBy: {
+      nama: "asc" as const,
+    },
+  },
+};
+
+const programIncludeAllKelas = {
+  programMapels: {
+    include: {
+      mapel: true,
+    },
+    orderBy: {
+      urutan: "asc" as const,
+    },
+  },
+  kelasList: {
+    where: {
+      isDeleted: false,
+    },
     orderBy: {
       nama: "asc" as const,
     },
@@ -226,6 +249,7 @@ function serializeProgram(program: {
   kelasList?: Array<{
     id: string;
     nama: string;
+    isActive?: boolean;
   }>;
 }) {
   return {
@@ -251,9 +275,9 @@ function serializeProgram(program: {
   };
 }
 
-export async function getProgramCatalog() {
+export async function getProgramCatalog(options?: { includeInactiveKelas?: boolean }) {
   const programList = await prisma.program.findMany({
-    include: programInclude,
+    include: options?.includeInactiveKelas ? programIncludeAllKelas : programInclude,
     orderBy: {
       nama_indo: "asc",
     },

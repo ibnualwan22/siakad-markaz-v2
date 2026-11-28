@@ -40,6 +40,8 @@ model Kelas {
   pengajarSesiList  PengajarSesi[]
   absenPengajarList AbsenPengajar[]
   is_akbarnas_b2    Boolean         @default(false)
+  isActive          Boolean         @default(true)
+  isDeleted         Boolean         @default(false)
   jumlah_kolom_usbu Int             @default(0) // 0=normal, 1=satu kolom, 2=dua kolom
   urutan_haflah     Int             @default(0)
   ketuaKelasList    KetuaKelas[]

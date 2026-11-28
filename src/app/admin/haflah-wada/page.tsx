@@ -18,6 +18,7 @@ export default async function HaflahWadaPage() {
   const [santriRows, kelasList, activeDufahName] = await Promise.all([
     getDashboardSantriRows(),
     prisma.kelas.findMany({
+      where: { isActive: true, isDeleted: false },
       include: {
         waliKelas: true,
       }

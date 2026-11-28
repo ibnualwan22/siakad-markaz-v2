@@ -204,32 +204,17 @@ export function JadwalMengajarClient({
   teachers: TeacherItem[];
 }) {
   // Bangun daftar semua kolom default:
-  // - Setiap kelas di program menjadi 1 kolom ("KELAS:<id>")
-  // - Program yang belum punya kelas (mis. program khusus/Hufadz) tetap tampil sebagai 1 kolom ("PROGRAM:<id>")
+  // Hanya tampilkan kelas yang aktif ("KELAS:<id>"). Program tanpa kelas aktif tidak ditampilkan.
   const allColumnsMap = useMemo(() => {
     const cols: MatrixColumn[] = [];
     for (const p of programs) {
       const lembagaGroup = getLembagaGroup(p.kategori, p.nama_indo);
-      if (p.kelasList.length > 0) {
-        for (const k of p.kelasList) {
-          cols.push({
-            targetKey: `KELAS:${k.id}`,
-            kind: "KELAS",
-            id: k.id,
-            nama: k.nama,
-            programId: p.id,
-            programNama: p.nama_indo,
-            kategori: p.kategori,
-            lembagaGroup,
-            mapelList: p.mapelList,
-          });
-        }
-      } else {
+      for (const k of p.kelasList) {
         cols.push({
-          targetKey: `PROGRAM:${p.id}`,
-          kind: "PROGRAM",
-          id: p.id,
-          nama: p.nama_indo,
+          targetKey: `KELAS:${k.id}`,
+          kind: "KELAS",
+          id: k.id,
+          nama: k.nama,
           programId: p.id,
           programNama: p.nama_indo,
           kategori: p.kategori,

@@ -403,8 +403,9 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
               if (res.ok) {
                 const data = await res.json();
                 const progName = data?.data?.programAktif;
+                const siakadProgName = data?.data?.siakadProgramNama;
                 const kategoriProgram = data?.data?.kategoriProgram;
-                const mappedId = resolveProgramSiakad(programMaps, progName, kategoriProgram);
+                const mappedId = resolveProgramSiakad(programMaps, progName, kategoriProgram, siakadProgName);
                 if (mappedId) {
                   santriProgramMap.set(s.id, mappedId);
                 }

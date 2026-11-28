@@ -24,6 +24,7 @@ export default async function CetakBulkUsbuPage({ params }: { params: Promise<{ 
   const activeStudentIds = Array.from(masterMap.values()).filter(m => m.isAktif).map(m => m.id);
 
   const kelasList = await prisma.kelas.findMany({
+    where: { isActive: true, isDeleted: false },
     include: {
       waliKelas: true,
       program: {

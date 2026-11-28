@@ -13,7 +13,9 @@ export default async function CetakUsbuPage() {
   const isRestricted = !isAdmin && !!allowedKelasId;
 
   const kelasList = await prisma.kelas.findMany({
-    where: isRestricted ? { id: allowedKelasId } : undefined,
+    where: isRestricted
+      ? { id: allowedKelasId, isActive: true, isDeleted: false }
+      : { isActive: true, isDeleted: false },
     include: {
       program: true,
     },

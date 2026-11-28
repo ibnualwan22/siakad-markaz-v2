@@ -16,10 +16,18 @@ type PPDBProgram = {
   id: string;
   nama: string;
   kategoriProgram?: string;
+  durasiBulan?: number;
+  requiredBulan?: number;
   durasiBulanFormatted: string;
   tglProgramFormatted: string;
   hargaFormatted: string;
   harga: number;
+  mode?: "KLAIM" | "KEKURANGAN" | "PENUH";
+  bisaKlaimGratis?: boolean;
+  kekuranganBulan?: number;
+  tarifPerBulan?: number;
+  nominalTanpaAtribut?: number;
+  nominalDenganAtribut?: number;
 };
 
 type StatusData = {
@@ -240,17 +248,83 @@ export default function SantriDaftarUlangPage() {
 
   // Tampilan "bulan tersisa" memakai sisa terhadap dufah berjalan (fallback ke lama bila API belum update)
   const sisaBulan = statusData?.masaAktif?.sisaBulanBerjalan ?? statusData?.masaAktif?.sisaKoutaBulan;
+  const sisaKuotaTarget = Math.max(0, Number(statusData?.masaAktif?.sisaKoutaBulan ?? 0));
   const berakhirDufah = adjustDufahName(statusData?.masaAktif?.berakhirPadaDufahNama);
   const dufahSekarang = adjustDufahName(statusData?.masaAktif?.dufahSekarangSistem?.nama);
   
   const isDurasiLow =
     sisaBulan !== undefined && sisaBulan !== null && sisaBulan <= 2;
   const requiresRenewal = statusData?.logikaSistem?.butuhDaftarUlang;
-  // Mode klaim: santri punya kuota aktif -> halaman jadi "Pemilihan Program", bukan transaksi
-  const klaimTersedia = statusData?.logikaSistem?.klaimTersedia === true;
+  // Mode klaim: santri punya kuota aktif >= 1 bulan terhadap duf'ah tujuan
+  const klaimTersedia = statusData?.logikaSistem?.klaimTersedia === true || sisaKuotaTarget > 0;
   
   const programs = metaData?.programTersedia || [];
+
+  const getProgramPricing = (prog: PPDBProgram) => {
+    const parsedDurasi =
+      prog.requiredBulan ??
+      prog.durasiBulan ??
+      (parseInt((prog.durasiBulanFormatted || "1").replace(/\D/g, ""), 10) || 1);
+
+    if (prog.mode && prog.nominalTanpaAtribut !== undefined && prog.nominalDenganAtribut !== undefined) {
+      return {
+        mode: prog.mode,
+        requiredBulan: parsedDurasi,
+        kekuranganBulan: prog.kekuranganBulan ?? Math.max(0, parsedDurasi - sisaKuotaTarget),
+        tarifPerBulan: prog.tarifPerBulan ?? 1100000,
+        nominalTanpaAtribut: prog.nominalTanpaAtribut,
+        nominalDenganAtribut: prog.nominalDenganAtribut,
+      };
+    }
+
+    // Client-side fallback jika response API belum membawa metadata pricing
+    const kat = (prog.kategoriProgram || "REGULER").trim().toUpperCase();
+    const isReguler = kat === "REGULER" || (prog.nama || "").toLowerCase().includes("akbarnas");
+    const tarifPerBulan = isReguler
+      ? 1100000
+      : Math.round(Math.max(0, prog.harga - 100000) / Math.max(1, parsedDurasi));
+
+    if (sisaKuotaTarget >= parsedDurasi) {
+      return {
+        mode: "KLAIM" as const,
+        requiredBulan: parsedDurasi,
+        kekuranganBulan: 0,
+        tarifPerBulan,
+        nominalTanpaAtribut: 0,
+        nominalDenganAtribut: 0,
+      };
+    }
+    if (sisaKuotaTarget > 0) {
+      const kurang = parsedDurasi - sisaKuotaTarget;
+      const base = kurang * tarifPerBulan;
+      return {
+        mode: "KEKURANGAN" as const,
+        requiredBulan: parsedDurasi,
+        kekuranganBulan: kurang,
+        tarifPerBulan,
+        nominalTanpaAtribut: base,
+        nominalDenganAtribut: base + 100000,
+      };
+    }
+    return {
+      mode: "PENUH" as const,
+      requiredBulan: parsedDurasi,
+      kekuranganBulan: parsedDurasi,
+      tarifPerBulan,
+      nominalTanpaAtribut: Math.max(0, prog.harga - 100000),
+      nominalDenganAtribut: Math.max(0, prog.harga),
+    };
+  };
+
   const selectedProgramData = programs.find((p) => p.id === selectedProgram);
+  const selectedPricing = selectedProgramData ? getProgramPricing(selectedProgramData) : null;
+  const selectedIsKlaimGratis = selectedPricing ? selectedPricing.mode === "KLAIM" : klaimTersedia;
+  const selectedNominal = selectedPricing
+    ? isBeliAtribut
+      ? selectedPricing.nominalDenganAtribut
+      : selectedPricing.nominalTanpaAtribut
+    : 0;
+  const fmtRp = (n: number) => `Rp ${new Intl.NumberFormat("id-ID").format(n)}`;
 
   // Kategori filter logic
   const validPrograms = programs.map(p => ({
@@ -753,22 +827,49 @@ export default function SantriDaftarUlangPage() {
                       <span className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>{prog.tglProgramFormatted}</span>
                     </div>
 
-                    {/* Harga: disembunyikan saat mode klaim; tampilkan harga setelah potongan 100k bila tanpa atribut */}
-                    {!klaimTersedia && (
-                      <div>
-                        <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
-                          {isBeliAtribut
-                            ? prog.hargaFormatted
-                            : `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, prog.harga - 100000))}`}
-                        </p>
-                        {!isBeliAtribut && (
-                          <p className="text-[11px] font-semibold mt-1" style={{ color: "var(--color-text-muted)" }}>
-                            <span style={{ textDecoration: "line-through" }}>{prog.hargaFormatted}</span>
-                            {" "}− Rp 100.000 (tanpa atribut)
+                    {/* Status Kuota & Harga per Program */}
+                    {(() => {
+                      const pr = getProgramPricing(prog);
+                      if (pr.mode === "KLAIM") {
+                        return (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold" style={{ background: "var(--color-success-light)", color: "var(--color-success)" }}>
+                            <CheckCircle size={14} />
+                            Gratis — Klaim Sisa Kuota ({sisaKuotaTarget} bln)
+                          </div>
+                        );
+                      }
+                      if (pr.mode === "KEKURANGAN") {
+                        const nom = isBeliAtribut ? pr.nominalDenganAtribut : pr.nominalTanpaAtribut;
+                        return (
+                          <div className="space-y-1">
+                            <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "var(--color-warning-light)", color: "var(--color-warning)" }}>
+                              Kurang {pr.kekuranganBulan} Bulan (Sisa kuota {sisaKuotaTarget} bln)
+                            </div>
+                            <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-warning)" }}>
+                              {fmtRp(nom)}
+                            </p>
+                            <p className="text-[11px] font-semibold" style={{ color: "var(--color-text-muted)" }}>
+                              {pr.kekuranganBulan} bln × {fmtRp(pr.tarifPerBulan)}
+                              {isBeliAtribut ? " + Rp 100.000 (atribut)" : " (tanpa atribut)"}
+                            </p>
+                          </div>
+                        );
+                      }
+                      const nomPenuh = isBeliAtribut ? pr.nominalDenganAtribut : pr.nominalTanpaAtribut;
+                      return (
+                        <div>
+                          <p className="text-xl font-black tracking-tight" style={{ color: "var(--color-primary)" }}>
+                            {fmtRp(nomPenuh)}
                           </p>
-                        )}
-                      </div>
-                    )}
+                          {!isBeliAtribut && (
+                            <p className="text-[11px] font-semibold mt-1" style={{ color: "var(--color-text-muted)" }}>
+                              <span style={{ textDecoration: "line-through" }}>{prog.hargaFormatted}</span>
+                              {" "}− Rp 100.000 (tanpa atribut)
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   {/* Selection Indicator overlay */}
@@ -784,8 +885,8 @@ export default function SantriDaftarUlangPage() {
         )}
       </div>
 
-      {klaimTersedia ? (
-      /* ===== PANEL KLAIM: cukup pilih program, tanpa transaksi ===== */
+      {selectedIsKlaimGratis ? (
+      /* ===== PANEL KLAIM: sisa kuota cukup, tanpa transaksi ===== */
       <div className="neu-card p-5 space-y-4">
         {/* Selected Summary */}
         {selectedProgramData && (
@@ -895,44 +996,65 @@ export default function SantriDaftarUlangPage() {
         </div>
 
         {/* Selected Summary */}
-        {selectedProgramData && (
+        {selectedProgramData && selectedPricing && (
           <div
-            className="rounded-xl p-3.5 flex items-center justify-between"
+            className="rounded-xl p-3.5 flex items-center justify-between gap-3"
             style={{
-              background: "var(--color-success-light)",
+              background:
+                selectedPricing.mode === "KEKURANGAN"
+                  ? "var(--color-warning-light)"
+                  : "var(--color-success-light)",
               boxShadow: "var(--shadow-inset-sm)",
             }}
           >
             <div className="flex items-center gap-3">
-                <CheckCircle
-                size={16}
-                style={{ color: "var(--color-success)" }}
-                />
-                <div>
+              {selectedPricing.mode === "KEKURANGAN" ? (
+                <AlertTriangle size={16} style={{ color: "var(--color-warning)" }} />
+              ) : (
+                <CheckCircle size={16} style={{ color: "var(--color-success)" }} />
+              )}
+              <div>
                 <p
-                    className="text-xs font-bold"
-                    style={{ color: "var(--color-success)" }}
+                  className="text-xs font-bold"
+                  style={{
+                    color:
+                      selectedPricing.mode === "KEKURANGAN"
+                        ? "var(--color-warning)"
+                        : "var(--color-success)",
+                  }}
                 >
-                    Program Terpilih
+                  {selectedPricing.mode === "KEKURANGAN"
+                    ? `Kekurangan ${selectedPricing.kekuranganBulan} Bulan (Sisa Kuota ${sisaKuotaTarget} Bln)`
+                    : "Program Terpilih"}
                 </p>
                 <p
-                    className="text-[11px] font-semibold mt-0.5"
-                    style={{ color: "var(--color-text)" }}
+                  className="text-[11px] font-semibold mt-0.5"
+                  style={{ color: "var(--color-text)" }}
                 >
-                    {selectedProgramData?.nama}
+                  {selectedProgramData.nama}
                 </p>
-                </div>
+              </div>
             </div>
-            <p className="text-sm font-bold" style={{ color: "var(--color-success)" }}>
-                {selectedProgramData && !isBeliAtribut && selectedProgramData.harga
-                  ? `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, selectedProgramData.harga - 100000))}`
-                  : selectedProgramData?.hargaFormatted}
+            <p
+              className="text-sm font-black shrink-0"
+              style={{
+                color:
+                  selectedPricing.mode === "KEKURANGAN"
+                    ? "var(--color-warning)"
+                    : "var(--color-success)",
+              }}
+            >
+              {fmtRp(selectedNominal)}
             </p>
           </div>
         )}
-        {!isBeliAtribut && selectedProgramData && (
+        {selectedProgramData && selectedPricing && (
           <p className="text-[11px] text-right -mt-2" style={{ color: "var(--color-text-muted)" }}>
-            Sudah dikurangi Rp 100.000 (tanpa atribut)
+            {selectedPricing.mode === "KEKURANGAN"
+              ? `${selectedPricing.kekuranganBulan} bln × ${fmtRp(selectedPricing.tarifPerBulan)}${isBeliAtribut ? " + Rp 100.000 (atribut)" : " (tanpa atribut)"}`
+              : !isBeliAtribut
+                ? "Sudah dikurangi Rp 100.000 (tanpa atribut)"
+                : "Termasuk paket atribut"}
           </p>
         )}
 
@@ -997,20 +1119,28 @@ export default function SantriDaftarUlangPage() {
                   <p className="text-sm font-bold truncate" style={{ color: "var(--color-text)" }}>
                     {selectedProgramData?.nama || "-"}
                   </p>
-                  {!klaimTersedia && selectedProgramData && (
-                    <p className="text-sm font-black mt-0.5" style={{ color: "var(--color-primary)" }}>
-                      {isBeliAtribut
-                        ? selectedProgramData.hargaFormatted
-                        : `Rp ${new Intl.NumberFormat("id-ID").format(Math.max(0, selectedProgramData.harga - 100000))}`}
-                      {!isBeliAtribut && (
-                        <span className="text-[10px] font-semibold ml-1" style={{ color: "var(--color-text-muted)" }}>
-                          (tanpa atribut −100k)
-                        </span>
-                      )}
+                  {!selectedIsKlaimGratis && selectedProgramData && selectedPricing && (
+                    <p
+                      className="text-sm font-black mt-0.5"
+                      style={{
+                        color:
+                          selectedPricing.mode === "KEKURANGAN"
+                            ? "var(--color-warning)"
+                            : "var(--color-primary)",
+                      }}
+                    >
+                      {fmtRp(selectedNominal)}
+                      <span className="text-[10px] font-semibold ml-1" style={{ color: "var(--color-text-muted)" }}>
+                        {selectedPricing.mode === "KEKURANGAN"
+                          ? `(kurang ${selectedPricing.kekuranganBulan} bln${isBeliAtribut ? " + atribut" : ""})`
+                          : !isBeliAtribut
+                            ? "(tanpa atribut −100k)"
+                            : "(dengan atribut)"}
+                      </span>
                     </p>
                   )}
                 </div>
-                {klaimTersedia ? (
+                {selectedIsKlaimGratis ? (
                   <button
                     onClick={handleKlaim}
                     disabled={submitting}
@@ -1042,11 +1172,11 @@ export default function SantriDaftarUlangPage() {
                     }
                   >
                     {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                    Daftar Ulang
+                    {selectedPricing?.mode === "KEKURANGAN" ? "Bayar Kekurangan" : "Daftar Ulang"}
                   </button>
                 )}
               </div>
-              {!klaimTersedia && (
+              {!selectedIsKlaimGratis && (
                 <div className="space-y-2 pt-2" style={{ borderTop: "1px solid var(--color-surface-dark)" }}>
                   <label className="flex items-start gap-2 cursor-pointer">
                     <input
@@ -1060,7 +1190,9 @@ export default function SantriDaftarUlangPage() {
                       <span className="font-bold">Ambil paket atribut</span> (+Rp 100.000)
                       <br />
                       <span style={{ color: "var(--color-text-muted)" }}>
-                        Tanpa atribut — nominal dikurangi Rp 100.000.
+                        {selectedPricing?.mode === "KEKURANGAN"
+                          ? "Tanpa atribut — tarif Rp 1.100.000/bulan kekurangan."
+                          : "Tanpa atribut — nominal dikurangi Rp 100.000."}
                       </span>
                     </span>
                   </label>

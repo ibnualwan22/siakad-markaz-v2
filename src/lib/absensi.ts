@@ -39,6 +39,28 @@ export async function getActiveDufahName(): Promise<string | null> {
   return sorted[0][0];
 }
 
+/**
+ * Mendapatkan status bulan aktif program Akbarnas (1 atau 2) berdasarkan Dufah berjalan.
+ * Seluruh kelas Akbarnas selalu berada di bulan yang sama (tidak ada pembeda per kelas).
+ */
+export async function getActiveAkbarnasBulan(): Promise<{
+  dufahNama: string | null;
+  akbarnasBulan: 1 | 2;
+}> {
+  const activeDufahName = await getActiveDufahName();
+  if (!activeDufahName) {
+    return { dufahNama: null, akbarnasBulan: 2 };
+  }
+  const dufah = await prisma.dufah.findUnique({
+    where: { nama: activeDufahName },
+    select: { akbarnasBulan: true },
+  });
+  return {
+    dufahNama: activeDufahName,
+    akbarnasBulan: dufah?.akbarnasBulan === 1 ? 1 : 2,
+  };
+}
+
 export type SantriAbsenTarget = {
   riwayatId: string;
   santriId: string;

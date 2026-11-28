@@ -8,6 +8,7 @@ import { Calendar, Save, Power, PowerOff } from "lucide-react";
 type DufahData = {
   nama: string;
   namaArab: string | null;
+  akbarnasBulan?: number;
   usbu1StartDate: string | null;
   usbu1EndDate: string | null;
   usbu1Active: boolean;
@@ -50,7 +51,7 @@ export function DufahManager({ initialData, activeDufahName }: { initialData: Du
     }
   };
 
-  const handleChange = (nama: string, field: keyof DufahData, value: string | boolean | null) => {
+  const handleChange = (nama: string, field: keyof DufahData, value: string | boolean | number | null) => {
     setData(data.map(d => {
       if (d.nama !== nama) return d;
       return { ...d, [field]: value };
@@ -89,16 +90,37 @@ export function DufahManager({ initialData, activeDufahName }: { initialData: Du
                   <p className="text-xs text-[var(--color-text-muted)] mt-1 font-medium flex items-center gap-1">
                     Total Santri: {dufah._count?.riwayatRecords || 0}
                   </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <label className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Nama Arab:</label>
-                    <input
-                      type="text"
-                      dir="rtl"
-                      placeholder="Contoh: الدفعة التسعون"
-                      value={dufah.namaArab || ""}
-                      onChange={(e) => handleChange(dufah.nama, "namaArab", e.target.value)}
-                      className="text-sm rounded border-[var(--color-surface-dark)] px-2 py-1 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] w-48"
-                    />
+                  <div className="mt-2 flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Nama Arab:</label>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        placeholder="Contoh: الدفعة التسعون"
+                        value={dufah.namaArab || ""}
+                        onChange={(e) => handleChange(dufah.nama, "namaArab", e.target.value)}
+                        className="text-sm rounded border-[var(--color-surface-dark)] px-2 py-1 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] w-48"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">Bulan Akbarnas:</label>
+                      <div className="inline-flex rounded-lg border border-indigo-200 bg-white p-0.5">
+                        {[1, 2].map((b) => (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => handleChange(dufah.nama, "akbarnasBulan", b)}
+                            className={`px-3 py-1 rounded-md text-xs font-bold transition ${
+                              (dufah.akbarnasBulan ?? 1) === b
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "text-gray-600 hover:bg-indigo-50"
+                            }`}
+                          >
+                            Bulan {b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <button

@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
         if (!riwayat) {
           const santriRiwayats = await prisma.riwayatSantri.findMany({
             where: { santriId: santri.nis },
-            include: { program: true, kelas: true },
+            include: { program: true, kelas: true, dufah: { select: { akbarnasBulan: true } } },
             orderBy: { id: 'desc' }
           });
 
@@ -179,7 +179,10 @@ export async function POST(req: NextRequest) {
           let kelasId = null;
 
           const pastAkbarnas = santriRiwayats.find(r => r.program?.nama_indo.toLowerCase().includes("akbarnas"));
-          if (pastAkbarnas && !pastAkbarnas.kelas?.is_akbarnas_b2) {
+          const pastWasBulan2 = pastAkbarnas?.dufah
+            ? pastAkbarnas.dufah.akbarnasBulan === 2
+            : Boolean(pastAkbarnas?.kelas?.is_akbarnas_b2);
+          if (pastAkbarnas && !pastWasBulan2) {
             // carry over
             programId = pastAkbarnas.programId;
             kelasId = pastAkbarnas.kelasId;

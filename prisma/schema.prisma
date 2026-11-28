@@ -26,6 +26,8 @@ model Program {
   bankSoalUsbuList            BankSoalUsbu[]
   paketUjianList              PaketUjian[]
   tasmiConfigList             TasmiConfig[]
+  babMateriList               BabMateri[]
+  regulasiSoalList            RegulasiSoalUsbu[]
 }
 
 model Kelas {
@@ -60,6 +62,8 @@ model Mapel {
   jenisSoalList      JenisSoal[]
   tasmiConfigList    TasmiConfig[]
   jadwalSlotMetas    JadwalSlotMeta[]
+  babMateriList      BabMateri[]
+  regulasiSoalList   RegulasiSoalUsbu[]
 }
 
 model ProgramMapel {
@@ -139,8 +143,9 @@ model WaOtp {
 }
 
 model Dufah {
-  nama     String  @id
-  namaArab String?
+  nama          String  @id
+  namaArab      String?
+  akbarnasBulan Int     @default(1) // 1 = Akbarnas Bulan 1, 2 = Akbarnas Bulan 2
 
   usbu1StartDate DateTime? @db.Date
   usbu1EndDate   DateTime? @db.Date
@@ -1078,10 +1083,50 @@ model SoalUsbuAssignment {
   @@unique([soalId, usbuKe])
 }
 
+model BabMateri {
+  id        String   @id @default(cuid())
+  programId String
+  mapelId   String
+  nama      String
+  urutan    Int      @default(0)
+  deskripsi String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program  Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  mapel    Mapel          @relation(fields: [mapelId], references: [id], onDelete: Cascade)
+  soalList BankSoalUsbu[]
+
+  @@unique([programId, mapelId, nama])
+  @@index([programId, mapelId])
+}
+
+model RegulasiSoalUsbu {
+  id          String   @id @default(cuid())
+  programId   String
+  mapelId     String
+  bulanKe     Int      @default(1) // 1 untuk semua program; Akbarnas memiliki 1 & 2
+  urutanQism  Int      // 1, 2, 3, 4, 5
+  tipeSoal    String   // PG, MENJODOHKAN, ISIAN_SAMPING, BENAR_SALAH, ESSAY_SINGKAT, ESSAY_PANJANG, SUSUN_HURUF, DRAG_TO_BLANK, TABEL_TASRIF
+  targetJumlah Int     // Jumlah soal target sesuai panduan
+  targetBobot Float    // Bobot per soal sesuai panduan
+  catatan     String?  // Spesifikasi soal (teks biru di panduan PDF)
+  usbuBerlaku String   @default("1,2") // Berlaku untuk Usbu 1 & 2
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  mapel   Mapel   @relation(fields: [mapelId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, mapelId, bulanKe, urutanQism])
+  @@index([programId, mapelId, bulanKe])
+}
+
 model BankSoalUsbu {
   id          String   @id @default(cuid())
   mapelId     String
   programId   String
+  babId       String?  // Pengelompokan Bab Materi (null = Tanpa Bab)
   usbuKe      Int?     // Batasan materi target Usbu — null = Belum Masuk Usbu'
   bulanKe     Int      @default(1)    // Batasan materi target Bulan (Khusus Akbarnas)
   paketSoal   String   @default("A")  // Legacy: will be unused soon
@@ -1099,6 +1144,7 @@ model BankSoalUsbu {
 
   mapel           Mapel    @relation(fields: [mapelId], references: [id], onDelete: Restrict)
   program         Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  bab             BabMateri? @relation(fields: [babId], references: [id], onDelete: SetNull)
   jenisSoal       JenisSoal? @relation(fields: [jenisSoalId], references: [id], onDelete: SetNull)
   opsiList        OpsiSoalUsbu[]
   soalPaketList   SoalPaket[]
@@ -1109,6 +1155,7 @@ model BankSoalUsbu {
   anakGrup      BankSoalUsbu[] @relation("GrupSoal")
 
   @@index([programId, mapelId, jenisSoalId])
+  @@index([programId, mapelId, babId])
   @@index([mapelId])
 }
 

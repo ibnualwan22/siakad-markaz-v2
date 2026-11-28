@@ -530,7 +530,15 @@ export function SyahadahClient({
                           </span>
                         ) : null}
 
-                        {santri.canPrintSyahadah || santri.canPrintMcSyahadah ? (
+                        {santri.canPrintMcSyahadah && santri.mcRiwayatId ? (
+                          <Link
+                            href={`/cetak-template/akbarnas-mc/${santri.mcRiwayatId}`}
+                            target="_blank"
+                            className="rounded-full px-4 py-2 text-xs font-bold transition bg-indigo-100 text-indigo-800 hover:bg-indigo-200"
+                          >
+                            Cetak Syahadah MC
+                          </Link>
+                        ) : santri.canPrintSyahadah ? (
                           <Link
                             href={`/cetak-offline/${santri.id}`}
                             target="_blank"

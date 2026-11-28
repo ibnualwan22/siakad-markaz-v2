@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
-import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2, Eye, X, ChevronLeft, ChevronRight, Grid3X3, Info } from "lucide-react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Plus, Edit2, Trash2, CheckCircle2, Save, GripVertical, FileSpreadsheet, Activity, Bold, Underline, Image as ImageIcon, Loader2, Eye, X, ChevronLeft, ChevronRight, Grid3X3, Info, Lock, FolderOpen, ClipboardList, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import SoalText from "@/components/soal-text";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -9,6 +9,9 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from "@dnd-kit/utilities";
 import { detectTextDirection } from "@/lib/text-direction";
 import QuestionRenderer from "@/components/ujian/QuestionRenderer";
+import BabManagerBar, { type BabMateriItem } from "@/components/ujian/BabManagerBar";
+import { RegulasiStickyBar, RegulasiRingkasanView, type RegulasiRuleWithId } from "@/components/ujian/RegulasiRingkasanPanel";
+import { checkQuotaForCandidate, type AssignedSoalLite } from "@/lib/regulasi-soal-usbu";
 
 // Lightweight text renderer for the list view to prevent browser hangs caused by heavy regex processing
 function LiteSoalText({ html, className = "", style }: { html: string, className?: string, style?: any }) {
@@ -124,8 +127,21 @@ export default function BankSoalPage() {
   const [instruksiText, setInstruksiText] = useState("");
   const [savingInstruksi, setSavingInstruksi] = useState(false);
   
-  // Batch Assignment Statee
-  const [selectedSoalIds, setSelectedSoalIds] = useState<string[]>([]);
+  // View Mode, Bab Materi & Regulasi Quota State
+  const [viewMode, setViewMode] = useState<"BANK" | "RINGKASAN">("BANK");
+  const [babList, setBabList] = useState<BabMateriItem[]>([]);
+  const [tanpaBabCount, setTanpaBabCount] = useState(0);
+  const [selectedBabId, setSelectedBabId] = useState<string>("ALL");
+  const [importBabId, setImportBabId] = useState<string>("");
+  const [mapelRegulasiRules, setMapelRegulasiRules] = useState<RegulasiRuleWithId[]>([]);
+  const [mapelAssignedByUsbu, setMapelAssignedByUsbu] = useState<Record<number, AssignedSoalLite[]>>({ 1: [], 2: [] });
+  const [over100BadgeCount, setOver100BadgeCount] = useState(0);
+  const [cbtAllowedKeys, setCbtAllowedKeys] = useState<Set<string>>(new Set());
+  const [cbtAllowedProgramIds, setCbtAllowedProgramIds] = useState<Set<string>>(new Set());
+  const [showAllMapels, setShowAllMapels] = useState(false);
+  const [activeAkbarnasBulan, setActiveAkbarnasBulan] = useState<1 | 2>(2);
+  const [activeDufahName, setActiveDufahName] = useState<string | null>(null);
+
   const [mapelOptions, setMapelOptions] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const PAGE_SIZE = 20;
@@ -177,6 +193,7 @@ export default function BankSoalPage() {
   const [formData, setFormData] = useState<any>({
     id: "",
     tipeSoal: "PG",
+    babId: "",
     usbuKe: null,
     bulanKe: 1,
     pertanyaan: "",
@@ -199,31 +216,136 @@ export default function BankSoalPage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const isAkbarnas = useMemo(() => {
+    return !!programList.find(p => p.id === selectedProgram)?.nama_indo?.toLowerCase().includes("akbarnas");
+  }, [programList, selectedProgram]);
+
+  const effectiveBulanKe = isAkbarnas ? activeAkbarnasBulan : 1;
+
+  const activeGuideUsbu = useMemo(() => {
+    if (activeUsbuTab === "1" || activeUsbuTab === "2" || activeUsbuTab === "3") {
+      return Number(activeUsbuTab);
+    }
+    return Number(selectedUsbu) || 1;
+  }, [activeUsbuTab, selectedUsbu]);
+
+  const selectedMapelNama = useMemo(() => {
+    const found = mapelOptions.find((m: { mapel?: { id: string; nama_indo: string }; mapelId?: string }) => m.mapel?.id === selectedMapel || m.mapelId === selectedMapel);
+    return found?.mapel?.nama_indo || "";
+  }, [mapelOptions, selectedMapel]);
+
+  const fetchBabList = useCallback(async () => {
+    if (!selectedProgram || !selectedMapel) {
+      setBabList([]);
+      setTanpaBabCount(0);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/ujian-usbu/bab?programId=${selectedProgram}&mapelId=${selectedMapel}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBabList(data.babList || []);
+        setTanpaBabCount(data.tanpaBabCount || 0);
+      }
+    } catch {
+      // silent fallback
+    }
+  }, [selectedProgram, selectedMapel]);
+
+  const fetchQuotaContext = useCallback(async () => {
+    if (!selectedProgram) {
+      setMapelRegulasiRules([]);
+      setMapelAssignedByUsbu({ 1: [], 2: [] });
+      setOver100BadgeCount(0);
+      return;
+    }
+    try {
+      const bParam = isAkbarnas ? effectiveBulanKe : 1;
+      const reqs: Promise<Response>[] = [
+        fetch(`/api/admin/ujian-usbu/ringkasan?programId=${selectedProgram}&usbuKe=1&bulanKe=${bParam}`),
+        fetch(`/api/admin/ujian-usbu/ringkasan?programId=${selectedProgram}&usbuKe=2&bulanKe=${bParam}`),
+      ];
+      if (selectedMapel) {
+        reqs.push(
+          fetch(`/api/admin/ujian-usbu/regulasi?programId=${selectedProgram}&mapelId=${selectedMapel}&bulanKe=${bParam}`)
+        );
+      }
+      const responses = await Promise.all(reqs);
+      const r1 = responses[0].ok ? await responses[0].json() : null;
+      const r2 = responses[1].ok ? await responses[1].json() : null;
+      const regRes = responses[2] && responses[2].ok ? await responses[2].json() : null;
+
+      setOver100BadgeCount((r1?.mapelOver100Count || 0) + (r2?.mapelOver100Count || 0));
+
+      if (selectedMapel) {
+        const m1 = r1?.mapels?.find((m: { mapelId: string; soals?: AssignedSoalLite[] }) => m.mapelId === selectedMapel);
+        const m2 = r2?.mapels?.find((m: { mapelId: string; soals?: AssignedSoalLite[] }) => m.mapelId === selectedMapel);
+        setMapelAssignedByUsbu({
+          1: m1?.soals || [],
+          2: m2?.soals || [],
+        });
+        setMapelRegulasiRules(regRes?.rules || []);
+      } else {
+        setMapelAssignedByUsbu({ 1: [], 2: [] });
+        setMapelRegulasiRules([]);
+      }
+    } catch {
+      // silent fallback
+    }
+  }, [selectedProgram, selectedMapel, isAkbarnas, effectiveBulanKe]);
+
+  const visiblePrograms = useMemo(() => {
+    if (showAllMapels || cbtAllowedProgramIds.size === 0) return programList;
+    return programList.filter((p: { id: string }) => cbtAllowedProgramIds.has(p.id));
+  }, [programList, cbtAllowedProgramIds, showAllMapels]);
+
   useEffect(() => {
     fetchInitialData();
   }, []);
 
   useEffect(() => {
+    if (visiblePrograms.length > 0 && !visiblePrograms.some((p: { id: string }) => p.id === selectedProgram)) {
+      setSelectedProgram(visiblePrograms[0].id);
+    }
+  }, [visiblePrograms, selectedProgram]);
+
+  useEffect(() => {
     if (selectedProgram) {
       const prog = programList.find(p => p.id === selectedProgram);
       if (prog) {
-        setMapelOptions(prog.programMapels || []);
-        if (prog.programMapels?.length > 0 && !selectedMapel) {
-          setSelectedMapel(prog.programMapels[0].mapelId);
+        const rawMapels = prog.programMapels || [];
+        const filtered =
+          showAllMapels || cbtAllowedKeys.size === 0
+            ? rawMapels
+            : rawMapels.filter((m: { mapelId: string }) => cbtAllowedKeys.has(`${selectedProgram}|${m.mapelId}`));
+        setMapelOptions(filtered);
+        const exists = filtered.some((m: { mapelId: string }) => m.mapelId === selectedMapel);
+        if (filtered.length > 0 && (!selectedMapel || !exists)) {
+          setSelectedMapel(filtered[0].mapelId);
+        } else if (filtered.length === 0) {
+          setSelectedMapel("");
         }
       }
     }
-  }, [selectedProgram, programList]);
+  }, [selectedProgram, programList, cbtAllowedKeys, showAllMapels, selectedMapel]);
 
   useEffect(() => {
+    setSelectedBabId("ALL");
     if (selectedMapel && selectedProgram) {
       fetchJenisSoal();
+      fetchBabList();
     } else {
       setJenisSoalList([]);
       setSelectedJenisSoal("");
       setSoalList([]);
+      setBabList([]);
+      setTanpaBabCount(0);
     }
-  }, [selectedMapel, selectedProgram]);
+  }, [selectedMapel, selectedProgram, fetchBabList]);
+
+  useEffect(() => {
+    fetchQuotaContext();
+  }, [fetchQuotaContext]);
 
   useEffect(() => {
     if (selectedMapel && selectedProgram && selectedJenisSoal) {
@@ -233,7 +355,7 @@ export default function BankSoalPage() {
     } else {
       setSoalList([]);
     }
-  }, [selectedMapel, selectedProgram, selectedJenisSoal]);
+  }, [selectedMapel, selectedProgram, selectedJenisSoal, selectedBabId]);
 
   const fetchJenisSoal = async () => {
     try {
@@ -252,14 +374,37 @@ export default function BankSoalPage() {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const progRes = await fetch("/api/admin/program?bypassFilter=true");
-      const progData = await progRes.json();
-      setProgramList(progData || []);
+      const [progRes, metaRes] = await Promise.all([
+        fetch("/api/admin/program?bypassFilter=true"),
+        fetch("/api/admin/ujian-usbu/regulasi?meta=cbt-mapels"),
+      ]);
+      const progData = (await progRes.json()) || [];
+      const metaData = metaRes.ok ? await metaRes.json() : null;
 
-      if (progData?.length > 0) {
-        setSelectedProgram(progData[0].id);
-        const mapels = progData[0].programMapels;
-        if (mapels?.length > 0) setSelectedMapel(mapels[0].mapelId);
+      const keySet = new Set<string>(metaData?.allowedKeys || []);
+      const progSet = new Set<string>(metaData?.allowedProgramIds || []);
+      setCbtAllowedKeys(keySet);
+      setCbtAllowedProgramIds(progSet);
+      if (metaData?.akbarnasBulan === 1 || metaData?.akbarnasBulan === 2) {
+        setActiveAkbarnasBulan(metaData.akbarnasBulan);
+      }
+      setActiveDufahName(metaData?.activeDufah || null);
+      setProgramList(progData);
+
+      const initialPrograms =
+        progSet.size > 0
+          ? progData.filter((p: { id: string }) => progSet.has(p.id))
+          : progData;
+
+      if (initialPrograms.length > 0) {
+        const firstProg = initialPrograms[0];
+        setSelectedProgram(firstProg.id);
+        const rawMapels = firstProg.programMapels || [];
+        const allowedMapels =
+          keySet.size > 0
+            ? rawMapels.filter((m: { mapelId: string }) => keySet.has(`${firstProg.id}|${m.mapelId}`))
+            : rawMapels;
+        if (allowedMapels.length > 0) setSelectedMapel(allowedMapels[0].mapelId);
       }
     } catch {
       toast.error("Gagal load initial data");
@@ -272,7 +417,8 @@ export default function BankSoalPage() {
     setLoadingSoal(true);
     if (!keepPage) setCurrentPage(0);
     try {
-      const res = await fetch(`/api/admin/ujian-usbu/bank-soal?programId=${selectedProgram}&mapelId=${selectedMapel}&jenisSoalId=${selectedJenisSoal}`);
+      const babQuery = selectedBabId !== "ALL" ? `&babId=${selectedBabId}` : "";
+      const res = await fetch(`/api/admin/ujian-usbu/bank-soal?programId=${selectedProgram}&mapelId=${selectedMapel}&jenisSoalId=${selectedJenisSoal}${babQuery}`);
       if (res.ok) {
         const data = await res.json();
         setSoalList(data);
@@ -365,26 +511,14 @@ export default function BankSoalPage() {
     if (!selectedProgram || !selectedMapel || !selectedJenisSoal) return toast.error("Pilih Program, Mapel, dan Jenis Soal terlebih dahulu");
     const activeJenis = jenisSoalList.find(j => j.id === selectedJenisSoal);
     const tipeToUse = activeJenis?.nama || "PG";
-    const isTempAkbarnas = !!programList.find(p => p.id === selectedProgram)?.nama_indo?.toLowerCase().includes("akbarnas");
-
-    let defaultBulan = 1;
-    let defaultUsbu: number | null = null; // default: Belum Masuk Usbu'
-
-    if (activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED") {
-      if (isTempAkbarnas && activeUsbuTab.includes("-")) {
-        defaultBulan = Number(activeUsbuTab.split("-")[0]);
-        defaultUsbu = Number(activeUsbuTab.split("-")[1]);
-      } else {
-        defaultUsbu = Number(activeUsbuTab);
-      }
-    }
 
     setFormData({
       id: "",
       tipeSoal: tipeToUse,
       jenisSoalId: selectedJenisSoal,
-      usbuKe: defaultUsbu,
-      bulanKe: defaultBulan,
+      babId: selectedBabId !== "ALL" && selectedBabId !== "NONE" ? selectedBabId : "",
+      usbuKe: null,
+      bulanKe: 1,
       pertanyaan: "",
       gambarUrl: "",
       grupSoalId: "",
@@ -415,6 +549,7 @@ export default function BankSoalPage() {
           id: fullSoal.id,
           tipeSoal: fullSoal.tipeSoal,
           jenisSoalId: selectedJenisSoal,
+          babId: fullSoal.babId || "",
           usbuKe: fullSoal.usbuKe ?? null,
           bulanKe: fullSoal.bulanKe || 1,
           pertanyaan: fullSoal.pertanyaan,
@@ -434,6 +569,7 @@ export default function BankSoalPage() {
           id: soal.id,
           tipeSoal: soal.tipeSoal,
           jenisSoalId: selectedJenisSoal,
+          babId: soal.babId || "",
           usbuKe: soal.usbuKe ?? null,
           bulanKe: soal.bulanKe || 1,
           pertanyaan: soal.pertanyaan,
@@ -453,6 +589,7 @@ export default function BankSoalPage() {
         id: soal.id,
         tipeSoal: soal.tipeSoal,
         jenisSoalId: selectedJenisSoal,
+        babId: soal.babId || "",
         usbuKe: soal.usbuKe ?? null,
         bulanKe: soal.bulanKe || 1,
         pertanyaan: soal.pertanyaan,
@@ -542,6 +679,7 @@ export default function BankSoalPage() {
       mapelId: selectedMapel,
       programId: selectedProgram,
       jenisSoalId: selectedJenisSoal,
+      babId: formData.babId || null,
       tipeSoal: formData.tipeSoal,
       pertanyaan: formData.pertanyaan,
       gambarUrl: formData.gambarUrl || null,
@@ -565,6 +703,8 @@ export default function BankSoalPage() {
       toast.success(isEditing ? "Soal berhasil diupdate!" : "Soal berhasil ditambahkan!");
       setIsModalOpen(false);
       fetchSoal(true);
+      fetchBabList();
+      fetchQuotaContext();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -577,6 +717,8 @@ export default function BankSoalPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success("Soal berhasil dihapus");
       fetchSoal(true);
+      fetchBabList();
+      fetchQuotaContext();
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -584,18 +726,17 @@ export default function BankSoalPage() {
 
   const handleToggleAssignment = async (soalId: string, usbuKe: number, isChecked: boolean) => {
     try {
-      const url = isChecked
-        ? "/api/admin/ujian-usbu/bank-soal/assign"
-        : "/api/admin/ujian-usbu/bank-soal/assign";
+      const url = "/api/admin/ujian-usbu/bank-soal/assign";
       const method = isChecked ? "POST" : "DELETE";
 
       // Update optimistic state
       setSoalList(prev => prev.map(s => {
         if (s.id === soalId) {
           const newAssigns = [...(s.usbuAssignments || [])];
-          if (isChecked) newAssigns.push({ usbuKe });
-          else {
-            const idx = newAssigns.findIndex(ua => ua.usbuKe === usbuKe);
+          if (isChecked) {
+            if (!newAssigns.some((ua: { usbuKe: number }) => ua.usbuKe === usbuKe)) newAssigns.push({ usbuKe });
+          } else {
+            const idx = newAssigns.findIndex((ua: { usbuKe: number }) => ua.usbuKe === usbuKe);
             if (idx > -1) newAssigns.splice(idx, 1);
           }
           return { ...s, usbuAssignments: newAssigns };
@@ -609,10 +750,23 @@ export default function BankSoalPage() {
         body: JSON.stringify({ soalIds: [soalId], usbuKe })
       });
 
-      if (!res.ok) throw new Error((await res.json()).error);
+      const resJson = await res.json();
+      if (!res.ok) throw new Error(resJson.error || "Gagal mengubah assignment soal");
+
+      // Terapkan auto-bobot dari regulasi Usbu' 1 & 2 jika ada
+      if (isChecked && Array.isArray(resJson.autoBobotApplied) && resJson.autoBobotApplied.length > 0) {
+        const applied = resJson.autoBobotApplied.find((a: { id: string; bobot: number }) => a.id === soalId);
+        if (applied) {
+          setSoalList(prev => prev.map(s => s.id === soalId ? { ...s, bobot: applied.bobot } : s));
+          toast.success(`Masuk Usbu' ${usbuKe} — bobot otomatis disesuaikan ke ${applied.bobot} poin sesuai panduan`);
+        }
+      }
+
+      await fetchQuotaContext();
     } catch (err: any) {
       toast.error(err.message || "Gagal mengubah assignment soal");
       fetchSoal(true); // rollback on error
+      fetchQuotaContext();
     }
   };
 
@@ -627,6 +781,7 @@ export default function BankSoalPage() {
       formData.append("mapelId", selectedMapel);
       formData.append("programId", selectedProgram);
       formData.append("jenisSoalId", selectedJenisSoal);
+      formData.append("babId", importBabId);
       formData.append("usbuKe", ""); // soal import baru = Belum Masuk Usbu'
       formData.append("paketSoal", "A"); // legacy fallback
       formData.append("timpaSoal", importTimpa.toString());
@@ -642,6 +797,8 @@ export default function BankSoalPage() {
       setIsImportModalOpen(false);
       setImportFile(null);
       fetchSoal(true);
+      fetchBabList();
+      fetchQuotaContext();
     } catch (err: any) {
       toast.error(err.message || "Gagal import excel");
     } finally {
@@ -676,9 +833,10 @@ export default function BankSoalPage() {
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => { });
   };
 
-  const handleResetAssign = async () => {
+  const handleResetAssign = async (overrideUsbu?: number) => {
+    const targetU = overrideUsbu ?? activeGuideUsbu;
     if (!selectedProgram || !selectedMapel) return toast.error("Pilih Program dan Mapel dahulu");
-    if (!confirm(`Yakin ingin MENGHAPUS SEMUA tampilan ujian soal (dari seluruh Jenis Soal pada Mapel ini) untuk Usbu' ${selectedUsbu}? Soal tidak akan dihapus, hanya tampilannya saja yang direset.`)) return;
+    if (!confirm(`Kosongkan SEMUA soal yang dicentang pada Usbu' ${targetU} untuk mapel ${selectedMapelNama || "ini"} (seluruh jenis soal)?\n\nSoal tidak akan dihapus dari Bank Soal, hanya centangan Usbu' ${targetU} yang direset.`)) return;
 
     try {
       const res = await fetch(`/api/admin/ujian-usbu/bank-soal/reset-assign`, {
@@ -687,33 +845,26 @@ export default function BankSoalPage() {
         body: JSON.stringify({
           programId: selectedProgram,
           mapelId: selectedMapel,
-          usbuKe: Number(selectedUsbu)
+          usbuKe: Number(targetU)
         })
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success(`Berhasil mereset tampilan ujian soal untuk Usbu' ${selectedUsbu}`);
+      toast.success(`Isi Usbu' ${targetU} pada mapel ini berhasil dikosongkan`);
       fetchSoal(true);
+      fetchQuotaContext();
     } catch (err: any) {
-      toast.error(err.message || "Gagal mereset tampilan ujian");
+      toast.error(err.message || "Gagal mengosongkan isi Usbu'");
     }
   };
-
-  const isAkbarnas = useMemo(() => {
-    return !!programList.find(p => p.id === selectedProgram)?.nama_indo?.toLowerCase().includes("akbarnas");
-  }, [programList, selectedProgram]);
 
   const filteredSoalList = useMemo(() => {
     if (activeUsbuTab === "ALL") return soalList;
     return soalList.filter(s => {
       if (activeUsbuTab === "UNASSIGNED") return !(s.usbuAssignments?.length > 0);
-
-      if (isAkbarnas && activeUsbuTab.includes("-")) {
-        const [b, u] = activeUsbuTab.split("-");
-        return s.bulanKe === parseInt(b) && s.usbuKe === parseInt(u);
-      }
-      return s.usbuKe === parseInt(activeUsbuTab);
+      const targetU = Number(activeUsbuTab);
+      return !!s.usbuAssignments?.some((ua: { usbuKe: number }) => ua.usbuKe === targetU);
     });
-  }, [soalList, activeUsbuTab, isAkbarnas]);
+  }, [soalList, activeUsbuTab]);
 
   const handleBulkBobot = async () => {
     if (filteredSoalList.length === 0) return toast.error("Belum ada soal untuk dihitung pada tab ini");
@@ -734,49 +885,10 @@ export default function BankSoalPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast.success(`Bobot ${filteredSoalList.length} soal berhasil diupdate menjadi ${bobotBaru}!`);
       setSoalList(prev => prev.map(s => ids.includes(s.id) ? { ...s, bobot: bobotBaru } : s));
+      fetchQuotaContext();
     } catch (err: any) {
       toast.error(err.message || "Gagal update bobot masal");
       fetchSoal(true);
-    }
-  };
-
-  const handleBulkAssign = async (assign: boolean) => {
-    if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") {
-        return toast.error("Pilih Usbu' target spesifik terlebih dahulu di tab (bukan ALL / Belum Masuk Usbu') untuk menampilkan soal di ujian!");
-    }
-    const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
-    const ids = filteredSoalList.map(s => s.id);
-    if (!ids.length) return toast.error("Tidak ada soal untuk ditampilkan di ujian");
-
-    if (assign && !confirm(`Tampilkan semua ${ids.length} soal ini di ujian Usbu' ${targetU}?`)) return;
-    if (!assign && !confirm(`Sembunyikan semua ${ids.length} soal ini dari ujian Usbu' ${targetU}?`)) return;
-
-    try {
-      const url = "/api/admin/ujian-usbu/bank-soal/assign";
-      const method = assign ? "POST" : "DELETE";
-
-      // Optimistic state update
-      setSoalList(prev => prev.map(s => {
-         if (ids.includes(s.id)) {
-            const newAssigns = [...(s.usbuAssignments || [])];
-            const idx = newAssigns.findIndex((ua: any) => ua.usbuKe === targetU);
-            if (assign && idx === -1) newAssigns.push({ usbuKe: targetU });
-            if (!assign && idx > -1) newAssigns.splice(idx, 1);
-            return { ...s, usbuAssignments: newAssigns };
-         }
-         return s;
-      }));
-
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ soalIds: ids, usbuKe: targetU })
-      });
-      if (!res.ok) throw new Error((await res.json()).error);
-      toast.success(assign ? `Berhasil menampilkan ${ids.length} soal di ujian Usbu' ${targetU}` : `Berhasil menyembunyikan ${ids.length} soal dari ujian Usbu' ${targetU}`);
-    } catch(err: any) {
-       toast.error(err.message);
-       fetchSoal(true);
     }
   };
 
@@ -786,30 +898,144 @@ export default function BankSoalPage() {
     <div>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text)" }}>Bank Soal CBT Usbu'</h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-text-subtle)" }}>Kelola bank soal untuk masing-masing program dan mata pelajaran</p>
+          <h1 className="text-2xl font-bold font-display" style={{ color: "var(--color-text)" }}>Bank Soal CBT Usbu&apos;</h1>
+          <p className="text-sm mt-1" style={{ color: "var(--color-text-subtle)" }}>Kelola bank soal per Bab, panduan regulasi Usbu&apos; 1 &amp; 2, dan pencetangan soal ujian</p>
+        </div>
+
+        {/* View Mode Switcher */}
+        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setViewMode("BANK")}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              viewMode === "BANK"
+                ? "bg-[var(--color-primary)] text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <FolderOpen size={14} /> Daftar Bank Soal
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("RINGKASAN")}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              viewMode === "RINGKASAN"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <ClipboardList size={14} /> Ringkasan Soal Ujian
+            {over100BadgeCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white flex items-center gap-0.5">
+                <AlertTriangle size={10} /> {over100BadgeCount}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      <div className="neu-card rounded-2xl p-4 mb-6 flex flex-col md:flex-row gap-4">
-        <div className="flex-1">
-          <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>Program</label>
-          <select value={selectedProgram} onChange={e => setSelectedProgram(e.target.value)} className="neu-input w-full py-2.5 text-sm font-semibold">
-            {programList.map(p => <option key={p.id} value={p.id}>{p.nama_indo}</option>)}
-          </select>
+      <div className="neu-card rounded-2xl p-4 mb-6 space-y-3">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>Program</label>
+            <select value={selectedProgram} onChange={e => setSelectedProgram(e.target.value)} className="neu-input w-full py-2.5 text-sm font-semibold">
+              {visiblePrograms.map(p => <option key={p.id} value={p.id}>{p.nama_indo}</option>)}
+            </select>
+          </div>
+          {viewMode === "BANK" && (
+            <div className="flex-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>Mata Pelajaran</label>
+              <select value={selectedMapel} onChange={e => setSelectedMapel(e.target.value)} className="neu-input w-full py-2.5 text-sm font-semibold">
+                <option value="">-- Pilih Mapel --</option>
+                {mapelOptions.map(m => (
+                  <option key={m.mapel.id} value={m.mapel.id}>
+                    {m.mapel.nama_indo} (Tes: {m.mapel.jumlah_tes}x)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-        <div className="flex-1">
-          <label className="block text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: "var(--color-text-muted)" }}>Mata Pelajaran</label>
-          <select value={selectedMapel} onChange={e => setSelectedMapel(e.target.value)} className="neu-input w-full py-2.5 text-sm font-semibold">
-            <option value="">-- Pilih Mapel --</option>
-            {mapelOptions.map(m => (
-              <option key={m.mapel.id} value={m.mapel.id}>
-                {m.mapel.nama_indo} (Tes: {m.mapel.jumlah_tes}x)
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100/80">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[11px] text-gray-400 font-medium">
+              {showAllMapels
+                ? "Menampilkan seluruh Program & Mapel (termasuk non-CBT)."
+                : "Mode rapi: hanya menampilkan Program & Mapel ujian CBT."}
+            </span>
+            {isAkbarnas && (
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-[11px] font-bold text-indigo-800"
+                title="Diatur melalui menu Manajemen Angkatan & Usbu'"
+              >
+                Akbarnas ({activeDufahName || "Aktif"}): Bulan {activeAkbarnasBulan}
+              </span>
+            )}
+          </div>
+          <label className="inline-flex items-center gap-1.5 text-[11px] font-bold text-gray-500 hover:text-gray-800 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showAllMapels}
+              onChange={(e) => setShowAllMapels(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-gray-300 accent-indigo-600 cursor-pointer"
+            />
+            Tampilkan semua mapel
+          </label>
         </div>
       </div>
+
+      {viewMode === "RINGKASAN" && selectedProgram ? (
+        <RegulasiRingkasanView
+          programId={selectedProgram}
+          isAkbarnas={isAkbarnas}
+          defaultUsbuKe={activeGuideUsbu}
+          defaultBulanKe={effectiveBulanKe}
+          onUncheckSoal={() => {
+            fetchSoal(true);
+            fetchQuotaContext();
+          }}
+          onJumpToMapel={(mId) => {
+            setSelectedMapel(mId);
+            setViewMode("BANK");
+          }}
+        />
+      ) : (
+      <>
+      {/* Kelompok Bab Materi Bar */}
+      {selectedProgram && selectedMapel && (
+        <BabManagerBar
+          programId={selectedProgram}
+          mapelId={selectedMapel}
+          babList={babList}
+          tanpaBabCount={tanpaBabCount}
+          selectedBabId={selectedBabId}
+          onSelectBab={(id) => {
+            setSelectedBabId(id);
+            setCurrentPage(0);
+          }}
+          onRefresh={async () => {
+            await Promise.all([fetchBabList(), fetchSoal(true), fetchQuotaContext()]);
+          }}
+        />
+      )}
+
+      {/* Panduan Regulasi Live Usbu' 1 & 2 */}
+      {selectedProgram && selectedMapel && (
+        <RegulasiStickyBar
+          programId={selectedProgram}
+          mapelId={selectedMapel}
+          mapelNama={selectedMapelNama}
+          isAkbarnas={isAkbarnas}
+          usbuKe={activeGuideUsbu}
+          bulanKe={effectiveBulanKe}
+          rules={mapelRegulasiRules}
+          assignedSoals={mapelAssignedByUsbu[activeGuideUsbu] || []}
+          onOpenFullRingkasan={() => setViewMode("RINGKASAN")}
+          onRefreshData={async () => {
+            await Promise.all([fetchQuotaContext(), fetchSoal(true)]);
+          }}
+        />
+      )}
 
       {/* Tabs Jenis Soal */}
       {selectedMapel && (
@@ -872,60 +1098,83 @@ export default function BankSoalPage() {
         </div>
       )}
 
-      {/* Tabs Filter Usbu */}
+      {/* Soal yang Akan Diujikan di Usbu' */}
       {selectedJenisSoal && (
-        <div className="flex flex-wrap gap-2 mb-4 bg-white p-3 rounded-xl border border-gray-100 shadow-sm items-center">
-          <span className="text-xs font-bold text-gray-500 uppercase mr-2">Tampilan Usbu':</span>
-          {["ALL", ...(isAkbarnas ? ["1-1", "1-2", "1-3", "2-1", "2-2", "2-3"] : ["1", "2", "3"]), "UNASSIGNED"].map(tab => {
-            let stats = null;
-            if (tab !== "ALL" && tab !== "UNASSIGNED") {
-               const targetU = tab.includes("-") ? Number(tab.split("-")[1]) : Number(tab);
-               const targetB = tab.includes("-") ? Number(tab.split("-")[0]) : null;
-               
-               const soalInTab = soalList.filter(s => {
-                  if (isAkbarnas && targetB) return s.bulanKe === targetB && s.usbuKe === targetU;
-                  return s.usbuKe === targetU;
-               });
-               
-               const assignedSoal = soalInTab.filter(s => s.usbuAssignments?.some((ua: any) => ua.usbuKe === targetU));
-               const totalPoin = assignedSoal.reduce((sum, s) => sum + s.bobot, 0);
-               stats = { count: assignedSoal.length, points: totalPoin };
-            }
+        <div className="flex flex-wrap gap-2 mb-4 bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm items-center justify-between">
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="text-xs font-bold text-gray-500 uppercase mr-1">Soal yang Diujikan di:</span>
+            {["ALL", "1", "2", "3", "UNASSIGNED"].map(tab => {
+              let stats = null;
+              if (tab === "1" || tab === "2" || tab === "3") {
+                const targetU = Number(tab);
+                const assignedSoal = soalList.filter(s => s.usbuAssignments?.some((ua: { usbuKe: number }) => ua.usbuKe === targetU));
+                const totalPoin = assignedSoal.reduce((sum, s) => sum + s.bobot, 0);
+                stats = { count: assignedSoal.length, points: totalPoin };
+              }
 
-            return (
-              <button
-                key={tab}
-                onClick={() => { setActiveUsbuTab(tab); setCurrentPage(0); }}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors border ${
-                  activeUsbuTab === tab
-                    ? "bg-[var(--color-primary)] text-white shadow-md border-transparent"
-                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span>
-                    {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Masuk Usbu'" : (isAkbarnas ? `Bulan ${tab.split('-')[0]} Usbu' ${tab.split('-')[1]}` : `Usbu' ${tab}`)}
-                  </span>
-                  {stats && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${activeUsbuTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                      {stats.count} ☑️ • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Poin
+              return (
+                <button
+                  key={tab}
+                  onClick={() => {
+                    setActiveUsbuTab(tab);
+                    setCurrentPage(0);
+                    if (tab === "1" || tab === "2" || tab === "3") {
+                      setSelectedUsbu(tab);
+                    }
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-bold transition-colors border ${
+                    activeUsbuTab === tab
+                      ? "bg-[var(--color-primary)] text-white shadow-md border-transparent"
+                      : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {tab === "ALL" ? "Semua Soal" : tab === "UNASSIGNED" ? "Belum Diujikan" : `Usbu' ${tab}`}
                     </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+                    {stats && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${activeUsbuTab === tab ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'}`}>
+                        {stats.count} ✓ • {Number.isInteger(stats.points) ? stats.points : stats.points.toFixed(2)} Pt
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePreview}
+              disabled={!selectedProgram || previewLoading}
+              className="font-bold text-xs px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors flex gap-1.5 items-center disabled:opacity-50"
+              title={`Pratinjau seluruh soal terpilih untuk Usbu' ${activeGuideUsbu}`}
+            >
+              {previewLoading ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />}
+              Pratinjau Usbu&apos; {activeGuideUsbu}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleResetAssign(activeGuideUsbu)}
+              disabled={!selectedProgram || !selectedMapel}
+              className="font-bold text-xs px-3 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors flex gap-1.5 items-center disabled:opacity-50"
+              title={`Kosongkan seluruh centangan soal pada Usbu' ${activeGuideUsbu} di mapel ini`}
+            >
+              <Trash2 size={13} /> Kosongkan Isi Usbu&apos; {activeGuideUsbu}
+            </button>
+          </div>
         </div>
       )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 bg-gray-50 border border-gray-100 p-4 rounded-xl">
         <div className="flex gap-4 items-center">
           <h2 className="font-bold text-lg" style={{ color: "var(--color-text)" }}>
-            Daftar Soal {activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" ? `(Tab Aktif)` : ""}
+            Daftar Soal {activeUsbuTab === "1" || activeUsbuTab === "2" || activeUsbuTab === "3" ? `(Usbu' ${activeUsbuTab})` : ""}
             ({filteredSoalList.length})
           </h2>
           <div className="hidden md:flex items-center gap-2 bg-[var(--color-primary-50)] text-[var(--color-primary)] px-3 py-1 rounded-xl text-xs font-bold">
-            <Activity size={14} /> Total Poin (Tab Aktif): {Number(filteredSoalList.reduce((sum, s) => sum + s.bobot, 0).toFixed(2))}
+            <Activity size={14} /> Total Poin: {Number(filteredSoalList.reduce((sum, s) => sum + s.bobot, 0).toFixed(2))}
           </div>
           {filteredSoalList.length > 0 && (
             <button onClick={handleBulkBobot} className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors border border-amber-200 shadow-sm">
@@ -934,45 +1183,14 @@ export default function BankSoalPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {filteredSoalList.length > 0 && activeUsbuTab !== "ALL" && activeUsbuTab !== "UNASSIGNED" && (
-            <div className="flex items-center gap-2 mr-2">
-              <button 
-                onClick={() => handleBulkAssign(true)}
-                title="Tampilkan semua soal di layar ini di ujian"
-                className="px-3 py-1.5 text-xs font-bold bg-green-50 text-green-700 rounded-lg hover:bg-green-100 border border-green-200 transition-colors shadow-sm"
-              >
-                Tampilkan Semua
-              </button>
-              <button 
-                onClick={() => handleBulkAssign(false)}
-                title="Sembunyikan semua soal di layar ini dari ujian"
-                className="px-3 py-1.5 text-xs font-bold bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 border border-gray-200 transition-colors shadow-sm"
-              >
-                Sembunyikan Semua
-              </button>
-            </div>
-          )}
-
-          {/* Quick Actions Usbu */}
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm mr-1">
-            <label className="text-[10px] font-bold text-gray-500 uppercase">Target Usbu:</label>
-            <select
-              value={selectedUsbu}
-              onChange={(e) => setSelectedUsbu(e.target.value)}
-              className="neu-input py-1 px-2 text-xs font-bold w-16 cursor-pointer"
-            >
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3">3</option>
-            </select>
-            <button onClick={handlePreview} disabled={!selectedProgram || previewLoading} className="font-bold text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded-md hover:bg-purple-100 transition-colors flex gap-1 items-center shadow-sm disabled:opacity-50" title="Lihat pratinjau seluruh soal yang tampil di ujian Usbu' ini (Semua Jenis Soal)">
-              {previewLoading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Pratinjau
-            </button>
-            <button onClick={handleResetAssign} disabled={!selectedProgram} className="font-bold text-xs px-2 py-1 bg-red-50 text-red-700 rounded-md hover:bg-red-100 transition-colors flex gap-1 items-center shadow-sm" title="Hapus semua tampilan ujian soal dari mapel ini untuk Usbu yang dipilih">
-              <Trash2 size={12} /> Reset Pilihan
-            </button>
-          </div>
-          <button onClick={() => setIsImportModalOpen(true)} disabled={!selectedMapel || !selectedProgram} className="font-bold text-sm px-3 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors flex gap-1 items-center shadow-sm">
+          <button
+            onClick={() => {
+              setImportBabId(selectedBabId !== "ALL" && selectedBabId !== "NONE" ? selectedBabId : "");
+              setIsImportModalOpen(true);
+            }}
+            disabled={!selectedMapel || !selectedProgram}
+            className="font-bold text-sm px-3 py-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors flex gap-1 items-center shadow-sm"
+          >
             <FileSpreadsheet size={16} /> Import
           </button>
           <button onClick={handleCreateNew} disabled={!selectedMapel || !selectedProgram || !selectedJenisSoal} className="neu-button-primary px-3 py-2 flex items-center justify-center gap-1 rounded-xl text-sm font-bold shadow-sm">
@@ -1053,9 +1271,18 @@ export default function BankSoalPage() {
                           {currentPage * PAGE_SIZE + index + 1}
                         </div>
                         <div className="flex-1 pr-20">
-                          <div className="flex gap-3 mb-3 items-center flex-wrap">
+                          <div className="flex gap-2 mb-3 items-center flex-wrap">
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">ID: {soal.id.substring(soal.id.length - 5)}</span>
                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-orange-100 text-orange-600">Bobot: {Number.isInteger(soal.bobot) ? soal.bobot : soal.bobot.toFixed(2)} Poin</span>
+                            {soal.bab?.nama ? (
+                              <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 flex gap-1 items-center">
+                                <FolderOpen size={11} /> {soal.bab.nama}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/70">
+                                Tanpa Bab
+                              </span>
+                            )}
                             {soal.grupSoalId ? (
                               <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-600 flex gap-1 items-center" title="Pertanyaan turunan dari bacaan lain">
                                 <Activity size={12} /> Anak Qiro&apos;ah
@@ -1310,24 +1537,53 @@ export default function BankSoalPage() {
                         </div>
                       </div>
                                {/* Checkbox Assignments Footer */}
-                    <div className="border-t border-gray-100 px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-center justify-between mt-auto">
-                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 sm:mb-0">Tampilkan di Ujian (Usbu'):</span>
-                      <div className="flex gap-4">
+                    <div className="border-t border-gray-100 px-6 py-3 bg-gray-50 flex flex-col sm:flex-row items-center justify-between mt-auto gap-2">
+                      <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tampilkan di Ujian (Usbu&apos;):</span>
+                      <div className="flex flex-wrap gap-3">
                         {([1, 2, 3].filter(u => {
                           if (activeUsbuTab === "ALL" || activeUsbuTab === "UNASSIGNED") return true;
-                          const targetU = activeUsbuTab.includes("-") ? Number(activeUsbuTab.split("-")[1]) : Number(activeUsbuTab);
-                          return u === targetU;
+                          return u === Number(activeUsbuTab);
                         })).map(u => {
-                          const isAssigned = soal.usbuAssignments?.some((ua: any) => ua.usbuKe === u);
+                          const isAssigned = !!soal.usbuAssignments?.some((ua: { usbuKe: number }) => ua.usbuKe === u);
+                          const shouldCheckQuota = !isAssigned && (u === 1 || u === 2);
+                          const quotaCheck = shouldCheckQuota
+                            ? checkQuotaForCandidate(
+                                mapelRegulasiRules,
+                                mapelAssignedByUsbu[u] || [],
+                                { tipeSoal: soal.tipeSoal, bobot: Number(soal.bobot) || 0 },
+                                u,
+                              )
+                            : { allowed: true };
+                          const isLocked = !isAssigned && !quotaCheck.allowed;
+
                           return (
-                            <label key={u} className={`flex items-center gap-2 cursor-pointer text-sm font-bold transition-all ${isAssigned ? 'text-green-600' : 'text-gray-500 hover:text-gray-800'}`}>
+                            <label
+                              key={u}
+                              title={isLocked ? quotaCheck.reason : (u === 1 || u === 2 ? `Centang untuk masukkan ke Usbu' ${u} (bobot otomatis ikut panduan)` : `Centang untuk masukkan ke Usbu' ${u}`)}
+                              className={`flex items-center gap-1.5 text-sm font-bold transition-all px-2.5 py-1 rounded-lg border ${
+                                isAssigned
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 cursor-pointer'
+                                  : isLocked
+                                    ? 'bg-gray-100 border-gray-200 text-gray-400 opacity-60 cursor-not-allowed select-none'
+                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-900 cursor-pointer'
+                              }`}
+                            >
                               <input
                                 type="checkbox"
-                                className="w-4 h-4 text-green-500 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
-                                checked={isAssigned || false}
-                                onChange={(e) => handleToggleAssignment(soal.id, u, e.target.checked)}
+                                disabled={isLocked}
+                                className={`w-4 h-4 rounded border-gray-300 ${isLocked ? 'cursor-not-allowed accent-gray-400' : 'text-green-500 focus:ring-green-500 cursor-pointer'}`}
+                                checked={isAssigned}
+                                onChange={(e) => {
+                                  if (isLocked) return;
+                                  handleToggleAssignment(soal.id, u, e.target.checked);
+                                }}
                               />
-                              Usbu {u}
+                              <span>Usbu {u}</span>
+                              {isLocked && (
+                                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-gray-400">
+                                  <Lock size={10} /> Penuh
+                                </span>
+                              )}
                             </label>
                           );
                         })}
@@ -1351,6 +1607,8 @@ export default function BankSoalPage() {
             );
           })()}
         </div>
+      )}
+      </>
       )}
 
       {/* MODAL FORM BUILDER GOOGLE FORMS STYLE */}
@@ -1388,36 +1646,20 @@ export default function BankSoalPage() {
               </div>
 
               <div className="flex gap-4 items-center flex-wrap bg-gray-50/50 p-4 rounded-xl border border-gray-200 shadow-sm mt-4">
-                {/* Materi Target Usbu */}
+                {/* Kelompok Bab Materi */}
                 <div className="flex-1 min-w-[200px]">
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Batasan Materi (Usbu')</label>
+                  <label className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-2 block">Kelompok Bab Materi</label>
                   <select
-                    value={formData.usbuKe ?? ""}
-                    onChange={e => setFormData({ ...formData, usbuKe: e.target.value === "" ? null : Number(e.target.value) })}
+                    value={formData.babId || ""}
+                    onChange={e => setFormData({ ...formData, babId: e.target.value })}
                     className="neu-input w-full p-2.5 text-sm font-semibold cursor-pointer"
                   >
-                    <option value="">Belum Masuk Usbu'</option>
-                    {[1, 2, 3].map(u => (
-                      <option key={u} value={u}>Usbu' {u}</option>
+                    <option value="">-- Tanpa Bab --</option>
+                    {babList.map(b => (
+                      <option key={b.id} value={b.id}>{b.nama}</option>
                     ))}
                   </select>
                 </div>
-
-                {/* Materi Target Bulan (Khusus Akbarnas) */}
-                {isAkbarnas && (
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider mb-2 block">Batasan Materi (Bulan)</label>
-                    <select
-                      value={formData.bulanKe}
-                      onChange={e => setFormData({ ...formData, bulanKe: Number(e.target.value) })}
-                      className="neu-input w-full p-2.5 text-sm font-semibold cursor-pointer"
-                    >
-                      {[1, 2].map(b => (
-                        <option key={b} value={b}>Bulan {b}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
               </div>
 
               {/* Grup Qiro'ah / Soal Induk */}
@@ -2472,6 +2714,22 @@ export default function BankSoalPage() {
             </div>
 
             <form onSubmit={handleImport} className="space-y-6">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-indigo-600">
+                  Masukkan ke Kelompok Bab (Opsional)
+                </label>
+                <select
+                  value={importBabId}
+                  onChange={e => setImportBabId(e.target.value)}
+                  className="neu-input w-full p-2.5 text-sm font-semibold cursor-pointer"
+                >
+                  <option value="">-- Tanpa Bab --</option>
+                  {babList.map(b => (
+                    <option key={b.id} value={b.id}>{b.nama}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="neu-card border-dashed p-6 text-center bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors relative">
                 <input
                   type="file"

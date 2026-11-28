@@ -83,6 +83,7 @@ export async function POST(req: Request) {
     const usbuKe = rawUsbuKe === null || rawUsbuKe === "" ? null : Number(rawUsbuKe);
     const paketSoal = (formData.get("paketSoal") as string) || "A";
     const jenisSoalId = formData.get("jenisSoalId") as string;
+    const babId = (formData.get("babId") as string) || null;
     const timpaSoal = formData.get("timpaSoal") === "true";
 
     if (!file || !programId || !mapelId || !jenisSoalId) {
@@ -134,7 +135,12 @@ export async function POST(req: Request) {
     await prisma.$transaction(async (tx: any) => {
       if (timpaSoal) {
         await tx.bankSoalUsbu.deleteMany({
-          where: { programId, mapelId, jenisSoalId }
+          where: {
+            programId,
+            mapelId,
+            jenisSoalId,
+            ...(babId ? { babId } : {}),
+          }
         });
       }
 
@@ -181,6 +187,7 @@ export async function POST(req: Request) {
             programId,
             mapelId,
             jenisSoalId,
+            babId: babId || null,
             usbuKe,
             paketSoal: rowPaketSoal,
             tipeSoal: "PG",

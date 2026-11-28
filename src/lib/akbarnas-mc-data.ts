@@ -19,6 +19,7 @@ export async function getAkbarnasMcPrintData(riwayatId: string) {
     include: {
       santri: { select: { nama: true } },
       program: { select: { nama_indo: true } },
+      dufah: { select: { akbarnasBulan: true } },
       nilaiList: {
         include: { mapel: { select: { nama_indo: true } } },
       },
@@ -30,6 +31,7 @@ export async function getAkbarnasMcPrintData(riwayatId: string) {
   if (
     !riwayat ||
     riwayat.program?.nama_indo !== "Akbarnas" ||
+    riwayat.dufah?.akbarnasBulan !== 1 ||
     nilaiMc?.nilaiAkhir == null
   ) {
     return null;

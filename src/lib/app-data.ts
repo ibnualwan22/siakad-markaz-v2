@@ -273,7 +273,7 @@ export async function getTemplateData() {
 }
 
 export const getDashboardSantriRows = cache(async function getDashboardSantriRows() {
-  const [masterSantriList, initialRiwayatList, activeDufahName, munaqosahList] = await Promise.all([
+  const [masterSantriList, initialRiwayatList, activeDufahName, munaqosahList, dufahList] = await Promise.all([
     getMasterSantriList(),
     prisma.riwayatSantri.findMany({
       include: {
@@ -288,7 +288,18 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
     prisma.munaqosahHufadz.findMany({
       orderBy: { createdAt: "desc" },
     }),
+    prisma.dufah.findMany({
+      select: { nama: true, akbarnasBulan: true },
+    }),
   ]);
+
+  const dufahAkbarnasBulanMap = new Map<string, number>();
+  for (const d of dufahList) {
+    dufahAkbarnasBulanMap.set(d.nama, d.akbarnasBulan);
+  }
+  const activeDufahAkbarnasBulan = activeDufahName
+    ? (dufahAkbarnasBulanMap.get(activeDufahName) ?? 2)
+    : 2;
 
   const munaqosahByKey = new Map<string, (typeof munaqosahList)[0]>();
   const munaqosahLatestBySantri = new Map<string, (typeof munaqosahList)[0]>();
@@ -364,14 +375,8 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
       const totalMapel = program?.programMapels.length ?? 0;
       const isAkbarnas = program?.nama_indo.toLowerCase().includes("akbarnas");
 
-      // Syahadah MC Akbarnas bulan 1 — dihitung dari riwayat MENTAH
-      // (sebelum nilaiList diganti hasil gabungan di bawah, supaya nilai
-      // MC dufah sebelumnya tidak bocor ke baris ini).
-      // "Bulan pertama" = tidak ada riwayat Akbarnas lebih awal dari
-      // riwayat ini (bahasa yang sama dipakai getTranskripAkbarnas:
-      // bulan pertama = tidak ada transkrip gabungan). BUKAN
-      // SantriInternal.bulanKe (angka itu kumulatif lintas program dan
-      // tersebar 1–6 di kelas yang sama) dan BUKAN flag kelas b2.
+      // Syahadah MC Akbarnas HANYA muncul saat Dufah tersebut berstatus Bulan 1
+      // (berdasarkan pendeteksi global Dufah.akbarnasBulan === 1) dan nilai mapel MC terisi.
       const mcMapelId = program?.programMapels?.find(
         (pm: any) => pm.mapel?.nama_indo === "MC",
       )?.mapelId;
@@ -382,19 +387,11 @@ export const getDashboardSantriRows = cache(async function getDashboardSantriRow
             (n: any) => n.mapelId === mcMapelId && n.nilaiAkhir != null,
           ),
       );
-      const dufahNum = (name: string) => {
-        const m = (name || "").match(/\d+/);
-        return m ? parseInt(m[0], 10) : 0;
-      };
+      const riwayatAkbarnasBulan = riwayat
+        ? (dufahAkbarnasBulanMap.get(riwayat.dufahNama) ?? activeDufahAkbarnasBulan)
+        : activeDufahAkbarnasBulan;
       const isBulanPertamaAkbarnas = Boolean(
-        isAkbarnas &&
-          riwayat &&
-          !riwayatList.some(
-            (r: any) =>
-              r.santriId === masterSantri.id &&
-              r.program?.nama_indo.toLowerCase().includes("akbarnas") &&
-              dufahNum(r.dufahNama) < dufahNum(riwayat.dufahNama),
-          ),
+        isAkbarnas && riwayat && riwayatAkbarnasBulan === 1,
       );
       const canPrintMcSyahadah = isBulanPertamaAkbarnas && mcTerisi;
 

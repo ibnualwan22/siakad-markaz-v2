@@ -14,7 +14,7 @@ export async function PUT(
     if (!(await checkPermission("ujian_usbu"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = await params;
-    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, bulanKe, paketSoal, jenisSoalId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
+    const { pertanyaan, gambarUrl, tipeSoal, bobot, opsiList, usbuKe, bulanKe, paketSoal, jenisSoalId, babId, grupSoalId, perintah, kunciJawaban, dataTambahan } = await req.json();
 
     // Ambil opsi lama (id + urutan) SEBELUM dihapus — untuk memetakan
     // jawaban santri yang sudah masuk ke id opsi yang baru
@@ -40,6 +40,7 @@ export async function PUT(
           ...(bulanKe !== undefined && { bulanKe: Number(bulanKe) }),
           ...(paketSoal !== undefined && { paketSoal }),
           ...(jenisSoalId !== undefined && { jenisSoalId }),
+          ...(babId !== undefined && { babId: babId || null }),
           opsiList: {
             deleteMany: {},
             create: opsiList?.map((opsi: any, i: number) => ({

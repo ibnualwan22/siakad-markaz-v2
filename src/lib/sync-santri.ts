@@ -334,7 +334,7 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
         where: {
           santriId: { in: activeSantriWithDufah.map((s) => s.id) },
         },
-        include: { program: true, kelas: true },
+        include: { program: true, kelas: true, dufah: { select: { akbarnasBulan: true } } },
         orderBy: { id: "desc" },
       });
 
@@ -349,8 +349,10 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
           pr.program &&
           pr.program.nama_indo.toLowerCase().includes("akbarnas")
         ) {
-          // We keep the old akbarnas logic to auto carry over if needed
-          const wasBulan2 = pr.kelas?.is_akbarnas_b2;
+          // Prioritaskan sumber kebenaran global Dufah.akbarnasBulan (fallback ke flag kelas)
+          const wasBulan2 = pr.dufah
+            ? pr.dufah.akbarnasBulan === 2
+            : Boolean(pr.kelas?.is_akbarnas_b2);
           if (pr.kelasId && pr.programId && !wasBulan2) {
             santriToAkbarnasClass.set(pr.santriId, {
               programId: pr.programId,
@@ -473,10 +475,16 @@ export async function jalankanSyncSantri(): Promise<HasilSync> {
 
         if (akbarnasIds.length > 0) {
           const isBulan2Baru = continuingAkbarnasCount > 0;
-          await prisma.kelas.updateMany({
-            where: { programId: { in: akbarnasIds } },
-            data: { is_akbarnas_b2: isBulan2Baru },
-          });
+          await prisma.$transaction([
+            prisma.dufah.updateMany({
+              where: { nama: { in: missingDufahs } },
+              data: { akbarnasBulan: isBulan2Baru ? 2 : 1 },
+            }),
+            prisma.kelas.updateMany({
+              where: { programId: { in: akbarnasIds } },
+              data: { is_akbarnas_b2: isBulan2Baru },
+            }),
+          ]);
         }
       } catch (err) {
         console.error(

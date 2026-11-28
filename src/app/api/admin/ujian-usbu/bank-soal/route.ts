@@ -14,6 +14,7 @@ export async function GET(req: Request) {
     const usbuKe = searchParams.get("usbuKe");
     const jenisSoalId = searchParams.get("jenisSoalId");
     const paketSoal = searchParams.get("paketSoal");
+    const babId = searchParams.get("babId");
 
     const where: any = {};
     if (mapelId) where.mapelId = mapelId;
@@ -22,6 +23,11 @@ export async function GET(req: Request) {
     // For legacy usages if they still pass paketSoal, although we use jenisSoalId now
     if (paketSoal) where.paketSoal = paketSoal;
     if (jenisSoalId) where.jenisSoalId = jenisSoalId;
+    if (babId === "NONE") {
+      where.babId = null;
+    } else if (babId && babId !== "ALL") {
+      where.babId = babId;
+    }
 
     // For usbuKe filter, we now filter by relations if usbuKe is present!
     if (usbuKe) {
@@ -42,6 +48,7 @@ export async function GET(req: Request) {
           id: true,
           mapelId: true,
           programId: true,
+          babId: true,
           jenisSoalId: true,
           tipeSoal: true,
           usbuKe: true,
@@ -60,6 +67,7 @@ export async function GET(req: Request) {
           },
           mapel: { select: { nama_indo: true } },
           program: { select: { nama_indo: true } },
+          bab: { select: { id: true, nama: true, urutan: true } },
           jenisSoal: { select: { nama: true } },
           usbuAssignments: true
         },
@@ -78,6 +86,7 @@ export async function GET(req: Request) {
         },
         mapel: { select: { nama_indo: true } },
         program: { select: { nama_indo: true } },
+        bab: { select: { id: true, nama: true, urutan: true } },
         jenisSoal: { select: { nama: true } },
         usbuAssignments: true
       },
@@ -96,7 +105,7 @@ export async function POST(req: Request) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!(await checkPermission("ujian_usbu"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const { mapelId, programId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan, usbuKe, bulanKe } = await req.json();
+    const { mapelId, programId, babId, jenisSoalId, tipeSoal, pertanyaan, gambarUrl, bobot, opsiList, grupSoalId, perintah, kunciJawaban, dataTambahan, usbuKe, bulanKe } = await req.json();
 
     if (!mapelId || !programId) {
       return NextResponse.json({ error: "Mapel atau Program tidak boleh kosong" }, { status: 400 });
@@ -106,6 +115,7 @@ export async function POST(req: Request) {
       data: {
         mapelId,
         programId,
+        babId: babId || null,
         jenisSoalId,
         tipeSoal: tipeSoal || "PG",
         usbuKe: usbuKe === null || usbuKe === undefined || usbuKe === "" ? null : Number(usbuKe),
